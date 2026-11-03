@@ -37,7 +37,9 @@ const SUPABASE_COOKIE = 'sb-127-auth-token=base64-e30';
 // A local stand-in for Supabase's GET /auth/v1/user (127.0.0.1 only), so
 // getUser() returns the user a test chooses.
 let currentUser: Record<string, unknown> = {};
+let supabaseRequests = 0;
 const fakeSupabase = createServer((req, res) => {
+  supabaseRequests += 1;
   if ((req.url || '').startsWith('/auth/v1/user')) {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(currentUser));
@@ -175,4 +177,47 @@ test('local auth mode gates the personal pages on the presence cookie too', asyn
     response = await updateSession(request(path, 'crack_local_session=1'));
     assert.equal(redirectTarget(response), null, path);
   }
+});
+
+test('django auth mode: presence-cookie gate, no Supabase request, no Supabase keys needed', async () => {
+  process.env.NEXT_PUBLIC_AUTH_MODE = 'django';
+  // A reachable Supabase stand-in and a signed-in Supabase cookie: neither is used.
+  process.env.NEXT_PUBLIC_SUPABASE_URL = FAKE_SUPABASE_URL;
+  const before = supabaseRequests;
+
+  let response = await updateSession(signedInAs('/dashboard', { app_metadata: { role: 'admin' } }));
+  assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/dashboard')}`);
+
+  response = await updateSession(request('/questions/practice?year=2020'));
+  assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/questions/practice?year=2020')}`);
+
+  response = await updateSession(request('/dashboard', 'crack_local_session=1'));
+  assert.equal(redirectTarget(response), null);
+
+  response = await updateSession(request('/admin', 'crack_local_session=1'));
+  assert.equal(redirectTarget(response), '/dashboard');
+  response = await updateSession(request('/admin', 'crack_local_session=1; crack_local_admin=1'));
+  assert.equal(redirectTarget(response), null);
+
+  // The emailed-link pages and the sign-in pages are always reachable (the
+  // login page itself moves a confirmed session on; a stale cookie must not loop).
+  for (const path of ['/verify-email', '/connect-google', '/reset-password', '/login', '/register', '/forgot-password']) {
+    response = await updateSession(request(path, 'crack_local_session=1'));
+    assert.equal(redirectTarget(response), null, path);
+  }
+
+  // Production django builds have no Supabase keys at all.
+  const savedUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const savedKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try {
+    response = await updateSession(request('/dashboard'));
+    assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/dashboard')}`);
+  } finally {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = savedUrl;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = savedKey;
+  }
+
+  assert.equal(supabaseRequests, before, 'django mode made a Supabase request');
 });

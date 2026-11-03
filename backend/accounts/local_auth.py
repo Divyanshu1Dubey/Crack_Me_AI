@@ -10,6 +10,12 @@ Endpoints (mounted under /api/auth/local/ only when enabled):
   POST login/     {email|username, password}  -> {access, refresh, user}
   POST register/  {email, username?, password, first_name?, last_name?}
   POST refresh/   {refresh}                    -> {access, refresh?}
+
+With AUTH_PROVIDER=django the tokens are Django-native sessions
+(accounts.native_sessions: a ``session_id`` claim, server-side rotation and
+revocation, the device cap) and NativeJWTAuthentication checks them, so a
+NEXT_PUBLIC_AUTH_MODE=local build runs against a django-mode backend too;
+accounts registered here are marked email-verified (dev only).
 """
 from __future__ import annotations
 
@@ -42,9 +48,15 @@ class _LocalOnlyMixin:
         return super().initial(request, *args, **kwargs)
 
 
-def _token_payload(user):
+def _token_payload(user, request=None):
+    from .auth_mode import django_auth_enabled
     from .serializers import UserSerializer
 
+    if django_auth_enabled():
+        from .native_sessions import issue_session_tokens
+
+        tokens = issue_session_tokens(user, request, 'local')
+        return {**tokens, 'user': UserSerializer(user).data}
     refresh = RefreshToken.for_user(user)
     return {
         'access': str(refresh.access_token),
@@ -73,7 +85,7 @@ class LocalLoginView(_LocalOnlyMixin, APIView):
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_active:
             return Response({'error': 'This account is disabled.'}, status=status.HTTP_403_FORBIDDEN)
-        return Response(_token_payload(user))
+        return Response(_token_payload(user, request))
 
 
 class _LocalRegisterSerializer(serializers.Serializer):
@@ -122,9 +134,27 @@ class LocalRegisterView(_LocalOnlyMixin, APIView):
             if getattr(user, 'role', 'student') != 'student':
                 user.role = 'student'
                 user.save(update_fields=['role'])
+            from .auth_mode import django_auth_enabled
+
+            if django_auth_enabled():
+                # Dev only (DEBUG): native sessions need a verified email.
+                from django.utils import timezone
+
+                user.email_verified_at = timezone.now()
+                user.save(update_fields=['email_verified_at'])
             TokenBalance.objects.get_or_create(user=user)
-        return Response(_token_payload(user), status=status.HTTP_201_CREATED)
+        return Response(_token_payload(user, request), status=status.HTTP_201_CREATED)
 
 
 class LocalRefreshView(_LocalOnlyMixin, TokenRefreshView):
-    pass
+    def post(self, request, *args, **kwargs):
+        from .auth_mode import django_auth_enabled
+
+        if django_auth_enabled():
+            from .native_sessions import NativeAuthError, rotate
+
+            try:
+                return Response(rotate(request.data.get('refresh') if hasattr(request.data, 'get') else None))
+            except NativeAuthError as exc:
+                return exc.response()
+        return super().post(request, *args, **kwargs)

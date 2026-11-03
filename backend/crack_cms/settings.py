@@ -49,6 +49,10 @@ if _TEST_RUN and os.getenv('ALLOW_EXTERNAL_SERVICES_IN_TESTS', '').strip().lower
         'DEEPSEEK_API_KEY', 'OMNIROUTE_API_KEY', 'OMNIROUTEAPI', 'OMNIROUTE_BASE_URL', 'NCBI_API_KEY',
         'SUPABASE_SERVICE_ROLE_KEY', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET',
         'EMAIL_HOST_PASSWORD', 'REDIS_URL',
+        # The sign-in mode and its keys: the suite runs in the code default
+        # (supabase); tests of the Django-native sign-in set AUTH_PROVIDER /
+        # GOOGLE_OAUTH_CLIENT_IDS with override_settings.
+        'AUTH_PROVIDER', 'GOOGLE_OAUTH_CLIENT_IDS', 'JWT_SIGNING_KEY',
     ):
         os.environ[_secret] = ''
 
@@ -67,6 +71,22 @@ if SENTRY_DSN:
     sentry_traces_rate = float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '1.0' if DEBUG else '0.1'))
     sentry_send_pii = os.getenv('SENTRY_SEND_DEFAULT_PII', 'true' if DEBUG else 'false').lower() == 'true'
 
+    # Request bodies of failed requests reach Sentry with only exact key names
+    # scrubbed ('password', 'token', ...): the Django-native sign-in also posts
+    # new_password / current_password, refresh / access tokens and Google
+    # ID tokens ('credential'), which the default list misses.
+    _sentry_extra = {}
+    try:
+        from sentry_sdk.scrubber import DEFAULT_DENYLIST, EventScrubber
+
+        _sentry_extra['event_scrubber'] = EventScrubber(
+            denylist=[*DEFAULT_DENYLIST, 'new_password', 'current_password', 'old_password', 'password2',
+                      'refresh', 'access', 'credential', 'id_token', 'access_token', 'refresh_token'],
+            recursive=True,
+        )
+    except ImportError:  # pragma: no cover - older sentry-sdk
+        pass
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[
@@ -79,6 +99,7 @@ if SENTRY_DSN:
         ],
         traces_sample_rate=sentry_traces_rate,
         send_default_pii=sentry_send_pii,
+        **_sentry_extra,
     )
 
 is_testing = 'test' in sys.argv or 'pytest' in sys.modules
@@ -113,6 +134,20 @@ OMNIROUTE_BASE_URL = os.getenv('OMNIROUTE_BASE_URL', 'https://omniroute-producti
 
 allowed_hosts_default = 'localhost,127.0.0.1,testserver'
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', allowed_hosts_default).split(',') if h.strip()]
+RAILWAY_HEALTHCHECK_HOST = 'healthcheck.railway.app'
+
+
+def _with_railway_healthcheck_host(hosts, environ=os.environ):
+    """Railway calls the deploy health check (railway.json healthcheckPath) with
+    Host: healthcheck.railway.app; without it Django answers 400 and the deploy
+    never goes live. Railway sets RAILWAY_ENVIRONMENT_ID on every build and deployment."""
+    hosts = list(hosts)
+    if (environ.get('RAILWAY_ENVIRONMENT_ID') or '').strip() and RAILWAY_HEALTHCHECK_HOST not in hosts:
+        hosts.append(RAILWAY_HEALTHCHECK_HOST)
+    return hosts
+
+
+ALLOWED_HOSTS = _with_railway_healthcheck_host(ALLOWED_HOSTS)
 
 # Application definition
 INSTALLED_APPS = [
@@ -329,6 +364,10 @@ PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    # Verifies bcrypt hashes imported from Supabase Auth (manage.py
+    # import_supabase_auth); last, so it is never used for new passwords and
+    # the first sign-in re-hashes with Argon2 (accounts/hashers.py).
+    'accounts.hashers.SupabaseBcryptPasswordHasher',
 ]
 
 # django-axes: brute-force login protection
@@ -338,7 +377,15 @@ AUTHENTICATION_BACKENDS = [
 ]
 AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
 AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
-AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']  # Lock by username and IP
+# One lockout per (username, client IP) COMBINATION. The flat list
+# ['username', 'ip_address'] meant two separate lockouts in axes 8: anyone
+# could lock a known username out from anywhere, and five failures from any
+# visitor locked out everyone behind the same proxy address. Per-email DRF
+# throttles (accounts/throttles.py) slow a distributed attack on one account.
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+# The client address, not the proxy's (TRUSTED_CLIENT_IP_HEADER / NUM_PROXIES,
+# else REMOTE_ADDR; crack_cms/client_ip.py).
+AXES_CLIENT_IP_CALLABLE = 'crack_cms.client_ip.get_client_ip'
 AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
 # Client IP behind proxies. DRF's throttles key anonymous traffic on the
@@ -393,10 +440,43 @@ def _env_int(name: str, default: int) -> int:
 QUESTION_BANK_RATE_LIMIT = _env_int('QUESTION_BANK_RATE_LIMIT', 300)
 QUESTION_BANK_RATE_WINDOW = _env_int('QUESTION_BANK_RATE_WINDOW', 60)
 
+# ── Sign-in provider ────────────────────────────────────────────────
+# 'supabase' (default, unchanged): Supabase Auth issues the tokens and
+# accounts.supabase_rest_auth verifies them with GoTrue. 'django': Django
+# signs people in itself (accounts/native_auth.py: email + password with
+# email verification, Google ID tokens matched on `sub`, server-side
+# sessions); no GoTrue call is made. Both authenticators stay installed and
+# check this value per request. The frontend build must match
+# (NEXT_PUBLIC_AUTH_MODE=django); GET /api/auth/config/ reports the mode.
+AUTH_PROVIDER = (os.getenv('AUTH_PROVIDER', 'supabase').strip().lower() or 'supabase')
+if AUTH_PROVIDER not in ('supabase', 'django'):
+    raise ImproperlyConfigured(f"AUTH_PROVIDER must be 'supabase' or 'django', not {AUTH_PROVIDER!r}.")
+# Google OAuth web client id(s) whose ID tokens are accepted (comma
+# separated; add the Android client id for the app). Empty: Google off.
+GOOGLE_OAUTH_CLIENT_IDS = [c for c in re.split(r'[\s,]+', os.getenv('GOOGLE_OAUTH_CLIENT_IDS', '')) if c]
+# A native session ends this long after sign-in whatever its refreshes.
+NATIVE_AUTH_SESSION_MAX_DAYS = _env_int('NATIVE_AUTH_SESSION_MAX_DAYS', 60)
+# A refresh token that was just rotated still gets an access token for this
+# long (another tab rotated first); any later reuse revokes the session.
+NATIVE_AUTH_REFRESH_REUSE_SECONDS = _env_int('NATIVE_AUTH_REFRESH_REUSE_SECONDS', 20)
+NATIVE_AUTH_ALLOW_SIGNUP = os.getenv('NATIVE_AUTH_ALLOW_SIGNUP', 'true').strip().lower() in ('1', 'true', 'yes')
+# Password-reset links (django.contrib.auth.tokens.default_token_generator)
+# and email-verification links expire after these many seconds.
+PASSWORD_RESET_TIMEOUT = _env_int('PASSWORD_RESET_TIMEOUT', 3600)
+EMAIL_VERIFICATION_MAX_AGE = _env_int('EMAIL_VERIFICATION_MAX_AGE', 86400)
+# Signs Django-issued JWTs (SIMPLE_JWT below). Falls back to SECRET_KEY,
+# which `check --deploy` reports in django mode (accounts.W004).
+JWT_SIGNING_KEY = os.getenv('JWT_SIGNING_KEY', '').strip()
+
 # REST Framework
 REST_FRAMEWORK = {
+    # Both bearer authenticators are always listed; each returns None outside
+    # its AUTH_PROVIDER mode (checked per request, so tests can switch it).
+    # SupabaseJWTAuthentication stays first: its WWW-Authenticate value is
+    # what makes DRF answer 401 instead of 403.
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'accounts.supabase_rest_auth.SupabaseJWTAuthentication',
+        'accounts.native_auth_authentication.NativeJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
@@ -441,6 +521,20 @@ REST_FRAMEWORK = {
         # (same defaults as their built-in fallbacks; listed to be tunable).
         'feedback_submit': os.getenv('DRF_THROTTLE_FEEDBACK_SUBMIT', '10/hour'),
         'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
+        # Django-native sign-in (accounts/native_auth.py, accounts/throttles.py).
+        # '*_email' scopes are keyed on a SHA-256 of the lower-cased email,
+        # the others on the client IP (NUM_PROXIES) or the signed-in user.
+        'native_login': os.getenv('DRF_THROTTLE_NATIVE_LOGIN', '10/min'),
+        'native_login_email': os.getenv('DRF_THROTTLE_NATIVE_LOGIN_EMAIL', '10/hour'),
+        'native_register': os.getenv('DRF_THROTTLE_NATIVE_REGISTER', '5/hour'),
+        'native_register_email': os.getenv('DRF_THROTTLE_NATIVE_REGISTER_EMAIL', '3/hour'),
+        'native_refresh': os.getenv('DRF_THROTTLE_NATIVE_REFRESH', '60/min'),
+        'native_verify': os.getenv('DRF_THROTTLE_NATIVE_VERIFY', '10/hour'),
+        'native_verify_email': os.getenv('DRF_THROTTLE_NATIVE_VERIFY_EMAIL', '3/hour'),
+        'native_password_change': os.getenv('DRF_THROTTLE_NATIVE_PASSWORD_CHANGE', '10/hour'),
+        'password_reset_email': os.getenv('DRF_THROTTLE_PASSWORD_RESET_EMAIL', '3/hour'),
+        'google_signin': os.getenv('DRF_THROTTLE_GOOGLE_SIGNIN', '20/min'),
+        'google_link_email': os.getenv('DRF_THROTTLE_GOOGLE_LINK_EMAIL', '3/hour'),
     },
 }
 
@@ -457,20 +551,20 @@ _payments_mock_requested = os.getenv('PAYMENTS_MODE', '').strip().lower() == 'mo
 PAYMENTS_MOCK = bool(DEBUG and _payments_mock_requested)
 if _payments_mock_requested and not DEBUG:
     print('WARNING: PAYMENTS_MODE=mock ignored because DEBUG is off.', file=sys.stderr)
-if LOCAL_DEV_AUTH:
+if LOCAL_DEV_AUTH and AUTH_PROVIDER != 'django':  # django mode: NativeJWTAuthentication
     REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = (
         *REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'],
         'accounts.local_auth_authentication.LocalDevJWTAuthentication',
     )
 
-# SimpleJWT — refresh rotation + blacklist after rotation.
-# These apply to the DRF-issued JWT fallback only (Supabase users go through
-# SupabaseJWTAuthentication which has its own refresh handling). Today that
-# is only the dev-only local refresh endpoint (accounts/local_auth.py).
-# Blacklisting needs the 'rest_framework_simplejwt.token_blacklist' app (and
-# its tables); it is not installed, so SimpleJWT silently skipped the
-# blacklist and rotated refresh tokens stayed valid until expiry. The flag
-# now reflects that: it can only be on when the app is installed.
+# SimpleJWT — Django-issued tokens: the native sign-in (AUTH_PROVIDER=django,
+# accounts/native_sessions.py) and the dev-only local login
+# (accounts/local_auth.py). Supabase tokens never go through SimpleJWT.
+# Native refresh tokens rotate with reuse detection against the server-side
+# AuthSession (accounts.native_sessions.rotate), so the token_blacklist app
+# is not needed; BLACKLIST_AFTER_ROTATION can only be on when it is installed.
+# A refresh token lives 14 days from its last rotation (sliding), the session
+# at most NATIVE_AUTH_SESSION_MAX_DAYS.
 _JWT_BLACKLIST_APP_INSTALLED = 'rest_framework_simplejwt.token_blacklist' in INSTALLED_APPS
 SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': os.getenv('JWT_ROTATE_REFRESH_TOKENS', 'true').lower() == 'true',
@@ -479,7 +573,11 @@ SIMPLE_JWT = {
         and os.getenv('JWT_BLACKLIST_AFTER_ROTATION', 'true').lower() == 'true'
     ),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_MIN', '15'))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '7'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', '14'))),
+    'SIGNING_KEY': JWT_SIGNING_KEY or SECRET_KEY,
+    'ISSUER': 'cracklabs',
+    'AUDIENCE': 'cracklabs-app',
+    'LEEWAY': 10,
 }
 
 # Upload hardening — cap body size to 10 MB to prevent DoS via giant payloads.
@@ -617,9 +715,13 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD') or os.getenv('SMTP_PASSWO
 # Choose email backend based on credentials availability
 if EMAIL_HOST_PASSWORD and EMAIL_HOST_PASSWORD.strip():
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = 'smtp.gmail.com'
-    EMAIL_PORT = 587
-    EMAIL_USE_TLS = True
+    # Gmail by default; EMAIL_HOST / EMAIL_PORT / EMAIL_USE_SSL select another
+    # SMTP provider (a domain sender with SPF / DKIM for verification and
+    # password-reset mail, AUTH_PROVIDER=django).
+    EMAIL_HOST = os.getenv('EMAIL_HOST', '').strip() or 'smtp.gmail.com'
+    EMAIL_PORT = _env_int('EMAIL_PORT', 587)
+    EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', '').strip().lower() in ('1', 'true', 'yes')
+    EMAIL_USE_TLS = not EMAIL_USE_SSL and os.getenv('EMAIL_USE_TLS', 'true').strip().lower() in ('1', 'true', 'yes')
 else:
     # Fallback to console output for development (passwords visible in console logs)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -801,6 +903,11 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+# The platform health check (Railway: railway.json healthcheckPath) reaches the
+# container over plain HTTP without X-Forwarded-Proto; a 301 to https would fail
+# the deploy. Only that path is exempt from SECURE_SSL_REDIRECT (no effect while
+# the redirect is off).
+SECURE_REDIRECT_EXEMPT = [r'^api/health/$']
 
 if not DEBUG:
     # Production-only TLS enforcement

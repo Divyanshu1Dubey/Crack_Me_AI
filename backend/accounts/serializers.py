@@ -87,6 +87,11 @@ class UserSerializer(serializers.ModelSerializer):
     ai_tutor_daily_cap = serializers.SerializerMethodField()
     showcase_questions_remaining = serializers.SerializerMethodField()
     is_premium = serializers.SerializerMethodField()
+    # Django-native sign-in (AUTH_PROVIDER=django): how this account can sign
+    # in ({password, google}; Settings -> Sign-in methods) and whether its
+    # email address is verified.
+    auth_methods = serializers.SerializerMethodField()
+    email_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -96,8 +101,8 @@ class UserSerializer(serializers.ModelSerializer):
                   'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price',
                   'subscription_info', 'last_seen', 'is_online',
                   'ai_tutor_used_today', 'ai_tutor_daily_cap',
-                  'showcase_questions_remaining', 'is_premium']
-        read_only_fields = ['id', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium']
+                  'showcase_questions_remaining', 'is_premium', 'auth_methods', 'email_verified']
+        read_only_fields = ['id', 'email', 'role', 'created_at', 'token_info', 'profile_bonus_rewarded', 'is_subscribed', 'scholarship_test_passed', 'scholarship_test_attempts', 'scholarship_granted_price', 'subscription_info', 'last_seen', 'is_online', 'ai_tutor_used_today', 'ai_tutor_daily_cap', 'showcase_questions_remaining', 'is_premium', 'auth_methods', 'email_verified']
 
     def validate_username(self, value):
         from .handles import handle_error
@@ -139,6 +144,14 @@ class UserSerializer(serializers.ModelSerializer):
         if obj.last_seen:
             return (timezone.now() - obj.last_seen) < timedelta(minutes=10)
         return False
+
+    def get_auth_methods(self, obj):
+        from .native_auth import auth_methods
+
+        return auth_methods(obj)
+
+    def get_email_verified(self, obj):
+        return getattr(obj, 'email_verified_at', None) is not None
 
     def get_role(self, obj):
         return 'admin' if obj.is_admin else 'student'

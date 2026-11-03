@@ -23,6 +23,15 @@ together>=2.0
 django-axes>=7.0
 # Argon2 password hasher (industry-standard, PWH winner)
 argon2-cffi>=21.3
+# Django-native sign-in (AUTH_PROVIDER=django). Both were only transitive
+# dependencies: bcrypt verifies the password hashes imported from Supabase
+# Auth (accounts/hashers.py), google-auth checks Google ID tokens
+# (accounts/google_identity.py). bcrypt is pinned to the version the suite
+# was run with; google-auth to published releases (the locally installed
+# 2.49.0.dev0 pre-release is not on PyPI, so a pin to it breaks deploys).
+# 2.40 has everything the verifier uses (a list of audiences, clock skew).
+bcrypt==5.0.0
+google-auth>=2.40,<3
 # Phase 7: Monitoring & structured logging
 sentry-sdk[django]>=2.58.0
 ddtrace>=4.15.6

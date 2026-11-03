@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import threading
 import time
 from datetime import timedelta, timezone as dt_timezone
@@ -20,6 +19,28 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import authentication, exceptions
 
+from .auth_mode import supabase_auth_enabled
+# The device cap lives in accounts.device_limits (shared with the native
+# authenticator); these names are re-exported for existing imports.
+from .device_limits import (  # noqa: F401
+    FREE_DEVICE_LIMIT,
+    SUBSCRIBED_DEVICE_LIMIT,
+    _DEVICE_LIMIT_EXEMPT_READS,
+    _DEVICE_MANAGEMENT_PATHS,
+    _DEVICE_STALE_AFTER,
+    _DEVICE_TOUCH_INTERVAL,
+    _NIL_UUID,
+    _SAFE_METHODS,
+    _SESSION_CLAIM_PATTERN,
+    _SESSION_FINGERPRINT_PREFIX,
+    _SESSION_ID_PATTERN,
+    DeviceLimitMixin,
+    _auth_failed,
+    _device_limit_for,
+    _is_device_management_request,
+    _is_valid_session_id,
+    session_id_from_claims,
+)
 from .models import TokenBalance
 
 logger = logging.getLogger(__name__)
@@ -46,34 +67,6 @@ _REFUSED_PREFIX = "supabase_jwt_refused:"
 _BUDGET_PREFIX = "supabase_verify_ip:"
 _SESSION_REVOKED_PREFIX = "supabase_session_revoked:"
 
-# Device cap (docs/AUTHENTICATION.md §6).
-FREE_DEVICE_LIMIT = 2
-SUBSCRIBED_DEVICE_LIMIT = 4
-# UserDevice.device_fingerprint of a device known only by its Supabase
-# session (no usable X-Session-ID). ':' never matches _SESSION_ID_PATTERN, so
-# a client cannot address these rows through the header.
-_SESSION_FINGERPRINT_PREFIX = "sid:"
-# Supabase access tokens carry the auth session's id (a UUID) as ``session_id``.
-_SESSION_CLAIM_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
-_NIL_UUID = "00000000-0000-0000-0000-000000000000"
-
-# Requests an over-the-limit device may still make, so the user can open
-# Settings and free a slot (list / log out devices, load the profile) or buy
-# the 4-device plan from this device (/auth/subscribe/...).
-_DEVICE_MANAGEMENT_PATHS = ('/auth/profile/', '/auth/devices/', '/auth/logout/', '/auth/subscribe/')
-# Read-only requests every signed-in page makes in the background (Header
-# token pill, announcements). Without them the over-limit device could not
-# stay on /subscription long enough to buy the 4-device plan. Exact paths
-# (any /api prefix allowed), safe methods only; they never enrol the device.
-_DEVICE_LIMIT_EXEMPT_READS = ('/auth/tokens/', '/analytics/announcements/')
-_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
-# A device's last_login is refreshed at most this often (one write per
-# request per user was the old behaviour).
-_DEVICE_TOUCH_INTERVAL = timedelta(seconds=60)
-# Devices unseen for this long no longer hold a slot for a NEW device (the
-# cap was never enforced before, so many accounts carry long-dead rows, e.g.
-# one per old incognito session). They stay listed in Settings.
-_DEVICE_STALE_AFTER = timedelta(days=30)
 # Clock skew allowed between Supabase's user ``created_at`` and our
 # ``date_joined`` when deciding that a row was created from an identity.
 ORIGINAL_IDENTITY_CLOCK_TOLERANCE = timedelta(minutes=5)
@@ -88,11 +81,6 @@ _PUBLIC_VERIFY_KEY_ENV_VARS = (
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
 )
 _service_role_fallback_logged = False
-
-
-def _auth_failed(code: str, detail: str) -> exceptions.AuthenticationFailed:
-    """AuthenticationFailed with a machine-readable ``code`` the frontend acts on."""
-    return exceptions.AuthenticationFailed({"detail": detail, "code": code})
 
 
 def _verification_busy() -> exceptions.Throttled:
@@ -230,16 +218,6 @@ def plausible_access_token_claims(token: str, now: float | None = None):
     return payload
 
 
-def session_id_from_claims(claims) -> str | None:
-    """The Supabase auth session id (``session_id`` claim) of an access token, if any."""
-    if not isinstance(claims, dict):
-        return None
-    value = claims.get("session_id")
-    if not isinstance(value, str) or not _SESSION_CLAIM_PATTERN.match(value) or value == _NIL_UUID:
-        return None
-    return value.lower()
-
-
 def _verification_rate_per_ip() -> int:
     """GoTrue calls allowed per client IP per minute (0 = no limit).
 
@@ -313,26 +291,6 @@ _INFLIGHT_LOCK = threading.Lock()
 _INFLIGHT: dict[str, _PendingVerification] = {}
 
 
-def _device_limit_for(user) -> int:
-    """4 devices with an active plan, else 2.
-
-    Same rule as every other entitlement (accounts.utils.is_premium:
-    Subscription rows). The bare ``is_subscribed`` flag used to decide it,
-    which the removed unpaid /auth/subscribe/ endpoint had set for anyone.
-    """
-    from .utils import is_premium
-
-    return SUBSCRIBED_DEVICE_LIMIT if is_premium(user) else FREE_DEVICE_LIMIT
-
-
-def _is_device_management_request(request_obj) -> bool:
-    """Requests an over-the-limit device may make without taking a slot."""
-    path = request_obj.path
-    if any(p in path for p in _DEVICE_MANAGEMENT_PATHS):
-        return True
-    return request_obj.method in _SAFE_METHODS and any(path.endswith(p) for p in _DEVICE_LIMIT_EXEMPT_READS)
-
-
 def _supabase_email_confirmed(supabase_user: dict) -> bool:
     """True when Supabase has verified that this identity owns its email.
 
@@ -396,37 +354,8 @@ def _avatar_from_metadata(metadata: dict) -> str:
         return url
     return ""
 
-# SECURITY (Fix #3): The X-Session-ID header is trusted by this backend as a
-# device fingerprint. Without validation, any attacker can rotate the header
-# (`X-Session-ID: 1`, `2`, `3`, ...) to spawn unlimited parallel sessions
-# and bypass the per-user device limit. We require the header to look like
-# either:
-#   - a UUID-shaped token (8-4-4-4-12 hex), OR
-#   - a client-prefixed random ID matching ``^(dev|ses)_[a-z0-9_]{8,80}$``
-#     (the formats emitted by frontend/src/lib/api.ts:84-92), OR
-#   - an alphanumeric token of length 16-128 with no obvious high-entropy
-#     attacks (only [A-Za-z0-9_-]).
-# Plain integers, short strings, and special characters are rejected so
-# simple enumeration can't multiply the device count.
-_SESSION_ID_PATTERN = re.compile(
-    r"^(?:"
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-    r"|(?:dev|ses)_[A-Za-z0-9_]{8,80}"
-    r"|[A-Za-z0-9_\-]{16,128}"
-    r")$"
-)
 
-
-def _is_valid_session_id(value):
-    """Return True iff ``value`` looks like a non-spoofable device token."""
-    if not value or not isinstance(value, str):
-        return False
-    if len(value) > 128:
-        return False
-    return bool(_SESSION_ID_PATTERN.match(value))
-
-
-class SupabaseJWTAuthentication(authentication.BaseAuthentication):
+class SupabaseJWTAuthentication(DeviceLimitMixin, authentication.BaseAuthentication):
     """
     Authenticate API requests using Supabase Auth access tokens.
 
@@ -455,6 +384,10 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         return 'Bearer realm="api"'
 
     def authenticate(self, request_obj):
+        # AUTH_PROVIDER=django: Django issues the tokens
+        # (accounts.native_auth_authentication); never call GoTrue.
+        if not supabase_auth_enabled():
+            return None
         auth_header = authentication.get_authorization_header(request_obj).split()
         if not auth_header or auth_header[0].lower() != b"bearer":
             return None
@@ -503,177 +436,10 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         self._enforce_device_limits(request_obj, user, session_id=session_id, token=token)
         return (user, token)
 
-    def _enforce_device_limits(self, request_obj, user, session_id=None, token=None):
-        """Track the user's devices and enforce the 2 (free) / 4 (premium) cap.
-
-        A device is a browser (its X-Session-ID, ``crack_device_id``) bound to
-        the Supabase auth session that uses it: the ``session_id`` claim of the
-        verified access token, which the client can neither omit nor forge
-        (UserDevice.session_id). The binding is looked up first, so:
-
-        * a session whose device was logged out (Settings / admin) or replaced
-          gets ``device_inactive`` whatever header it sends or omits, and its
-          Supabase session is ended as well (_end_supabase_session);
-        * a session without a usable header still counts: it is enrolled as a
-          device of its own (fingerprint ``sid:<session id>``) and needs a slot;
-        * a new sign-in on a browser takes over that browser's device row (no
-          new slot); the session it replaces is retired and refused from then
-          on, so one device id shared between people gives one seat at a time.
-
-        A NEW device is enrolled only while the user has fewer active devices
-        (seen in the last 30 days) than the cap; otherwise
-        ``device_limit_reached`` (except on the device-management paths, so
-        Settings can free a slot). Existing devices beyond the cap (e.g. after
-        a 4 -> 2 downgrade): the ones used most recently win, judged on
-        last_login values from BEFORE this request.
-
-        Tokens without a ``session_id`` claim (GoTrue always sets it; only
-        tokens minted outside Supabase sign-in lack it) fall back to the old
-        header-only rule.
-        """
-        from .models import UserDevice
-
-        # SECURITY (Fix #3): only device-token shapes are accepted as
-        # X-Session-ID, so enumerating 1, 2, 3, ... cannot multiply devices.
-        header_value = request_obj.META.get('HTTP_X_SESSION_ID')
-        fingerprint = header_value if header_value and _is_valid_session_id(header_value) else None
-        if not session_id and not fingerprint:
-            return  # nothing identifies the device (token without a session id)
-
-        # SECURITY (Fix #3b): only trust REMOTE_ADDR for IP-based device
-        # bookkeeping. X-Forwarded-For is attacker-controlled when the
-        # client can reach the backend directly.
-        ip = request_obj.META.get('REMOTE_ADDR', '').strip() or None
-        user_agent = request_obj.META.get('HTTP_USER_AGENT', '')[:250]
-        management_request = _is_device_management_request(request_obj)
-        now = timezone.now()
-        limit_cache = []
-
-        def device_limit():
-            if not limit_cache:  # one Subscription query, only when it matters
-                limit_cache.append(_device_limit_for(user))
-            return limit_cache[0]
-
-        def at_limit(count):
-            return count >= FREE_DEVICE_LIMIT and count >= device_limit()
-
-        def limit_reached():
-            return _auth_failed(
-                "device_limit_reached",
-                f"Maximum device limit reached ({device_limit()} devices). Please manage devices in Settings.",
-            )
-
-        def device_inactive():
-            self._end_supabase_session(token, session_id)
-            return _auth_failed("device_inactive", "This device has been logged out or blocked.")
-
-        device = None
-        if session_id:
-            # Inactive rows sort first: any logged-out or replaced binding ends the session.
-            bound = list(UserDevice.objects.filter(user=user, session_id=session_id).order_by('is_active', '-pk')[:2])
-            if bound:
-                if not bound[0].is_active:
-                    raise device_inactive()
-                device = bound[0]
-
-        if device is None:
-            row = UserDevice.objects.filter(user=user, device_fingerprint=fingerprint).first() if fingerprint else None
-            if row is not None and row.is_active:
-                if session_id and row.session_id != session_id:
-                    # A new sign-in on this browser: the slot moves to it.
-                    self._bind_device_to_session(row, session_id)
-                device = row
-            elif row is not None and (not session_id or not row.session_id):
-                # Logged out before its session was recorded (or a token
-                # without a session id): the browser must sign in again with a
-                # fresh device id, as before.
-                raise device_inactive()
-            else:
-                # A device this user has not used yet, or a fresh sign-in on a
-                # browser whose (recorded) session was logged out.
-                slots_taken = UserDevice.objects.filter(
-                    user=user, is_active=True, last_login__gte=now - _DEVICE_STALE_AFTER,
-                ).count()
-                if at_limit(slots_taken):
-                    if management_request:
-                        return  # let it reach Settings without taking a slot
-                    raise limit_reached()
-                if row is not None:
-                    device = self._reenrol_device(row, session_id, user_agent, ip, now)
-                else:
-                    device, _created = UserDevice.objects.get_or_create(
-                        user=user,
-                        device_fingerprint=fingerprint or _SESSION_FINGERPRINT_PREFIX + session_id,
-                        defaults={
-                            'device_name': user_agent, 'ip_address': ip, 'is_active': True,
-                            'session_id': session_id,
-                        },
-                    )
-                request_obj.auth_device_id = device.pk
-                return
-
-        request_obj.auth_device_id = device.pk
-        more_recent = (
-            UserDevice.objects
-            .filter(user=user, is_active=True, last_login__gt=device.last_login)
-            .exclude(pk=device.pk)
-            .count()
-        )
-        if at_limit(more_recent):
-            if management_request:
-                return  # do not refresh last_login, or it would win its slot back
-            raise limit_reached()
-
-        if (
-            device.last_login is None
-            or now - device.last_login >= _DEVICE_TOUCH_INTERVAL
-            or device.device_name != user_agent
-            or (device.ip_address or None) != ip
-        ):
-            UserDevice.objects.filter(pk=device.pk).update(
-                device_name=user_agent, ip_address=ip, last_login=now,
-            )
-
-    @staticmethod
-    def _retire_session(user_id, session_id):
-        """Record ``session_id`` as ended: its requests get ``device_inactive`` from now on.
-
-        Kept as an inactive UserDevice row (``sid:<session id>``), never listed.
-        """
-        from .models import UserDevice
-
-        if not session_id:
-            return
-        retired, created = UserDevice.objects.get_or_create(
-            user_id=user_id,
-            device_fingerprint=_SESSION_FINGERPRINT_PREFIX + session_id,
-            defaults={'session_id': session_id, 'is_active': False, 'device_name': 'Ended session'},
-        )
-        if not created and (retired.is_active or retired.session_id != session_id):
-            UserDevice.objects.filter(pk=retired.pk).update(is_active=False, session_id=session_id)
-
-    def _bind_device_to_session(self, row, session_id):
-        """Move an active device row to a new Supabase session, retiring the old one."""
-        from .models import UserDevice
-
-        with transaction.atomic():
-            if row.session_id and row.session_id != session_id:
-                self._retire_session(row.user_id, row.session_id)
-            UserDevice.objects.filter(pk=row.pk).update(session_id=session_id)
-        row.session_id = session_id
-
-    def _reenrol_device(self, row, session_id, user_agent, ip, now):
-        """A fresh sign-in on a logged-out device row: enrol it again for the new session."""
-        from .models import UserDevice
-
-        with transaction.atomic():
-            if row.session_id and row.session_id != session_id:
-                self._retire_session(row.user_id, row.session_id)
-            UserDevice.objects.filter(pk=row.pk).update(
-                is_active=True, session_id=session_id, device_name=user_agent, ip_address=ip, last_login=now,
-            )
-        row.is_active, row.session_id, row.last_login = True, session_id, now
-        return row
+    # Device cap: accounts.device_limits.DeviceLimitMixin. A logged-out
+    # device's Supabase session is signed out upstream as well.
+    def _end_session(self, token, session_id):
+        self._end_supabase_session(token, session_id)
 
     def _end_supabase_session(self, token, session_id):
         """Best effort: sign the logged-out device's Supabase session out (GoTrue /logout).
@@ -969,6 +735,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                     "is_superuser": trusted_admin,
                     "is_staff": trusted_admin,
                 },
+                # A concurrent first request may have created the row: look
+                # it up again with every linking rule (never by email alone).
+                relink=lambda: self._link_existing_row_by_email(
+                    User, email, supabase_uid, trusted_admin, supabase_user,
+                ),
             )
 
         if created:
@@ -1013,7 +784,10 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             if updates:
                 user.save(update_fields=updates)
 
-        TokenBalance.objects.get_or_create(user=user)
+        # The token wallet is created with the account (_create_local_user)
+        # and when a row is first linked (_link_existing_row_by_email); every
+        # wallet reader uses get_or_create as well. It used to cost a query on
+        # every authenticated request.
         return user
 
     @staticmethod
@@ -1042,10 +816,26 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         sets supabase_uid in Django admin). Once linked, the row is only ever
         matched by supabase_uid, so a row already linked to another identity
         is never re-linked by email.
+
+        The email is matched case-insensitively and must match exactly one
+        row. The lookup used to be case-sensitive (PostgreSQL), so a legacy
+        row with a mixed-case address got a duplicate account on its first
+        Supabase sign-in; with two matching rows nothing is linked.
         """
-        row = User.objects.filter(email=email).order_by("id").first()
-        if row is None:
+        rows = list(User.objects.filter(email__iexact=email).order_by("id")[:2])
+        if not rows:
             return None
+        if len(rows) > 1:
+            logger.warning(
+                "Refusing to link Supabase identity %s: several accounts share its email (ids %s); "
+                "link one explicitly with `manage.py link_supabase_identity --email <email> --uid <id> --apply`.",
+                supabase_uid or "<no id>", ", ".join(str(r.pk) for r in rows),
+            )
+            raise _auth_failed(
+                "account_link_required",
+                "This account must be verified by an administrator before it can sign in. Please contact support.",
+            )
+        row = rows[0]
         if not row.is_active:
             # Never link a blocked account.
             raise _auth_failed(
@@ -1085,6 +875,7 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             claimed = 0
         if claimed:
             row.supabase_uid = supabase_uid
+            TokenBalance.objects.get_or_create(user=row)
             if privileged:
                 self._log_privileged_link(row, supabase_uid, supabase_user or {}, trusted_admin)
             return row
@@ -1120,8 +911,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
         )
 
     @staticmethod
-    def _create_local_user(User, *, email, supabase_uid, metadata, defaults):
+    def _create_local_user(User, *, email, supabase_uid, metadata, defaults, relink=None):
         """Create the local row for a new Supabase identity. Returns (user, created).
+
+        ``relink`` (the caller's ``_link_existing_row_by_email``) finds the
+        row a concurrent first request created, with every linking rule.
 
         The username is public (discussions, leaderboard): the one chosen at
         sign-up (user_metadata.username) when it follows the Settings rules,
@@ -1148,12 +942,15 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
                     supabase_uid=supabase_uid,
                     **defaults,
                 )
+                TokenBalance.objects.get_or_create(user=user)
             return user, True
         except IntegrityError:
             # A concurrent first request for the same identity created it.
             existing = User.objects.filter(supabase_uid=supabase_uid).first() if supabase_uid else None
-            if existing is None:
-                existing = User.objects.filter(email=email).order_by("id").first()
+            if existing is None and relink is not None:
+                # Same rules as a first sign-in: one case-insensitive email
+                # match, admin rows only for their original identity.
+                existing = relink()
             if existing is None:
                 raise
             return existing, False

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseBrowserClient } from '@/utils/supabase/client';
 import { getSupabaseConfig } from '@/utils/supabase/config';
-import { isLocalAuthMode } from './localAuth';
+import { isTokenAuthBuild } from './localSession';
 
 let browserClient: SupabaseClient | null = null;
 
@@ -13,13 +13,15 @@ const INVALID_REFRESH_TOKEN_MARKERS = [
 
 export const isSupabaseConfigured = () => getSupabaseConfig().isConfigured;
 
-// In local dev auth mode (NEXT_PUBLIC_AUTH_MODE=local) Supabase is switched
-// off entirely, even if its keys are present in the environment.
+// In the token auth modes (NEXT_PUBLIC_AUTH_MODE=local, dev only, or =django,
+// the Django-native sign-in) Supabase is switched off entirely, even if its
+// keys are present in the environment: no client is ever created, so no
+// session is read and no request goes to Supabase.
 export const isSupabaseAuthEnabled = () =>
-  !isLocalAuthMode() && isSupabaseConfigured();
+  !isTokenAuthBuild() && isSupabaseConfigured();
 
 export const getSupabaseBrowserClient = () => {
-  if (isLocalAuthMode() || !isSupabaseConfigured()) return null;
+  if (isTokenAuthBuild() || !isSupabaseConfigured()) return null;
 
   if (!browserClient) {
     browserClient = createSupabaseBrowserClient();

@@ -1,15 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, LogIn, Mail } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
 import { extractApiErrorMessage } from '@/lib/api';
 import { safeInternalPath } from '@/lib/auth-redirect';
+import { AuthApiError, resendVerificationEmail } from '@/lib/localAuth';
+
+const isAdminProfile = (profile: unknown): boolean =>
+    String((profile as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
+    ((profile as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
+
+// Django-native sign-in: 409 google_link_required (an account with this email
+// exists but is not linked to that Google account yet; the backend mailed a
+// single-use link to the account's address).
+const GOOGLE_LINK_NOTICE =
+    'Check your email to link your Google account. An account with this email address already exists, '
+    + 'so we sent a link to that address. Open it within 30 minutes to connect Google sign-in; you will be signed in.';
 
 export default function LoginClient() {
     const [identifier, setIdentifier] = useState('');
@@ -20,32 +33,72 @@ export default function LoginClient() {
     const [loading, setLoading] = useState(false);
     const [oauthLoading, setOauthLoading] = useState<'google' | ''>('');
     const [magicLoading, setMagicLoading] = useState(false);
-    const { login, magicLinkLogin, oauthLogin, isSupabaseAuth } = useAuth();
+    // Django-native sign-in: the error's code (extra help next to it), an
+    // informational notice, the "resend confirmation" button and the Google button.
+    const [errorCode, setErrorCode] = useState('');
+    const [notice, setNotice] = useState('');
+    const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+    const [googleBusy, setGoogleBusy] = useState(false);
+    const signingIn = useRef(false);
+    const {
+        user, loading: authLoading, login, magicLinkLogin, oauthLogin, googleLogin,
+        isSupabaseAuth, authMode, googleSignInEnabled,
+    } = useAuth();
+    const isDjangoAuth = authMode === 'django';
     const router = useRouter();
     const searchParams = useSearchParams();
     const authErrorFromCallback = (searchParams.get('authError') || '').trim();
 
+    // Send admins to the control tower, students to their dashboard. Guard
+    // against open-redirect: only same-origin relative paths are accepted
+    // (rejects protocol-relative `//evil.com`, absolute URLs, scheme
+    // separators, etc.).
+    const destinationFor = (signedIn: unknown) =>
+        safeInternalPath(searchParams.get('next'), isAdminProfile(signedIn) ? '/admin' : '/dashboard');
+
+    // Django mode: a visitor whose stored session is still valid leaves
+    // /login (in Supabase mode the middleware redirects; the token-mode
+    // middleware cannot tell a valid session from a stale presence cookie).
+    useEffect(() => {
+        if (!isDjangoAuth || authLoading || !user || signingIn.current) return;
+        router.replace(destinationFor(user));
+    }, [isDjangoAuth, authLoading, user]);
+
+    const clearMessages = () => {
+        setError('');
+        setErrorCode('');
+        setNotice('');
+        setResendState('idle');
+    };
+
+    /** Django-native sign-in errors carry a code ({detail, code}). */
+    const showNativeError = (err: AuthApiError) => {
+        setErrorCode(err.code || '');
+        if (err.code === 'google_link_required') {
+            setNotice(GOOGLE_LINK_NOTICE);
+            return;
+        }
+        setError(err.message || 'Sign-in failed. Please try again.');
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        clearMessages();
         setLoading(true);
+        signingIn.current = true;
         try {
             // login() resolves with the freshly-fetched profile (see
             // lib/auth.tsx#login), so we MUST use that value instead of
             // the `user` captured at render time — the render-time
             // snapshot is still the pre-login (often stale or null) value.
             const signedIn = await login(identifier, password);
-            // Send admins to the control tower, students to their dashboard.
-            const rawNext = searchParams.get('next');
-            const isAdmin =
-                String((signedIn as { is_admin?: boolean } | null)?.is_admin) === 'true' ||
-                ((signedIn as { role?: string } | null)?.role || '').toLowerCase() === 'admin';
-            const fallback = isAdmin ? '/admin' : '/dashboard';
-            // Guard against open-redirect: only accept same-origin relative paths
-            // (rejects protocol-relative `//evil.com`, absolute URLs, scheme
-            // separators, etc.).
-            router.push(safeInternalPath(rawNext, fallback));
+            router.push(destinationFor(signedIn));
         } catch (err: unknown) {
+            signingIn.current = false;
+            if (err instanceof AuthApiError) {
+                showNativeError(err);
+                return;
+            }
             const error = err as { response?: { data?: unknown } };
             if (error.response?.data) {
                 setError(extractApiErrorMessage(error.response.data, 'Invalid username or password'));
@@ -69,6 +122,37 @@ export default function LoginClient() {
         }
     };
 
+    const handleGoogleCredential = async (credential: string) => {
+        clearMessages();
+        setGoogleBusy(true);
+        signingIn.current = true;
+        try {
+            const signedIn = await googleLogin(credential);
+            router.push(destinationFor(signedIn));
+        } catch (err: unknown) {
+            signingIn.current = false;
+            if (err instanceof AuthApiError) {
+                showNativeError(err);
+            } else {
+                setError(err instanceof Error && err.message ? err.message : 'Google sign-in failed. Please try again.');
+            }
+        } finally {
+            setGoogleBusy(false);
+        }
+    };
+
+    const handleResendConfirmation = async () => {
+        if (!identifier.includes('@')) return;
+        setResendState('sending');
+        try {
+            setNotice(await resendVerificationEmail(identifier));
+            setResendState('sent');
+        } catch (err: unknown) {
+            setResendState('idle');
+            setError(err instanceof Error && err.message ? err.message : 'Could not send the email. Please try again.');
+        }
+    };
+
     return (
         <AuthShell
             badge="Welcome Back"
@@ -87,8 +171,38 @@ export default function LoginClient() {
             )}
 
             {error && (
-                <div className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+                <div role="alert" className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
                     {error}
+                    {errorCode === 'account_link_required' && (
+                        <>
+                            {' '}
+                            <Link href="/contact" className="font-semibold underline underline-offset-2">Contact support</Link>
+                        </>
+                    )}
+                    {isDjangoAuth && errorCode === 'invalid_credentials' && (
+                        <span className="mt-1.5 block text-xs text-muted-foreground">
+                            Signed up with Google? Use the Google button below. Never set a password, or forgot it?{' '}
+                            <Link href="/forgot-password" className="font-medium text-primary hover:underline">Reset it here</Link>.
+                        </span>
+                    )}
+                    {errorCode === 'email_not_confirmed' && identifier.includes('@') && (
+                        <span className="mt-2 block">
+                            <button
+                                type="button"
+                                onClick={handleResendConfirmation}
+                                disabled={resendState !== 'idle'}
+                                className="text-xs font-semibold text-primary underline underline-offset-2 disabled:opacity-60"
+                            >
+                                {resendState === 'sending' ? 'Sending...' : resendState === 'sent' ? 'Confirmation email sent' : 'Resend confirmation email'}
+                            </button>
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {notice && (
+                <div role="status" className="mb-5 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                    {notice}
                 </div>
             )}
 
@@ -108,6 +222,7 @@ export default function LoginClient() {
                         type="email"
                         name="identifier"
                         placeholder="Enter your email"
+                        autoComplete="email"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         required
@@ -128,6 +243,7 @@ export default function LoginClient() {
                             name="password"
                             className="pr-12"
                             placeholder="Enter your password"
+                            autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
@@ -144,9 +260,22 @@ export default function LoginClient() {
                     </div>
                 </div>
 
-                <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading}>
+                <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={loading || googleBusy}>
                     {loading ? 'Signing in...' : (<><LogIn className="w-5 h-5" /> Sign In</>)}
                 </Button>
+
+                {isDjangoAuth && googleSignInEnabled && (<>
+                <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">or continue with</span>
+                    </div>
+                </div>
+                <GoogleSignInButton text="signin_with" onCredential={handleGoogleCredential} busy={googleBusy || loading} />
+                {googleBusy && <p className="text-center text-xs text-muted-foreground">Signing in with Google...</p>}
+                </>)}
 
                 {isSupabaseAuth && (<>
                 <div className="relative py-1">
@@ -200,6 +329,15 @@ export default function LoginClient() {
                 </Button>
                 </>)}
             </form>
+
+            {isDjangoAuth && (
+                <p className="mt-5 text-center text-xs leading-5 text-muted-foreground">
+                    Already have an account? Your email and password still work{googleSignInEnabled ? ', and so does Google' : ''}.
+                    {' '}Never set a password? Use{' '}
+                    <Link href="/forgot-password" className="font-medium text-primary hover:underline">Forgot password</Link>
+                    {' '}to set one.
+                </p>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
                 Don&apos;t have an account?{' '}

@@ -7,6 +7,13 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { authAPI } from '@/lib/api';
 import { consumePostAuthPath } from '@/lib/auth';
 import { safeInternalPath } from '@/lib/auth-redirect';
+import { isDjangoAuthBuild } from '@/lib/localSession';
+
+// Django-native sign-in has no OAuth / email-link callback: the old Supabase
+// links (sign-up confirmation, magic link, password recovery) land here and
+// are sent to /login, with a hint when the URL carried one of them.
+const OLD_LINK_MESSAGE =
+  'This sign-in link is no longer valid. Please sign in with your email and password or with Google, or use "Forgot password?".';
 
 const decodeUrlFragment = () => {
   if (typeof window === 'undefined') return new URLSearchParams();
@@ -30,6 +37,18 @@ export default function AuthCallbackClient() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (isDjangoAuthBuild()) {
+      const next = safeInternalPath(searchParams.get('next'), '');
+      const params = new URLSearchParams();
+      if (next) params.set('next', next);
+      const fragment = decodeUrlFragment();
+      if (hasQueryParams || fragment.get('access_token') || fragment.get('error_description')) {
+        params.set('authError', OLD_LINK_MESSAGE);
+      }
+      const query = params.toString();
+      router.replace(query ? `/login?${query}` : '/login');
+      return;
+    }
     const finishAuth = async () => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {

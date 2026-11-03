@@ -1,6 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import AdminAuditLog, CustomUser, TokenBalance, TokenConfig, TokenTransaction
+from django.utils import timezone
+
+from .models import (
+    AdminAuditLog, AuthSession, CustomUser, PendingSignup, TokenBalance, TokenConfig, TokenTransaction, UserIdentity,
+)
 from .models_freemium import FreeShowcaseQuestion
 
 
@@ -12,6 +16,8 @@ class CustomUserAdmin(UserAdmin):
         ('CMS Profile', {'fields': ('role', 'phone', 'target_exam', 'target_year', 'avatar_url')}),
         # Linked Supabase Auth identity (see accounts.supabase_rest_auth).
         ('Supabase identity', {'fields': ('supabase_uid',)}),
+        # Django-native sign-in (AUTH_PROVIDER=django; accounts.native_auth).
+        ('Native sign-in', {'fields': ('email_verified_at',)}),
     )
 
 
@@ -83,3 +89,73 @@ class FreeShowcaseQuestionAdmin(admin.ModelAdmin):
     ordering = ('year', 'position')
     search_fields = ('question__question_text',)
     raw_id_fields = ('question',)
+
+
+# ── Django-native sign-in (AUTH_PROVIDER=django) ───────────────────────
+
+@admin.register(UserIdentity)
+class UserIdentityAdmin(admin.ModelAdmin):
+    """External sign-in identities (Google ``sub``). Adding one here is the operator link.
+
+    Admin / staff accounts are never linked by email automatically
+    (accounts.google_identity): link them here after checking who owns the
+    Google account. Identities are matched on (provider, subject) only.
+    """
+
+    list_display = ['user', 'provider', 'source', 'email_verified', 'created_at', 'last_sign_in_at']
+    list_filter = ['provider', 'source']
+    search_fields = ['user__username', 'user__email', 'subject']
+    raw_id_fields = ['user']
+    readonly_fields = ['created_at', 'last_sign_in_at', 'supabase_identity_id']
+
+    def get_changeform_initial_data(self, request):
+        return {**super().get_changeform_initial_data(request), 'source': 'operator'}
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from .views import create_admin_audit_log
+
+        create_admin_audit_log(
+            actor=request.user, action='identity_link', resource_type='user', resource_id=obj.user_id,
+            detail=f'{obj.provider} identity {"changed" if change else "linked"} in Django admin',
+            metadata={'provider': obj.provider, 'source': obj.source},
+        )
+
+
+@admin.register(AuthSession)
+class AuthSessionAdmin(admin.ModelAdmin):
+    """Native sign-in sessions; "Revoke" ends them (refresh token included) on the next request."""
+
+    list_display = ['user', 'method', 'created_at', 'last_used_at', 'expires_at', 'revoked_at', 'revoked_reason']
+    list_filter = ['method', 'revoked_reason']
+    search_fields = ['user__username', 'user__email', 'sid']
+    raw_id_fields = ['user']
+    readonly_fields = [f.name for f in AuthSession._meta.fields]
+    actions = ['revoke_sessions']
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description='Revoke the selected sessions')
+    def revoke_sessions(self, request, queryset):
+        count = queryset.filter(revoked_at__isnull=True).update(revoked_at=timezone.now(), revoked_reason='admin')
+        from .views import create_admin_audit_log
+
+        create_admin_audit_log(
+            actor=request.user, action='session_revoke', resource_type='auth_session',
+            detail=f'Revoked {count} native session(s) in Django admin', metadata={'count': count},
+        )
+        self.message_user(request, f'Revoked {count} session(s).')
+
+
+@admin.register(PendingSignup)
+class PendingSignupAdmin(admin.ModelAdmin):
+    """Sign-ups waiting for their emailed link (no account exists yet)."""
+
+    list_display = ['email', 'created_at', 'expires_at']
+    search_fields = ['email']
+    readonly_fields = ['email', 'username', 'first_name', 'last_name', 'created_at', 'expires_at', 'ip_address']
+    exclude = ['password', 'token_hash']
+
+    def has_add_permission(self, request):
+        return False

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Web start command (Railway). Railway attaches a volume to ONE service, and the
+# django-q worker writes media (imports, generated videos) into MEDIA_ROOT, so by
+# default the worker runs inside the web container next to gunicorn and shares
+# the volume. Set RUN_QCLUSTER_IN_WEB=0 when a separate worker service has its
+# own access to the same storage.
+set -o errexit
+
+# Media steps need the volume, which Railway mounts only here (not in the
+# pre-deploy container of release.sh). They run in the background so the
+# health check does not wait for the first restore (~300 MB); every step is
+# idempotent, so a restart simply resumes. Set RUN_MEDIA_STEPS=0 to skip.
+if [ "${RUN_MEDIA_STEPS:-1}" = "1" ]; then
+    (
+        python manage.py shell -c "from pathlib import Path; from django.conf import settings; p = Path(settings.MEDIA_ROOT) / 'recall_images'; p.mkdir(parents=True, exist_ok=True); print('Bootstrapped', p)" || true
+        # Files staged in the database by scripts/railway/upload_media_to_db.py.
+        python manage.py restore_media_transfer || true
+        # After the restore, so the fixture images it looks for are on disk.
+        python manage.py relink_fixture_images --apply || true
+        echo "start_web.sh: media steps complete"
+    ) &
+fi
+
+if [ "${RUN_QCLUSTER_IN_WEB:-1}" = "1" ]; then
+    (
+        # Restart the worker if it exits; it must never take gunicorn down.
+        while true; do
+            python manage.py qcluster || true
+            echo "qcluster exited; restarting in 10 s" >&2
+            sleep 10
+        done
+    ) &
+fi
+
+exec gunicorn crack_cms.wsgi:application \
+    --bind "0.0.0.0:${PORT:-8000}" \
+    --workers "${WEB_CONCURRENCY:-3}" \
+    --threads "${GUNICORN_THREADS:-4}" \
+    --timeout "${GUNICORN_TIMEOUT:-120}" \
+    --log-file -
