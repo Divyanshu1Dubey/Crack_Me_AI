@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, MailCheck, UserPlus } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
@@ -38,7 +37,6 @@ export default function RegisterPage() {
     const [googleBusy, setGoogleBusy] = useState(false);
     const { register, oauthLogin, googleLogin, isSupabaseAuth, authMode, googleSignInEnabled } = useAuth();
     const isDjangoAuth = authMode === 'django';
-    const router = useRouter();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
