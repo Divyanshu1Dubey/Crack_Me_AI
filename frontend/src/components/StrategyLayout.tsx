@@ -8,6 +8,7 @@ import { questionBankHref, siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import FAQSection from '@/components/FAQSection';
 import AdSense from '@/components/AdSense';
+import PartnerAd from '@/components/PartnerAd';
 import { jsonLdString } from '@/lib/metadata';
 
 export interface StrategyWeek {
@@ -161,6 +162,7 @@ export default function StrategyLayout(c: StrategyContent) {
                 </section>
 
                 <AdSense slot="in-content" />
+                <PartnerAd kind="native" />
 
                 {/* Weekly plan */}
                 <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
