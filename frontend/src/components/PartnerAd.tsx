@@ -13,7 +13,7 @@
  * (allow-popups-to-escape-sandbox). The /ads/ pages get their own headers in vercel.json.
  *
  * Shown only on public content pages, next to the AdSense slots, and like AdSense only after
- * the visitor allowed the `marketing` consent category. Kill switch: NEXT_PUBLIC_PARTNER_ADS=off.
+ * the visitor allowed the `marketing` consent category. Off by default: set NEXT_PUBLIC_PARTNER_ADS=on.
  *
  * Deliberately not used: the network's popunder and social-bar formats. They only work in the
  * top-level page (where they could read sign-in tokens), and they open windows / overlays.
@@ -23,7 +23,10 @@ import { consent } from '@/lib/consent';
 
 type Kind = 'native' | 'skyscraper';
 
-const ENABLED = (process.env.NEXT_PUBLIC_PARTNER_ADS || 'on').trim().toLowerCase() !== 'off';
+// OFF unless NEXT_PUBLIC_PARTNER_ADS=on. 2026-11-03: a live test showed the network serving
+// explicit adult creatives ("undress" apps with nudity) in the native unit. Turn this on only after
+// the publisher account excludes adult categories and a check shows clean ads.
+const ENABLED = (process.env.NEXT_PUBLIC_PARTNER_ADS || 'off').trim().toLowerCase() === 'on';
 
 // Exported for tests: the sandbox must never grant same-origin or top navigation.
 export const PARTNER_AD_SANDBOX = 'allow-scripts allow-popups allow-popups-to-escape-sandbox';
