@@ -102,6 +102,13 @@ hostname with forged headers (`X-Forwarded-For: 1.2.3.4`, `CF-Connecting-IP: 1.2
 still be your real address with `edge_header_honoured` false. If the right-most entry is something else,
 use the Transform Rule secret instead (with `TRUSTED_CLIENT_IP_HEADER_FROM=any`).
 
+Until one of the two is done, `check --deploy` warns `accounts.W007`: a request sent to the origin directly
+(around Cloudflare) can name its own client address and get fresh sign-in rate-limit buckets; the per-email
+limits still cap guessing on one account. Removing the service's public `*.up.railway.app` domain (Railway →
+service → Settings → Networking) closes the obvious way around Cloudflare in the meantime, not every one.
+`TRUSTED_CLIENT_IP_HEADER_FROM` set without `NUM_PROXIES` is an error (`accounts.E001`): `migrate` in the
+release step refuses to run, so that deploy stops and the previous version keeps serving.
+
 Keep from the old deployment: the AI provider keys, `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` /
 `RAZORPAY_WEBHOOK_SECRET`, `SENTRY_DSN` (optional). Remove every `SUPABASE_*` variable.
 

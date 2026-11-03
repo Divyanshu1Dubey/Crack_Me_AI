@@ -2,8 +2,12 @@
 
 Per client IP: the sign-in views use ``crack_cms.throttling.ClientIPScopedRateThrottle``,
 keyed on ``crack_cms.client_ip.get_client_ip`` -- the address django-axes
-uses -- so forged X-Forwarded-For / CF-Connecting-IP headers never open a
-new bucket.
+uses. Forged X-Forwarded-For / CF-Connecting-IP headers stop opening new
+buckets only once the client address is hardened (NUM_PROXIES +
+TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare, or the Transform Rule secret;
+docs/DEPLOY_RAILWAY.md). Until then a request sent to the origin directly
+(around Cloudflare) can name its own address; the per-email limits below
+still cap guessing on one account, and accounts.W007 warns.
 
 Per email: a distributed attack on ONE account (many IPs, one email) is
 limited here: the cache key is a SHA-256 of the lower-cased email, so no

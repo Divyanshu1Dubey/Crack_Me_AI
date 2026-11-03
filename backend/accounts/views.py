@@ -1465,7 +1465,8 @@ class PasswordResetRequestView(APIView):
         if django_auth_enabled():
             from .throttles import PasswordResetEmailThrottle
 
-            # Per client IP as django-axes sees it (forged forwarding headers do not count).
+            # Per client IP as django-axes sees it (forged forwarding headers stop counting
+            # once the client address is hardened; accounts.W007).
             return [ClientIPScopedRateThrottle(), PasswordResetEmailThrottle()]
         return super().get_throttles()
 

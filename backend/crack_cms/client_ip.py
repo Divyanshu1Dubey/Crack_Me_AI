@@ -1,4 +1,4 @@
-"""Client IP resolution that cannot be steered through ``X-Forwarded-For`` or a forged edge header.
+"""Client IP resolution that, once hardened, cannot be steered through ``X-Forwarded-For`` or a forged edge header.
 
 In production the backend sits behind the platform proxy, so ``REMOTE_ADDR``
 is the proxy's address and is shared by every visitor. ``X-Forwarded-For``

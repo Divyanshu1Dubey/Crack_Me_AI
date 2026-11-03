@@ -29,7 +29,8 @@ Rules:
   and get the same 401 ``invalid_credentials``. django-axes counts failures
   per (account, client IP) -- 429 ``too_many_attempts`` -- and a per-email
   limit counts failed attempts from every IP (accounts.throttles). Per-IP
-  limits key on crack_cms.client_ip (forged forwarding headers do not count).
+  limits key on crack_cms.client_ip (forged forwarding headers stop counting
+  once the client address is hardened; docs/DEPLOY_RAILWAY.md).
 * ``403 account_blocked`` and ``401 email_not_confirmed`` are only answered
   after the right password; the latter also mails a verification link.
 * Sign-up creates no account: each sign-up is its own PendingSignup (the
@@ -355,8 +356,9 @@ class _NativeView(APIView):
     """Anonymous native-auth endpoint: 404 unless AUTH_PROVIDER=django, ``{detail, code}`` errors.
 
     Per-IP limits (``throttle_scope``) key on crack_cms.client_ip.get_client_ip,
-    the address django-axes uses: forged X-Forwarded-For / CF-Connecting-IP
-    headers never open a new bucket.
+    the address django-axes uses. Forged X-Forwarded-For / CF-Connecting-IP
+    headers stop opening new buckets once the client address is hardened
+    (accounts.W007; docs/DEPLOY_RAILWAY.md).
     """
 
     permission_classes = [permissions.AllowAny]
@@ -648,9 +650,17 @@ class NativeVerifyEmailView(_NativeView):
         outcome, user = None, None
         now = timezone.now()
         with transaction.atomic():
-            pending = PendingSignup.objects.select_for_update().filter(token_hash=_hash_token(token)).first()
+            # Lock every sign-up row of the address in one order (pk), then re-read this link's row
+            # under the lock: two links of one address verified at the same moment used to lock
+            # their own row first and then each other's (a deadlock, one request failed).
+            found = PendingSignup.objects.filter(token_hash=_hash_token(token)).only('pk', 'email').first()
+            rows = (
+                list(PendingSignup.objects.select_for_update().filter(email=found.email).order_by('pk'))
+                if found is not None else []
+            )
+            pending = next((row for row in rows if row.pk == found.pk), None) if found is not None else None
             if pending is None:
-                outcome = 'invalid'
+                outcome = 'invalid'  # unknown link, or consumed by a concurrent request
             elif pending.expires_at <= now:
                 pending.delete()
                 outcome = 'invalid'
@@ -658,12 +668,11 @@ class NativeVerifyEmailView(_NativeView):
                 PendingSignup.objects.filter(email=pending.email).delete()
                 outcome = 'exists'
             else:
-                open_signups = list(
-                    PendingSignup.objects.select_for_update()
-                    .filter(email=pending.email, expires_at__gt=now).order_by('-created_at', '-pk')
+                # This link's own sign-up first, then the address's other open ones, newest first.
+                open_signups = sorted(
+                    (row for row in rows if row.expires_at > now),
+                    key=lambda p: (p.pk != pending.pk, -p.created_at.timestamp(), -p.pk),
                 )
-                # This link's own sign-up first, then the address's other open ones.
-                open_signups.sort(key=lambda p: p.pk != pending.pk)
                 chosen = None
                 if len(password) <= _MAX_PASSWORD_CHARS:
                     chosen = next((p for p in open_signups if check_password_hash(password, p.password)), None)

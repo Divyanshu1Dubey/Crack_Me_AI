@@ -940,9 +940,51 @@ class NativeDeployCheckTests(TestCase):
         found = self.ids(AUTH_PROVIDER='django', DEBUG=False, JWT_SIGNING_KEY='a-separate-signing-key-' + 'x' * 40,
                          GOOGLE_OAUTH_CLIENT_IDS=['web.apps.googleusercontent.com'],
                          EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend', EMAIL_HOST='smtp.example.com',
-                         TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP',
+                         TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP', TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare',
                          REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1})
-        self.assertFalse({'accounts.W004', 'accounts.W005', 'accounts.W006', 'accounts.W007'} & found, found)
+        self.assertFalse({'accounts.W004', 'accounts.W005', 'accounts.W006', 'accounts.W007', 'accounts.E001'} & found,
+                         found)
+
+    def test_a_header_read_from_any_peer_warns_until_hardened(self):
+        base = dict(AUTH_PROVIDER='django', DEBUG=False, TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP',
+                    REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1})
+        self.assertIn('accounts.W007', self.ids(**base, TRUSTED_CLIENT_IP_HEADER_FROM=''))
+        self.assertIn('accounts.W007', self.ids(**base, TRUSTED_CLIENT_IP_HEADER_FROM='any'))
+        self.assertNotIn('accounts.W007', self.ids(**base, TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare'))
+        # The Transform Rule secret hardens it too (only requests through our Cloudflare zone carry it).
+        self.assertNotIn('accounts.W007', self.ids(**base, TRUSTED_CLIENT_IP_HEADER_FROM='',
+                                                   TRUSTED_CLIENT_IP_SECRET='edge-secret-value'))
+
+    def test_migration_0029_reverse_keeps_the_newest_signup_per_address(self):
+        import importlib
+
+        from django.apps import apps as global_apps
+
+        migration = importlib.import_module('accounts.migrations.0029_pendingsignup_one_row_per_signup')
+        expires = timezone.now() + timedelta(days=1)
+        older = PendingSignup.objects.create(email='twice@example.com', password='x', token_hash='h1' * 32,
+                                             expires_at=expires)
+        newer = PendingSignup.objects.create(email='twice@example.com', password='y', token_hash='h2' * 32,
+                                             expires_at=expires)
+        single = PendingSignup.objects.create(email='once@example.com', password='z', token_hash='h3' * 32,
+                                              expires_at=expires)
+        migration.keep_newest_signup_per_address(global_apps, None)
+        self.assertEqual(set(PendingSignup.objects.values_list('pk', flat=True)), {newer.pk, single.pk})
+        self.assertFalse(PendingSignup.objects.filter(pk=older.pk).exists())
+
+    def test_a_restricted_header_without_num_proxies_is_an_error_outside_debug(self):
+        restricted = dict(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP', TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare',
+                          REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': None})
+        with override_settings(DEBUG=False, **restricted):
+            errors = [m for m in run_checks() if m.id == 'accounts.E001']  # not deploy-only: migrate stops
+        self.assertEqual(len(errors), 1)
+        self.assertTrue(errors[0].is_serious())
+        with override_settings(DEBUG=True, **restricted):
+            self.assertFalse([m for m in run_checks() if m.id == 'accounts.E001'])
+        with override_settings(DEBUG=False, TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP',
+                               TRUSTED_CLIENT_IP_HEADER_FROM='cloudflare',
+                               REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1}):
+            self.assertFalse([m for m in run_checks() if m.id == 'accounts.E001'])
 
     def test_a_client_ip_header_without_num_proxies_still_warns(self):
         """Verifier probe: the header alone satisfied W007, although it is never read behind the proxy."""
