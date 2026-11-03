@@ -1,0 +1,32 @@
+# Build context for the Railway backend service (root directory: backend).
+# Railpack honours this file. Everything listed is read only by offline
+# import / training tools, never by the running server, and together it is
+# ~700 MB that overflowed Railway's build disk (2026-11-03).
+#
+# Still shipped on purpose: fixtures/ (seed_question_bank, relink_fixture_images),
+# Medura_Train/*.pdf at the top level (resources downloads) and
+# Medura_Train/textbooks|web_knowledge/*.md (ingest_source internal-notes).
+
+# Page images and intermediate output of the INI-CET / NEET PG importers
+importers/*/_output/
+
+# Question-paper PDFs and sources used by the import commands
+pyq/
+Medura_Train/PYQ/
+Medura_Train/textbooks/**/*.pdf
+Medura_Train/uploads/
+
+# One-off backups and local databases (production uses DATABASE_URL)
+questions_backup.json
+db.sqlite3
+*.sqlite3-journal
+
+# Local tooling and secrets
+.env
+.env.*
+venv/
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
