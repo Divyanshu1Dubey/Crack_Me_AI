@@ -14,7 +14,8 @@ Engineer would expect for a launch-ready deploy:
 * ALLOWED_HOSTS doesn't include the localhost-only default
 * warn when neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set (the
   rate limiters then see only the proxy's address), and when NUM_PROXIES
-  alone is missing (DRF's throttles read only that one)
+  alone is missing (DRF's throttles need it, and a Cloudflare header is only
+  read when the hop it names is Cloudflare's)
 
 Called from `crack_cms/urls.py` (not under the test runner); never raises
 in dev.
@@ -24,7 +25,7 @@ from __future__ import annotations
 import logging
 import os
 
-from crack_cms.client_ip import parse_num_proxies
+from crack_cms.client_ip import num_proxies_from_env
 
 LOG = logging.getLogger(__name__)
 
@@ -78,7 +79,8 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
             "ALLOWED_HOSTS contains localhost in production — strip it for prod."
         )
 
-    num_proxies_unset = parse_num_proxies(os.getenv("NUM_PROXIES")) is None
+    # As settings.py resolves it: 1 on Railway when unset (its edge proxy).
+    num_proxies_unset = num_proxies_from_env(os.environ) is None
     if num_proxies_unset and not os.getenv("TRUSTED_CLIENT_IP_HEADER", "").strip():
         LOG.warning(
             "Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: behind the platform proxy "
@@ -87,11 +89,13 @@ def security_posture_check(*, is_production: bool, is_ci: bool) -> None:
             "notes in crack_cms/settings.py and backend/.env.example."
         )
     elif num_proxies_unset:
-        # TRUSTED_CLIENT_IP_HEADER feeds the question-bank limiter only; DRF's
-        # anon / user / scoped throttles (auth, AI, local auth) read NUM_PROXIES.
+        # DRF's general throttles read NUM_PROXIES, and a Cloudflare header is
+        # only read when the hop the platform proxy appended is Cloudflare's
+        # (crack_cms/client_ip.py), which needs NUM_PROXIES as well.
         LOG.warning(
             "NUM_PROXIES is not set: DRF throttles key on the raw, client-controlled "
-            "X-Forwarded-For (TRUSTED_CLIENT_IP_HEADER covers the question-bank limiter only)."
+            "X-Forwarded-For, and a CF-Connecting-IP header is not read behind the platform proxy "
+            "(sign-in limits and lockouts then share the proxy's address). Set NUM_PROXIES (Railway: 1)."
         )
 
     has_any_ai_key = any(

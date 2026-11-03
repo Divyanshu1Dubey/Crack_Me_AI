@@ -177,11 +177,17 @@ test('register never signs in: it reports the emailed confirmation', async () =>
 test('emailed links: verify-email, password reset and connect-Google post the link values and sign in', async () => {
   const body = tokens(12, '2');
   answer = () => jsonResponse(201, { ...body, created: true });
-  await auth.verifyEmailLink({ token: 'pending-token-abcdefgh' });
-  assert.deepEqual(bodyOf(fetchCalls.at(-1)!), { token: 'pending-token-abcdefgh' });
-  await auth.verifyEmailLink({ uid: 'MTI', token: 'cbm4qa-0f1e' });
+  // A new sign-up's link goes with the password chosen at sign-up; an existing account's link alone.
+  await auth.verifyEmailLink({ token: 'pending-token-abcdefgh', password: 'Ch0sen!password' });
+  assert.deepEqual(bodyOf(fetchCalls.at(-1)!), { token: 'pending-token-abcdefgh', password: 'Ch0sen!password' });
+  await auth.verifyEmailLink({ uid: 'MTI', token: 'cbm4qa-0f1e', password: 'ignored' });
   assert.deepEqual(bodyOf(fetchCalls.at(-1)!), { uid: 'MTI', token: 'cbm4qa-0f1e' });
   assert.match(fetchCalls.at(-1)!.url, /\/auth\/native\/verify-email\/$/);
+
+  answer = () => jsonResponse(400, { detail: 'That is not the password you chose.', code: 'password_mismatch' });
+  await assert.rejects(auth.verifyEmailLink({ token: 'pending-token-abcdefgh', password: 'wrong' }),
+    { code: 'password_mismatch', status: 400 });
+  answer = () => jsonResponse(201, { ...body, created: true });
 
   answer = () => jsonResponse(200, { ...body, password_reset: true });
   await auth.confirmPasswordReset({ uid: 'MTI', token: 'cbm4qa-0f1e', newPassword: 'N3w!password' });

@@ -5,9 +5,10 @@
  * The Django-native backend rotates refresh tokens and treats a rotated token
  * presented again as theft: it revokes the whole session ("session_revoked"),
  * except for the token rotated in the last NATIVE_AUTH_REFRESH_REUSE_SECONDS
- * (20 s), which only gets a new access token (accounts/native_sessions.py
- * rotate()). Every tab shares the tokens in localStorage, so the client must
- * never POST the same refresh token twice when it can avoid it:
+ * (20 s), which gets tokens equivalent to the current ones
+ * (accounts/native_sessions.py rotate()). Every tab shares the tokens in
+ * localStorage, so the client must never POST the same refresh token twice
+ * when it can avoid it:
  *
  *   - concurrent requests in one tab share one refresh (one promise);
  *   - tabs take turns with an exclusive Web Lock and re-read the stored tokens
@@ -94,8 +95,8 @@ export function createTokenRefresher(options: TokenRefresherOptions) {
     const data = response?.data ?? null;
     const newAccess = status >= 200 && status < 300 && data && typeof data.access === 'string' ? data.access : '';
     if (newAccess) {
-      // No `refresh` in the answer: the token was rotated a moment ago by
-      // another tab, which stored the new one (the reuse window).
+      // No `refresh` in the answer (older backends inside the reuse window):
+      // another tab rotated a moment ago and stored the new one.
       const newRefresh = data && typeof data.refresh === 'string' && data.refresh ? data.refresh : null;
       options.writeTokens(newAccess, newRefresh);
       return { ok: true, access: newAccess, refreshed: true };

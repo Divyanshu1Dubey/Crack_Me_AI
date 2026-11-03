@@ -10,13 +10,13 @@ import logging
 from django.contrib.auth import get_user_model
 from rest_framework import exceptions, generics, permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Count, Max, Q, Subquery, Sum
 from django.core.cache import cache
 
+from crack_cms.throttling import ClientIPScopedRateThrottle, ScopedRateThrottle, UserRateThrottle
 from .models import TokenBalance, TokenConfig, TokenTransaction, Subscription
 from questions.models import Question
 from .permissions import IsControlTowerAdmin
@@ -1462,12 +1462,12 @@ class PasswordResetRequestView(APIView):
     def get_throttles(self):
         from .auth_mode import django_auth_enabled
 
-        throttles = super().get_throttles()
         if django_auth_enabled():
             from .throttles import PasswordResetEmailThrottle
 
-            throttles.append(PasswordResetEmailThrottle())
-        return throttles
+            # Per client IP as django-axes sees it (forged forwarding headers do not count).
+            return [ClientIPScopedRateThrottle(), PasswordResetEmailThrottle()]
+        return super().get_throttles()
 
     def post(self, request):
         from .auth_mode import django_auth_enabled
@@ -2131,7 +2131,7 @@ class PasswordResetConfirmView(APIView):
         from .auth_mode import django_auth_enabled
 
         if django_auth_enabled():
-            return [ScopedRateThrottle()]  # scope: throttle_scope below
+            return [ClientIPScopedRateThrottle()]  # scope: throttle_scope below
         return super().get_throttles()
 
     @property

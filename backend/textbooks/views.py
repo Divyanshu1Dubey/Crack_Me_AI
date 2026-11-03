@@ -3,7 +3,7 @@ import os
 from rest_framework import viewsets, permissions, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+from crack_cms.throttling import UserRateThrottle
 from django.db import transaction
 from django.db.models import Q, Avg
 from django.http import FileResponse

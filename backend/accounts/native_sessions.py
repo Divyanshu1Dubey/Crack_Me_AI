@@ -9,10 +9,12 @@ so the device cap keys on it exactly as on a Supabase session
 * ``issue_session_tokens(user, request, method)``: a new session and its first token pair.
 * ``rotate(raw_refresh)``: the presented refresh token must be the session's
   current one (``refresh_jti``); it is replaced (rotation). The token rotated
-  just before it (``previous_refresh_jti``) still gets an ACCESS token for
-  NATIVE_AUTH_REFRESH_REUSE_SECONDS, because another tab sharing the browser
-  storage may have rotated first. Any other reuse of a rotated token means
-  two parties hold the session's tokens: the whole session is revoked
+  just before it (``previous_refresh_jti``) is still answered for
+  NATIVE_AUTH_REFRESH_REUSE_SECONDS -- another tab sharing the browser
+  storage may have rotated first, or the rotation's answer was lost -- with an
+  access token and a refresh token equivalent to the current one (same
+  ``jti``, nothing new stored). Any other reuse of a rotated token means two
+  parties hold the session's tokens: the whole session is revoked
   (``refresh_reuse``) and both must sign in again.
 * ``revoke_session`` / ``revoke_user_sessions``: logout, password reset or
   change, device logout, account block. NativeJWTAuthentication checks the
@@ -182,8 +184,8 @@ def _equal(a: str, b: str) -> bool:
 
 
 def rotate(raw_refresh) -> dict:
-    """Exchange a refresh token: ``{'access', 'refresh', 'session_id'}``, or ``{'access', 'session_id'}``
-    inside the reuse window (another tab already stored the rotated refresh token).
+    """Exchange a refresh token: ``{'access', 'refresh', 'session_id'}`` (inside the reuse window the
+    refresh token is equivalent to the session's current one rather than new).
 
     Raises NativeAuthError: ``token_not_valid`` (bad / expired token),
     ``session_revoked`` (revoked, expired or reused session), ``account_blocked``,
@@ -246,10 +248,16 @@ def rotate(raw_refresh) -> dict:
             and session.rotated_at is not None
             and now - session.rotated_at <= refresh_reuse_window()
         ):
-            # Another tab rotated this token a moment ago and stored the new
-            # one; this request only needs an access token.
+            # Rotated a moment ago: another tab got there first, or the answer
+            # of that rotation never reached this browser (a dropped mobile
+            # connection, a tab closed mid-request). Answer with a refresh
+            # token EQUIVALENT to the current one (same jti; nothing new is
+            # stored), so a browser that kept the old token does not present
+            # it again later -- which would count as theft and end the session.
+            equivalent = _refresh_token_for(user, sid)
+            equivalent['jti'] = session.refresh_jti
             AuthSession.objects.filter(pk=session.pk).update(last_used_at=now)
-            result = {'access': str(presented.access_token), 'session_id': sid}
+            result = {'access': str(equivalent.access_token), 'refresh': str(equivalent), 'session_id': sid}
         else:
             AuthSession.objects.filter(pk=session.pk).update(revoked_at=now, revoked_reason='refresh_reuse')
             logger.warning(

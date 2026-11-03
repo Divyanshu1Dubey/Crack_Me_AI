@@ -13,7 +13,7 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import validate_email
 from rest_framework.response import Response
 from rest_framework import permissions, status
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from crack_cms.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.utils.urls import remove_query_param, replace_query_param
 from django.db import connection
 from django.http import Http404, HttpResponse

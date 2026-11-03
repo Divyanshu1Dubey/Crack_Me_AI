@@ -21,7 +21,7 @@ import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, BasePermission, AllowAny
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from crack_cms.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework import status
 from django.conf import settings as django_settings
 

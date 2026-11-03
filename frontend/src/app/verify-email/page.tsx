@@ -3,16 +3,22 @@
 /**
  * /verify-email -- the emailed confirmation link of the Django-native sign-in
  * (NEXT_PUBLIC_AUTH_MODE=django):
- *   #token=<t>            finishes a new sign-up (the account is created now)
+ *   #token=<t>            finishes a new sign-up: the account is created once
+ *                         the password chosen at sign-up is entered here
  *   #uid=<u>&token=<t>    confirms the email of an existing account
  * The values are read once from the URL fragment (never the query string) and
  * removed from the address bar, then posted to /api/auth/native/verify-email/,
  * which signs this browser in. The link works once.
+ *
+ * Why the password: anyone can sign up with someone else's address. The link
+ * proves the inbox; the password proves which sign-up is the inbox owner's,
+ * so opening the mail never creates an account protected by a stranger's
+ * password (backend: password_required / password_mismatch, the link stays
+ * usable after a wrong password).
  */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { CheckCircle, Loader2, MailWarning } from 'lucide-react';
+import { CheckCircle, KeyRound, Loader2, MailWarning } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,65 +30,102 @@ import { isDjangoAuthBuild } from '@/lib/localSession';
 
 type Outcome =
     | { kind: 'signed-in'; result: TokenAuthResult }
-    | { kind: 'missing' }
     | { kind: 'error'; code?: string; message: string };
+
+type EmailLink = { token: string; uid: string | null };
+
+// Wrong or missing password: the link is still valid, ask again.
+const PASSWORD_RETRY_CODES = new Set(['password_mismatch', 'password_required']);
 
 const isAdminProfile = (profile: { is_admin?: boolean; role?: string } | null | undefined) =>
     profile?.is_admin === true || (profile?.role || '').toLowerCase() === 'admin';
 
+const toOutcome = (request: Promise<TokenAuthResult>): Promise<Outcome> =>
+    request
+        .then((result): Outcome => ({ kind: 'signed-in', result }))
+        .catch((err: unknown): Outcome => ({
+            kind: 'error',
+            code: err instanceof AuthApiError ? err.code : undefined,
+            message: err instanceof Error && err.message ? err.message : 'This link could not be used. Please try again.',
+        }));
+
 export default function VerifyEmailPage() {
     const djangoAuth = isDjangoAuthBuild();
-    const router = useRouter();
     const { completeTokenSignIn } = useAuth();
-    // One request per page load: the link is single-use, and React runs this
-    // effect twice in development.
+    // The link is read once per page load (the fragment is removed from the
+    // address bar), and an existing account's link is posted once: it is
+    // single-use, and React runs effects twice in development.
+    const link = useRef<EmailLink | null | undefined>(undefined);
     const started = useRef<Promise<Outcome> | null>(null);
-    const [state, setState] = useState<'verifying' | 'done' | 'missing' | 'error'>('verifying');
+    const [state, setState] = useState<'verifying' | 'password' | 'done' | 'missing' | 'error'>('verifying');
     const [failure, setFailure] = useState<{ code?: string; message: string } | null>(null);
+    const [password, setPassword] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [passwordError, setPasswordError] = useState('');
     const [email, setEmail] = useState('');
     const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
     const [resendMessage, setResendMessage] = useState('');
 
+    const finish = async (outcome: Outcome, isActive: () => boolean = () => true) => {
+        if (!isActive()) return;
+        if (outcome.kind === 'error') {
+            setFailure({ code: outcome.code, message: outcome.message });
+            setState('error');
+            return;
+        }
+        setState('done');
+        let destination = consumePostAuthPath() || '/dashboard';
+        try {
+            const signedIn = await completeTokenSignIn(outcome.result);
+            if (destination === '/dashboard' && isAdminProfile(signedIn)) destination = '/admin';
+        } catch {
+            destination = '/login';
+        }
+        // Full page load: the router cache may hold redirects to /login (lib/authNavigation.ts).
+        if (isActive()) navigateAfterAuthChange(destination, { replace: true });
+    };
+
     useEffect(() => {
         if (!djangoAuth) return;
         let active = true;
-        if (!started.current) {
-            const link = takeAuthFragment();
-            started.current = link.token
-                ? verifyEmailLink({ token: link.token, uid: link.uid })
-                    .then((result): Outcome => ({ kind: 'signed-in', result }))
-                    .catch((err: unknown): Outcome => ({
-                        kind: 'error',
-                        code: err instanceof AuthApiError ? err.code : undefined,
-                        message: err instanceof Error && err.message ? err.message : 'This link could not be used. Please try again.',
-                    }))
-                : Promise.resolve<Outcome>({ kind: 'missing' });
+        if (link.current === undefined) {
+            const fragment = takeAuthFragment();
+            link.current = fragment.token ? { token: fragment.token, uid: fragment.uid } : null;
         }
-        void started.current.then(async (outcome) => {
-            if (!active) return;
-            if (outcome.kind === 'missing') {
-                setState('missing');
-                return;
-            }
-            if (outcome.kind === 'error') {
-                setFailure({ code: outcome.code, message: outcome.message });
-                setState('error');
-                return;
-            }
-            setState('done');
-            let destination = consumePostAuthPath() || '/dashboard';
-            try {
-                const signedIn = await completeTokenSignIn(outcome.result);
-                if (destination === '/dashboard' && isAdminProfile(signedIn)) destination = '/admin';
-            } catch {
-                destination = '/login';
-            }
-            if (active) navigateAfterAuthChange(destination, { replace: true });
-        });
+        const current = link.current;
+        if (!current) {
+            setState('missing');
+            return;
+        }
+        if (!current.uid) {
+            setState('password'); // a new sign-up: ask for the password chosen at sign-up
+            return;
+        }
+        if (!started.current) started.current = toOutcome(verifyEmailLink({ token: current.token, uid: current.uid }));
+        void started.current.then((outcome) => finish(outcome, () => active));
         return () => {
             active = false;
         };
     }, [djangoAuth]);
+
+    const handlePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const current = link.current;
+        if (!current || submitting) return;
+        if (!password) {
+            setPasswordError('Enter the password you chose when you signed up.');
+            return;
+        }
+        setSubmitting(true);
+        setPasswordError('');
+        const outcome = await toOutcome(verifyEmailLink({ token: current.token, password }));
+        setSubmitting(false);
+        if (outcome.kind === 'error' && outcome.code && PASSWORD_RETRY_CODES.has(outcome.code)) {
+            setPasswordError(outcome.message);
+            return;
+        }
+        await finish(outcome);
+    };
 
     const handleResend = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -129,6 +172,45 @@ export default function VerifyEmailPage() {
                     <Link href="/login">Go to sign in</Link>
                 </Button>
             </div>
+        );
+    } else if (state === 'password') {
+        body = (
+            <form onSubmit={handlePassword} className="space-y-4" noValidate>
+                <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
+                    <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span>
+                        Enter the password you chose when you signed up. This proves the sign-up is yours, so nobody
+                        else&apos;s password can end up on your account.
+                    </span>
+                </div>
+                <div className="space-y-2">
+                    <label htmlFor="verify-password" className="block text-sm font-semibold text-foreground">
+                        Password
+                    </label>
+                    <Input
+                        id="verify-password"
+                        type="password"
+                        name="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        aria-invalid={passwordError ? true : undefined}
+                        aria-describedby={passwordError ? 'verify-password-error' : undefined}
+                        required
+                    />
+                    {passwordError && (
+                        <p id="verify-password-error" role="alert" className="text-sm text-destructive">{passwordError}</p>
+                    )}
+                </div>
+                <Button type="submit" className="w-full rounded-2xl" size="lg" disabled={submitting}>
+                    {submitting ? 'Confirming...' : 'Confirm and create my account'}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                    Forgot it, or did not sign up yourself?{' '}
+                    <Link href="/register" className="font-medium text-primary hover:underline">Sign up again</Link>
+                    {' '}to choose a password.
+                </p>
+            </form>
         );
     } else if (state === 'verifying' || state === 'done') {
         body = (
@@ -185,7 +267,7 @@ export default function VerifyEmailPage() {
         <AuthShell
             badge="Confirm Email"
             title="Confirm your email address"
-            description="One click finishes setting up your CrackLabs account."
+            description="One step finishes setting up your CrackLabs account."
             highlights={[
                 'Confirmation links work once.',
                 'Opening the link signs you in on this device.',
