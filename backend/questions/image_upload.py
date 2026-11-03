@@ -46,6 +46,13 @@ class UploadedImage:
     mime: str
 
 
+def supabase_storage_configured() -> bool:
+    """True when Supabase Storage credentials are set. Without them (the Railway deployment,
+    2026-11) uploads are stored with Django's default storage under MEDIA_ROOT instead and
+    served by QuestionImageServeView like every recall image."""
+    return bool((os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")) and os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+
+
 def _ensure_supabase_client():
     """Return a Supabase client or raise RuntimeError with a clear message."""
     from supabase import create_client  # imported lazily so the module loads even if supabase is missing locally
@@ -164,11 +171,46 @@ def upload_image_to_supabase(
             mime=existing.mime or content_type,
         )
 
-    client = _ensure_supabase_client()
     ext = (original_filename.split(".")[-1] or "png").lower()[:8]
     ext = "".join(ch for ch in ext if ch.isalnum()) or "png"
     key = f"question_images/{question_id}/{sha256_short}.{ext}"
 
+    if not supabase_storage_configured():
+        # No Supabase: keep the bytes on this server's storage (a persistent volume in
+        # production) and let the serve endpoint deliver them.
+        from django.core.files.base import ContentFile
+
+        row = QuestionImage(
+            question_id=question_id,
+            page_number=0,
+            image_index_in_page=0,
+            mime=content_type,
+            width=width,
+            height=height,
+            bytes=len(payload),
+            sha256=sha256,
+            sha256_short=sha256_short,
+            modality="other",
+            role=role,
+            uploaded_by_admin=True,
+            url="",
+        )
+        row.file.save(f"q{question_id}_{sha256_short}.{ext}", ContentFile(payload), save=False)
+        row.save()
+        logger.info("Stored QuestionImage #%s locally at %s", row.id, row.file.name)
+        if role == "explanation":
+            from questions.models import Question as _Q
+            q = _Q.objects.only("id", "explanation").filter(pk=question_id).first()
+            token = f"[[img:{row.id}]]"
+            if q is not None and token not in (q.explanation or ""):
+                q.explanation = ((q.explanation or "") + "\n\n" + token).strip()
+                q.save(update_fields=["explanation", "updated_at"])
+        return UploadedImage(
+            id=row.id, url="", sha256=sha256, sha256_short=sha256_short, width=width,
+            height=height, bytes=len(payload), mime=content_type,
+        )
+
+    client = _ensure_supabase_client()
     try:
         client.storage.from_(BUCKET_NAME).upload(
             path=key,
