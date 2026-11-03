@@ -49,19 +49,41 @@ const tokens = (userId = 5, marker = '1') => ({
   user: { id: userId, email: 'learner@example.com', role: 'student' },
 });
 
-test('build mode: NEXT_PUBLIC_AUTH_MODE picks supabase (default), local or django', () => {
-  const saved = process.env.NEXT_PUBLIC_AUTH_MODE;
+test('build mode: NEXT_PUBLIC_AUTH_MODE picks supabase, local or django; unset follows the Supabase keys', () => {
+  const names = ['NEXT_PUBLIC_AUTH_MODE', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'] as const;
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const check = (value: string, mode: string, label: string) => {
+    process.env.NEXT_PUBLIC_AUTH_MODE = value;
+    assert.equal(session.authBuildMode(), mode, label);
+    assert.equal(session.isTokenAuthBuild(), mode !== 'supabase', label);
+    assert.equal(session.isDjangoAuthBuild(), mode === 'django', label);
+    assert.equal(session.isLocalAuthBuild(), mode === 'local', label);
+  };
   try {
+    // Supabase keys present: unset / unknown values keep the Supabase default.
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://project.supabase.example';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     for (const [value, mode] of [['', 'supabase'], ['supabase', 'supabase'], ['nonsense', 'supabase'],
       ['local', 'local'], [' Django ', 'django'], ['DJANGO', 'django']] as const) {
-      process.env.NEXT_PUBLIC_AUTH_MODE = value;
-      assert.equal(session.authBuildMode(), mode, value);
-      assert.equal(session.isTokenAuthBuild(), mode !== 'supabase', value);
-      assert.equal(session.isDjangoAuthBuild(), mode === 'django', value);
-      assert.equal(session.isLocalAuthBuild(), mode === 'local', value);
+      check(value, mode, `with keys: ${value}`);
     }
+    // No Supabase keys (Supabase retired): unset means the Django-native sign-in,
+    // explicit values still win.
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    for (const [value, mode] of [['', 'django'], ['nonsense', 'django'], ['supabase', 'supabase'],
+      ['local', 'local'], ['django', 'django']] as const) {
+      check(value, mode, `without keys: ${value}`);
+    }
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://project.supabase.example';  // a URL alone is not enough
+    check('', 'django', 'url without key');
   } finally {
-    process.env.NEXT_PUBLIC_AUTH_MODE = saved;
+    for (const name of names) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
   }
 });
 

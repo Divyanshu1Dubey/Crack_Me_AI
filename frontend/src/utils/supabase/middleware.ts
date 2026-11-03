@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
-import { assertSupabaseConfig } from './config';
+import { getSupabaseConfig } from './config';
 import { isTokenAuthBuild, LOCAL_ADMIN_COOKIE, LOCAL_SESSION_COOKIE } from '@/lib/localSession';
 
 const PROTECTED_ROUTE_PREFIXES = [
@@ -109,10 +109,24 @@ const localSessionGate = (request: NextRequest) => {
   return NextResponse.next();
 };
 
+/**
+ * Navigation guard only (the API authenticates every request), so it must never
+ * take the site down: a throw here is Vercel's MIDDLEWARE_INVOCATION_FAILED on
+ * every page. Explicit NEXT_PUBLIC_AUTH_MODE=supabase without Supabase keys, or
+ * any unexpected error, lets the request through.
+ */
 export const updateSession = async (request: NextRequest) => {
-  if (isTokenAuthBuild()) return localSessionGate(request);
+  try {
+    if (isTokenAuthBuild()) return localSessionGate(request);
+    const config = getSupabaseConfig();
+    if (!config.isConfigured) return NextResponse.next();
+    return await supabaseSessionGate(request, config.supabaseUrl, config.supabaseKey);
+  } catch {
+    return NextResponse.next();
+  }
+};
 
-  const { supabaseUrl, supabaseKey } = assertSupabaseConfig('middleware');
+const supabaseSessionGate = async (request: NextRequest, supabaseUrl: string, supabaseKey: string) => {
   let response = NextResponse.next({
     request: {
       headers: request.headers,

@@ -221,3 +221,32 @@ test('django auth mode: presence-cookie gate, no Supabase request, no Supabase k
 
   assert.equal(supabaseRequests, before, 'django mode made a Supabase request');
 });
+
+test('no Supabase keys never crashes the middleware (MIDDLEWARE_INVOCATION_FAILED regression)', async () => {
+  const savedUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const savedKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const before = supabaseRequests;
+  try {
+    // NEXT_PUBLIC_AUTH_MODE unset: without keys the build signs in natively (presence-cookie gate).
+    delete process.env.NEXT_PUBLIC_AUTH_MODE;
+    let response = await updateSession(request('/'));
+    assert.equal(redirectTarget(response), null);
+    response = await updateSession(request('/dashboard'));
+    assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/dashboard')}`);
+    response = await updateSession(request('/dashboard', 'crack_local_session=1'));
+    assert.equal(redirectTarget(response), null);
+    // Explicit supabase mode without keys used to throw on every request: now it lets requests through.
+    process.env.NEXT_PUBLIC_AUTH_MODE = 'supabase';
+    for (const path of ['/', '/login', '/dashboard']) {
+      response = await updateSession(request(path));
+      assert.equal(response.status, 200, path);
+      assert.equal(redirectTarget(response), null, path);
+    }
+  } finally {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = savedUrl;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = savedKey;
+  }
+  assert.equal(supabaseRequests, before, 'made a Supabase request without Supabase keys');
+});

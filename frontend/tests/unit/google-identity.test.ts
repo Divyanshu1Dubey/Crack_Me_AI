@@ -65,9 +65,27 @@ test('the button is offered only in django mode with a client id', () => {
   process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = '  ';
   assert.equal(googleSignInConfigured(), false);
   process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = CLIENT_ID;
-  for (const mode of ['', 'local', 'supabase']) {
+  for (const mode of ['local', 'supabase']) {
     process.env.NEXT_PUBLIC_AUTH_MODE = mode;
     assert.equal(googleSignInConfigured(), false, mode);
+  }
+  // Unset mode follows the Supabase keys (lib/localSession.ts authBuildMode).
+  const savedUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const savedKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try {
+    process.env.NEXT_PUBLIC_AUTH_MODE = '';
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://project.supabase.example';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+    assert.equal(googleSignInConfigured(), false, 'unset mode with Supabase keys');
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    assert.equal(googleSignInConfigured(), true, 'unset mode without Supabase keys is django');
+  } finally {
+    if (savedUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = savedUrl;
+    if (savedKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = savedKey;
+    process.env.NEXT_PUBLIC_AUTH_MODE = 'django';
   }
 });
 

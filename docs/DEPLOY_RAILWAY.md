@@ -94,7 +94,9 @@ Environment variables (Production), then redeploy:
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | the same Google web client id |
 
 Remove `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-(ignored in django mode; the build works without them).
+(ignored in django mode; the build works without them). A build with `NEXT_PUBLIC_AUTH_MODE` unset and no
+Supabase keys also runs in django mode; the middleware never fails a request (it used to throw on every
+page, Vercel `MIDDLEWARE_INVOCATION_FAILED`, when the Supabase keys were removed before the mode was set).
 
 * The Google button only renders when `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is set; it uses Google Identity
   Services in popup mode, so the client needs the Authorized JavaScript origins listed above (add
