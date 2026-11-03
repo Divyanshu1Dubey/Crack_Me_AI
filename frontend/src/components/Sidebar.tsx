@@ -18,6 +18,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, BarChart3, Lock, FileUp, Layers, type LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
@@ -205,7 +206,8 @@ export default function Sidebar() {
         try {
             await logout();
         } finally {
-            router.push('/');
+            // Full page load: drop the router cache built while signed in (lib/authNavigation.ts).
+            navigateAfterAuthChange('/');
         }
     };
 

@@ -17,6 +17,7 @@ import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { consumePostAuthPath, useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { takeAuthFragment } from '@/lib/authFragment';
 import { AuthApiError, resendVerificationEmail, verifyEmailLink, type TokenAuthResult } from '@/lib/localAuth';
 import { isDjangoAuthBuild } from '@/lib/localSession';
@@ -76,7 +77,7 @@ export default function VerifyEmailPage() {
             } catch {
                 destination = '/login';
             }
-            if (active) router.replace(destination);
+            if (active) navigateAfterAuthChange(destination, { replace: true });
         });
         return () => {
             active = false;

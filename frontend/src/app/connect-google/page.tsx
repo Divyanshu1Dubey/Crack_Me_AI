@@ -20,6 +20,7 @@ import { CheckCircle, Link2Off, Loader2 } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { takeAuthFragment } from '@/lib/authFragment';
 import { AuthApiError, googleConfirmLink, type TokenAuthResult } from '@/lib/localAuth';
 import { isDjangoAuthBuild } from '@/lib/localSession';
@@ -76,7 +77,7 @@ export default function ConnectGooglePage() {
             } catch {
                 destination = '/login';
             }
-            if (active) window.setTimeout(() => router.replace(destination), 1200);
+            if (active) window.setTimeout(() => navigateAfterAuthChange(destination, { replace: true }), 1200);
         });
         return () => {
             active = false;

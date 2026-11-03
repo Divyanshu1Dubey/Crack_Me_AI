@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { extractApiErrorMessage } from '@/lib/api';
 import { AuthApiError, resendVerificationEmail } from '@/lib/localAuth';
 import {
@@ -66,7 +67,7 @@ export default function RegisterPage() {
                 setConfirmationSentTo(form.email.trim());
                 return;
             }
-            router.push('/dashboard');
+            navigateAfterAuthChange('/dashboard');
         } catch (err: unknown) {
             if (err instanceof AuthApiError) {
                 // Django-native sign-up: {detail, code} (invalid_email,
@@ -104,7 +105,7 @@ export default function RegisterPage() {
         try {
             const signedIn = await googleLogin(credential);
             const isAdmin = signedIn?.is_admin === true || (signedIn?.role || '').toLowerCase() === 'admin';
-            router.push(isAdmin ? '/admin' : '/dashboard');
+            navigateAfterAuthChange(isAdmin ? '/admin' : '/dashboard');
         } catch (err: unknown) {
             const code = err instanceof AuthApiError ? err.code || '' : '';
             setErrorCode(code);

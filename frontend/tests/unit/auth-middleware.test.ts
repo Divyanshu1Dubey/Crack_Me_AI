@@ -250,3 +250,28 @@ test('no Supabase keys never crashes the middleware (MIDDLEWARE_INVOCATION_FAILE
   }
   assert.equal(supabaseRequests, before, 'made a Supabase request without Supabase keys');
 });
+
+test('router prefetches are never redirected (a cached redirect sent signed-in users back to /login)', async () => {
+  process.env.NEXT_PUBLIC_AUTH_MODE = 'django';
+  const prefetch = (path: string, headers: Record<string, string>, cookie = '') =>
+    new NextRequest(new URL(path, 'http://localhost:3000'), { headers: { ...headers, ...(cookie ? { cookie } : {}) } });
+  for (const headers of [
+    { rsc: '1', 'next-router-prefetch': '1' },
+    { rsc: '1', 'next-router-segment-prefetch': '/_tree' },
+    { purpose: 'prefetch' },
+    { 'sec-purpose': 'prefetch;prerender' },
+  ]) {
+    const label = JSON.stringify(headers);
+    let response = await updateSession(prefetch('/questions', headers));
+    assert.equal(redirectTarget(response), null, `signed-out prefetch ${label}`);
+    response = await updateSession(prefetch('/admin', headers, 'crack_local_session=1'));
+    assert.equal(redirectTarget(response), null, `non-admin prefetch of /admin ${label}`);
+  }
+  // Real navigations (including the RSC fetch of a click) are still gated.
+  let response = await updateSession(prefetch('/questions', { rsc: '1' }));
+  assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/questions')}`);
+  response = await updateSession(request('/questions'));
+  assert.equal(redirectTarget(response), `/login?next=${encodeURIComponent('/questions')}`);
+  response = await updateSession(request('/admin', 'crack_local_session=1'));
+  assert.equal(redirectTarget(response), '/dashboard');
+});

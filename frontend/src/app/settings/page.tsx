@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -433,7 +434,7 @@ export default function SettingsPage() {
                             <LogOut className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
                             Session
                         </h3>
-                        <button onClick={async () => { await logout(); router.push('/'); }} className="btn-secondary text-sm">
+                        <button onClick={async () => { await logout(); navigateAfterAuthChange('/'); }} className="btn-secondary text-sm">
                             Logout
                         </button>
                     </div>
