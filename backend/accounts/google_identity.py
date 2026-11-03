@@ -16,10 +16,13 @@ email alone (``resolve_google_sign_in``):
 2. otherwise Google must say the email is verified (``400 google_email_unverified``);
 3. no account with that email: a new verified student account plus its identity;
 4. one account with that email: admin / staff / superuser rows are linked by an
-   operator only (``409 account_link_required``); for any other account a
-   single-use link valid 30 minutes is mailed to the account's address
+   operator only (``409 account_link_required``); an account that already has
+   another Google identity answers ``409 google_already_linked``; for any other
+   account a single-use link valid 30 minutes is mailed to the account's address
    (``409 google_link_required``, no session). Opening it
-   (POST /api/auth/google/confirm-link/) links the identity and signs in;
+   (POST /api/auth/google/confirm-link/) links the identity and signs in,
+   unless the account already has another Google identity
+   (``409 google_already_linked``: one Google account per account);
 5. several accounts with that email: ``409 account_link_required``.
 
 The emailed link is a signed value (django.core.signing) holding the account
@@ -215,6 +218,15 @@ def _blocked():
     )
 
 
+def _already_linked():
+    return NativeAuthError(
+        'google_already_linked',
+        'Another Google account is already connected to this CrackLabs account. Sign in with that one, '
+        'or disconnect it in Settings first.',
+        409,
+    )
+
+
 def _link_required():
     return NativeAuthError(
         'account_link_required',
@@ -302,7 +314,7 @@ def resolve_google_sign_in(claims: dict, request=None):
             else:
                 from .native_auth import send_legacy_verification
 
-                send_legacy_verification(user)
+                send_legacy_verification(user, reason='google')
                 raise NativeAuthError(
                     'email_not_confirmed',
                     'Please confirm your email address: we sent you a link.',
@@ -343,6 +355,9 @@ def resolve_google_sign_in(claims: dict, request=None):
         raise _link_required()
     if not row.is_active:
         raise _blocked()
+    if UserIdentity.objects.filter(user=row, provider=PROVIDER).exists():
+        # Google attests this address, so its owner may learn that another Google account is connected.
+        raise _already_linked()
     send_link_mail(row, sub)
     raise NativeAuthError(
         'google_link_required',
@@ -427,6 +442,9 @@ def confirm_link(token):
             raise NativeAuthError(
                 'identity_in_use', 'This Google account is already connected to another CrackLabs account.', 409,
             )
+        if owner is None and UserIdentity.objects.filter(user=user, provider=PROVIDER).exists():
+            # As in link_to_signed_in_user: one Google account per CrackLabs account.
+            raise _already_linked()
         if owner is None:
             UserIdentity.objects.create(
                 user=user, provider=PROVIDER, subject=sub, email=normalized_email(user.email)[:254],

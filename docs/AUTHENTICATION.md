@@ -15,17 +15,39 @@ Supabase is retired. Production runs with `AUTH_PROVIDER=django` (backend) and `
   `/password-reset/confirm/` (410 in supabase mode); `POST /api/auth/google/`, `/google/confirm-link/`,
   `POST|DELETE /api/auth/google/link/`; `GET /api/auth/config/`. Token bodies `{access, refresh, session_id, user}`,
   errors `{detail, code}`.
+* **Sign-up** (`PendingSignup`, one row per sign-up): a later sign-up with the same address never changes an earlier
+  one, and opening the emailed link needs the password chosen at sign-up (`POST /verify-email/ {token, password}`;
+  `400 password_required` / `password_mismatch`, the link stays usable). The link proves the inbox, the password picks
+  the sign-up, so whoever signed up with somebody else's address cannot get that person to create an account
+  protected by the stranger's password (`/verify-email` asks for it). Existing unverified accounts get a
+  `{uid, token}` link only after the correct password; its mail says so and links to "Forgot password".
 * **Sessions** (`accounts/native_sessions.py`, model `AuthSession`): one per sign-in; refresh tokens rotate and a
-  reused old refresh token revokes the session; logout, password change / reset, device logout and blocking end
+  reused old refresh token revokes the session -- except within `NATIVE_AUTH_REFRESH_REUSE_SECONDS` (20 s) of a
+  rotation, which answers with tokens equivalent to the current ones (same refresh `jti`), so another tab or a lost
+  rotation answer does not end the session. Logout, password change / reset, device logout and blocking end
   sessions. Device limits (2 free / 4 subscribed) are unchanged (`accounts/device_limits.py`).
 * **Existing users**: `manage.py import_supabase_auth --source-url <restore of the Supabase backup>` (dry run;
   `--apply --create-missing` to write) links every Django account to its Supabase user, imports bcrypt password
-  hashes (`accounts/hashers.py`, verified and re-hashed to Argon2 on first sign-in; never for admin/staff) and
-  Google identities (`accounts.UserIdentity`, matched on Google's `sub`). Idempotent; ids never change.
+  hashes (`accounts/hashers.py`, verified and re-hashed to Argon2 on first sign-in) and Google identities
+  (`accounts.UserIdentity`, matched on Google's `sub`). Idempotent; ids never change. Hashes are **never** imported
+  for admin/staff (no override; they use "Forgot password", `manage.py changepassword` or Google), for
+  `--no-password-for` / `--no-password-for-uid`, or when they are of a published password
+  (`--leaked-password-file PATH`, one password per line, outside the repo; `accounts/leaked_passwords.py`): an auth
+  user without a Django row whose password is published is not created (`MISSING_LEAKED_PASSWORD`).
+  `manage.py withhold_leaked_passwords --password-file PATH [--apply]` makes any account password that is a
+  published one unusable (also hashes imported earlier and their Argon2 re-hash) and ends its sessions.
 * **Google** (`accounts/google_identity.py`): ID token verified against `GOOGLE_OAUTH_CLIENT_IDS`; sign-in by `sub`
   only. An unknown `sub` whose email belongs to an existing account gets `409 google_link_required` and an emailed
-  single-use link; admin/staff accounts are linked only by an operator (`409 account_link_required`).
-* **Throttles / lockout**: per-IP and per-email scopes (`accounts/throttles.py`); axes locks per (username, IP).
+  single-use link; admin/staff accounts are linked only by an operator (`409 account_link_required`); an account that
+  already has another Google identity answers `409 google_already_linked` (sign-in and confirm-link).
+* **Throttles / lockout**: per-IP and per-email scopes (`accounts/throttles.py`), per-link for `/verify-email/`. Every
+  per-IP limit and django-axes key on `crack_cms.client_ip.get_client_ip`: `NUM_PROXIES` picks the hop the platform
+  proxy appended to `X-Forwarded-For`, and `TRUSTED_CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) is read only when that
+  hop is the edge's (Cloudflare's published ranges by default; `TRUSTED_CLIENT_IP_HEADER_FROM`, optional
+  `TRUSTED_CLIENT_IP_SECRET`). Forged headers on the `*.up.railway.app` hostname do not count. Axes locks the native
+  sign-in per (username, IP); Django admin (`/admin/login/`) keeps the username lockout (5 failures from anywhere →
+  30 min) and the IP lockout (`accounts.throttles.axes_lockout_parameters`). `check --deploy` warns
+  (`accounts.W007`) while `NUM_PROXIES` is unset in django mode.
 
 ## 1. Two-Layer Auth Model
 
@@ -312,12 +334,12 @@ The frontend `middleware.ts` (`src/utils/supabase/middleware.ts`) redirects sign
 4. **CSRF**: Django CSRF middleware on session endpoints; JWT/Supabase endpoints use Bearer auth (CSRF-immune). `CSRF_COOKIE_HTTPONLY=True`, `CSRF_TRUSTED_ORIGINS` configured.
 5. **Authentication**: `accounts.supabase_rest_auth.SupabaseJWTAuthentication` (primary) + `SessionAuthentication` fallback.
 6. **Authorization**: per-view DRF permission classes (`IsAuthenticated`, `IsAdminUser`, `IsControlTowerAdmin`).
-7. **Brute-force**: `django-axes` — 5 failed attempts → 30 min lockout per `[username, ip_address]`. Resets on success.
+7. **Brute-force**: `django-axes` — 5 failed attempts → 30 min lockout. Per path (`accounts.throttles.axes_lockout_parameters`): the Django-native sign-in locks the (username, client IP) combination; Django admin and the dev-only local login lock the username and the client IP separately. Resets on success.
 8. **Device limit**: `UserDevice` rows keyed by `X-Session-ID` and bound to the access token's Supabase session, 2 devices free / 4 with an active subscription (`device_limit_reached`, `device_inactive`; §6).
 9. **Rate limiting** (verified from `settings.py`):
    - DRF: `AnonRateThrottle` 120/min, `UserRateThrottle` 600/min, `ScopedRateThrottle admin_control_tower` 180/min, `ai_tutor` 30/min
    - Custom: `questions.middleware.RateLimitMiddleware` — `QUESTION_BANK_RATE_LIMIT` (default 300) GETs per `QUESTION_BANK_RATE_WINDOW` (60 s) on `/api/questions/`, per user or, when anonymous, per client IP
-   - Client IP behind proxies: set `NUM_PROXIES` (DRF throttles and the limiter) and, on DigitalOcean, `TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP` (limiter only); check with `GET /api/health/client-ip/` as an admin. Unset, every anonymous request shares the proxy's bucket.
+   - Client IP behind proxies (`crack_cms/client_ip.py`, used by django-axes, the limiter and every DRF throttle through `crack_cms/throttling.py`): set `NUM_PROXIES` (Railway: 1) and, behind Cloudflare, `TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP`, which is read only when the hop the platform proxy appended is a Cloudflare address (`TRUSTED_CLIENT_IP_HEADER_FROM`, default `cloudflare` for that header); check with `GET /api/health/client-ip/` as an admin. Unset, every anonymous request shares the proxy's bucket.
    - Supabase token verification (runs before the DRF throttles): a per-process cap on concurrent GoTrue calls and, once the client IP is known, a per-IP budget; over either the answer is `429 auth_verification_busy` (§12).
    - AI provider-level: Groq 30 RPM, Gemini 15 RPM, etc.
 10. **AI error filtering**: `_PROVIDER_ERROR_PHRASES` prevents provider-internal error text from reaching users.
@@ -426,7 +448,7 @@ api.interceptors.request.use(async (config) => {
   - **Caches** (key: SHA-256 digest of the whole token; the `rate_limit` cache alias, else `default`): a valid answer is cached for `SUPABASE_TOKEN_CACHE_SECONDS` (default 300) and never past the token's `exp`; a token GoTrue refused (a 4xx other than 408 / 429) is not checked again for 60 s.
   - **One shared call**: concurrent requests with the same token in one process wait for a single GoTrue call.
   - **Concurrency cap**: at most `SUPABASE_AUTH_MAX_CONCURRENT_VERIFICATIONS` GoTrue calls at a time per process (default 2; 0 = no cap).
-  - **Per-IP budget**: `SUPABASE_AUTH_VERIFY_RATE_PER_IP` GoTrue calls per client IP per minute (default 240, applied only once `TRUSTED_CLIENT_IP_HEADER` or `NUM_PROXIES` is set, since until then every request carries the proxy's address; 0 = off).
+  - **Per-IP budget**: `SUPABASE_AUTH_VERIFY_RATE_PER_IP` GoTrue calls per client IP per minute (default 240, applied only once the client address is known -- `NUM_PROXIES` set, or a `TRUSTED_CLIENT_IP_HEADER` that is read from any peer; a Cloudflare header needs `NUM_PROXIES` behind a platform proxy -- since until then every request carries the proxy's address; 0 = off).
   - **Timeout**: `SUPABASE_AUTH_TIMEOUT_SECONDS` (default 3 s).
   - Over the cap or the budget the request is answered `429 {"detail": "...", "code": "auth_verification_busy"}` with `Retry-After: 1`, without a call; a request waiting on a shared call gets the same answer when that call hit a limit or did not finish within the timeout + 1 s. `api.ts` retries once (§11).
 - Resolves / links / creates the `CustomUser` (§4.1) and seeds its `TokenBalance`

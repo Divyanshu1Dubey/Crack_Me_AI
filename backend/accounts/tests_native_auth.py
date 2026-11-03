@@ -14,8 +14,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import identify_hasher
 from django.core import mail
 from django.core.cache import cache
+from django.conf import settings
 from django.core.checks import run_checks
-from django.test import TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.throttling import SimpleRateThrottle
@@ -31,6 +32,8 @@ User = get_user_model()
 FAST_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher', 'accounts.hashers.SupabaseBcryptPasswordHasher']
 PASSWORD = 'Native-Passw0rd!x'
 NEW_PASSWORD = 'Brand-New-Passw0rd!y'
+ATTACKER_PASSWORD = 'Attacker-Chosen-Pw!9'
+CLOUDFLARE_EDGE = '173.245.48.10'  # inside Cloudflare's published 173.245.48.0/20
 DEVICE_A = 'dev_aaaaaaaaaaaa_1'
 DEVICE_B = 'dev_bbbbbbbbbbbb_2'
 DEVICE_C = 'dev_cccccccccccc_3'
@@ -194,6 +197,38 @@ class NativeLoginTests(_NativeTestCase):
         self.assert_code(self.login('blocked@example.com'), 403, 'account_blocked')
         self.assertFalse(AuthSession.objects.exists())
 
+    def test_every_failed_sign_in_costs_one_password_hash(self):
+        """A blocked account used to cost two checks (ModelBackend, then the 'blocked?' check): the
+        extra time told which emails belong to blocked accounts."""
+        from django.contrib.auth.hashers import MD5PasswordHasher
+
+        make_user('active', 'active@example.com')
+        make_user('blocked', 'blocked@example.com', is_active=False)
+        costs = {}
+        for email in ('active@example.com', 'blocked@example.com', 'nobody@example.com'):
+            with mock.patch.object(MD5PasswordHasher, 'encode', autospec=True,
+                                   side_effect=MD5PasswordHasher.encode) as encode:
+                self.assert_code(self.login(email, 'wrong-password'), 401, 'invalid_credentials')
+            costs[email] = encode.call_count
+        self.assertEqual(costs, {'active@example.com': 1, 'blocked@example.com': 1, 'nobody@example.com': 1})
+
+    def test_axes_counts_failures_on_blocked_accounts(self):
+        make_user('blocked', 'blocked@example.com', is_active=False)
+        for _ in range(4):
+            self.assert_code(self.login('blocked@example.com', 'guess', ip='10.0.0.67'), 401, 'invalid_credentials')
+        self.assert_code(self.login('blocked@example.com', 'guess', ip='10.0.0.67'), 429, 'too_many_attempts')
+        self.assert_code(self.login('blocked@example.com', ip='10.0.0.67'), 429, 'too_many_attempts')
+        self.assert_code(self.login('blocked@example.com', ip='10.0.0.8'), 403, 'account_blocked')
+
+    def test_the_verification_mail_after_a_correct_password_says_so(self):
+        make_user('legacy2', 'legacy2@example.com', verified=False)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assert_code(self.login('legacy2@example.com'), 401, 'email_not_confirmed')
+        [message] = mail.outbox
+        self.assertIn('correct password', message.body)
+        self.assertIn('https://app.cracklabs.test/forgot-password', message.body)
+        self.assertNotIn('you can ignore this email', message.body)
+
     def test_axes_locks_one_account_per_client_ip(self):
         make_user('target', 'target@example.com')
         for _ in range(4):
@@ -259,10 +294,14 @@ class NativeSessionTests(_NativeTestCase):
         self.assertEqual(rotated.data['session_id'], first['session_id'])
         self.assertEqual(bearer(rotated.data['access'], DEVICE_A).get(PROBE).status_code, 200)
 
-        # Another tab presents the just-rotated token: an access token only.
+        # Another tab -- or this browser, whose rotation answer was lost -- presents the
+        # just-rotated token: tokens EQUIVALENT to the current ones (same refresh jti).
         racing = self.refresh(first['refresh'])
         self.assertEqual(racing.status_code, 200, racing.data)
-        self.assertNotIn('refresh', racing.data)
+        session = AuthSession.objects.get(sid=first['session_id'])
+        self.assertEqual(RefreshToken(racing.data['refresh'])['jti'], session.refresh_jti)
+        self.assertEqual(RefreshToken(rotated.data['refresh'])['jti'], session.refresh_jti)
+        self.assertEqual(bearer(racing.data['access'], DEVICE_A).get(PROBE).status_code, 200)
 
         # Later reuse of a rotated token: the whole session is revoked.
         AuthSession.objects.filter(sid=first['session_id']).update(rotated_at=timezone.now() - timedelta(minutes=5))
@@ -270,6 +309,18 @@ class NativeSessionTests(_NativeTestCase):
         self.assertEqual(AuthSession.objects.get(sid=first['session_id']).revoked_reason, 'refresh_reuse')
         self.assert_code(self.refresh(rotated.data['refresh']), 401, 'session_revoked')
         self.assert_code(bearer(rotated.data['access'], DEVICE_A).get(PROBE), 401, 'session_revoked')
+
+    def test_a_lost_rotation_answer_does_not_end_the_session(self):
+        """The browser kept the old refresh token (the rotating answer never arrived): within the
+        reuse window it gets the equivalent of the current token, and its next refresh rotates normally."""
+        first = self.login('sess@example.com').data
+        self.assertEqual(self.refresh(first['refresh']).status_code, 200)  # answer lost on the way
+        retried = self.refresh(first['refresh'])                            # the browser retries with the old one
+        self.assertEqual(retried.status_code, 200, retried.data)
+        later = self.refresh(retried.data['refresh'])                       # 15 minutes later
+        self.assertEqual(later.status_code, 200, later.data)
+        self.assertIsNone(AuthSession.objects.get(sid=first['session_id']).revoked_at)
+        self.assertEqual(bearer(later.data['access'], DEVICE_A).get(PROBE).status_code, 200)
 
     def test_logout_revokes_the_session(self):
         tokens = self.login('sess@example.com').data
@@ -402,14 +453,14 @@ class NativeDeviceLimitTests(_NativeTestCase):
 
 @override_settings(**NATIVE)
 class NativeRegisterTests(_NativeTestCase):
-    def register(self, **data):
+    def register(self, client=None, **data):
         body = {'email': 'newbie@example.com', 'password': PASSWORD, 'username': 'newbie_doc', **data}
         with self.captureOnCommitCallbacks(execute=True):
-            return self.client.post('/api/auth/native/register/', body, format='json')
+            return (client or self.client).post('/api/auth/native/register/', body, format='json')
 
-    def verify(self, **data):
+    def verify(self, client=None, **data):
         with self.captureOnCommitCallbacks(execute=True):
-            return self.client.post('/api/auth/native/verify-email/', data, format='json')
+            return (client or self.client).post('/api/auth/native/verify-email/', data, format='json')
 
     def test_no_account_exists_before_the_link_is_opened(self):
         users_before = User.objects.count()
@@ -422,7 +473,11 @@ class NativeRegisterTests(_NativeTestCase):
         [token] = mail_links(r'/verify-email#token=(\S+)')
         self.assertNotEqual(pending.token_hash, token)  # only a digest is stored
 
-        created = self.verify(token=token)
+        # Opening the link needs the password chosen at sign-up; a refusal consumes nothing.
+        self.assert_code(self.verify(token=token), 400, 'password_required')
+        self.assert_code(self.verify(token=token, password='not-the-password'), 400, 'password_mismatch')
+        self.assertFalse(User.objects.filter(email='newbie@example.com').exists())
+        created = self.verify(token=token, password=PASSWORD)
         self.assertEqual(created.status_code, 201, created.data)
         user = User.objects.get(email='newbie@example.com')
         self.assertEqual(created.data['user']['id'], user.pk)
@@ -434,8 +489,53 @@ class NativeRegisterTests(_NativeTestCase):
         self.assertFalse(PendingSignup.objects.exists())
         self.assertTrue(any('Welcome' in m.subject for m in mail.outbox))
         # Single-use.
-        self.assert_code(self.verify(token=token), 400, 'invalid_or_expired_link')
+        self.assert_code(self.verify(token=token, password=PASSWORD), 400, 'invalid_or_expired_link')
         self.assertEqual(self.login('newbie@example.com').status_code, 200)
+
+    def test_a_second_sign_up_never_replaces_the_first_ones_password(self):
+        """Owner first, then someone else with the same address: whichever mail the owner opens, the
+        account gets the owner's password (verifier probe: the second sign-up used to overwrite it)."""
+        owner, other = APIClient(), APIClient()
+        self.assertEqual(self.register(client=owner).status_code, 202)
+        self.assertEqual(self.register(client=other, password=ATTACKER_PASSWORD).status_code, 202)
+        self.assertEqual(PendingSignup.objects.filter(email='newbie@example.com').count(), 2)
+        first, newest = mail_links(r'/verify-email#token=(\S+)')
+        created = self.verify(client=owner, token=newest, password=PASSWORD)  # the owner opens the newest mail
+        self.assertEqual(created.status_code, 201, created.data)
+        user = User.objects.get(email='newbie@example.com')
+        self.assertTrue(user.check_password(PASSWORD))
+        self.assertFalse(user.check_password(ATTACKER_PASSWORD))
+        self.assertFalse(PendingSignup.objects.exists())  # every open sign-up of the address is gone
+        self.assert_code(self.verify(token=first, password=PASSWORD), 400, 'invalid_or_expired_link')
+
+    def test_someone_elses_sign_up_cannot_become_the_owners_account(self):
+        """Someone else first (pre-hijack), then the owner: opening the stranger's mail creates nothing
+        without the stranger's password, and the owner's own sign-up still works from either mail."""
+        stranger, owner = APIClient(), APIClient()
+        self.register(client=stranger, password=ATTACKER_PASSWORD)
+        [strangers_link] = mail_links(r'/verify-email#token=(\S+)')
+        self.assert_code(self.verify(client=owner, token=strangers_link, password=PASSWORD), 400, 'password_mismatch')
+        self.assertFalse(User.objects.filter(email='newbie@example.com').exists())
+        self.register(client=owner)  # the owner signs up after all
+        created = self.verify(client=owner, token=strangers_link, password=PASSWORD)
+        self.assertEqual(created.status_code, 201, created.data)
+        user = User.objects.get(email='newbie@example.com')
+        self.assertTrue(user.check_password(PASSWORD))
+        self.assertFalse(user.check_password(ATTACKER_PASSWORD))
+
+    def test_open_sign_ups_per_address_are_capped(self):
+        from accounts.native_auth import MAX_PENDING_SIGNUPS_PER_EMAIL
+
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_register_email': '100/hour',
+                                                                 'native_register': '100/hour'}):
+            for i in range(MAX_PENDING_SIGNUPS_PER_EMAIL + 2):
+                self.assertEqual(self.register(password=f'{PASSWORD}-{i}').status_code, 202)
+        self.assertEqual(PendingSignup.objects.filter(email='newbie@example.com').count(),
+                         MAX_PENDING_SIGNUPS_PER_EMAIL)
+        newest = mail_links(r'/verify-email#token=(\S+)')[-1]
+        self.assert_code(self.verify(token=newest, password=f'{PASSWORD}-0'), 400, 'password_mismatch')  # evicted
+        last = f'{PASSWORD}-{MAX_PENDING_SIGNUPS_PER_EMAIL + 1}'
+        self.assertEqual(self.verify(token=newest, password=last).status_code, 201)
 
     def test_an_existing_address_gets_the_same_answer_and_no_second_account(self):
         make_user('already', 'Already@Example.com')
@@ -451,7 +551,7 @@ class NativeRegisterTests(_NativeTestCase):
         self.register()
         [token] = mail_links(r'/verify-email#token=(\S+)')
         PendingSignup.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
-        self.assert_code(self.verify(token=token), 400, 'invalid_or_expired_link')
+        self.assert_code(self.verify(token=token, password=PASSWORD), 400, 'invalid_or_expired_link')
         self.assertFalse(User.objects.filter(email='newbie@example.com').exists())
 
     def test_a_weak_password_is_refused(self):
@@ -461,7 +561,7 @@ class NativeRegisterTests(_NativeTestCase):
     def test_the_chosen_username_never_shows_the_email(self):
         self.register(username='newbie')  # the email's local part
         [token] = mail_links(r'/verify-email#token=(\S+)')
-        self.assertEqual(self.verify(token=token).status_code, 201)
+        self.assertEqual(self.verify(token=token, password=PASSWORD).status_code, 201)
         self.assertTrue(User.objects.get(email='newbie@example.com').username.startswith('learner_'))
 
     @override_settings(NATIVE_AUTH_ALLOW_SIGNUP=False)
@@ -477,8 +577,8 @@ class NativeRegisterTests(_NativeTestCase):
         self.assertEqual(response.status_code, 202)
         new = mail_links(r'/verify-email#token=(\S+)')[-1]
         self.assertNotEqual(old, new)
-        self.assert_code(self.verify(token=old), 400, 'invalid_or_expired_link')
-        self.assertEqual(self.verify(token=new).status_code, 201)
+        self.assert_code(self.verify(token=old, password=PASSWORD), 400, 'invalid_or_expired_link')
+        self.assertEqual(self.verify(token=new, password=PASSWORD).status_code, 201)
         unknown = self.client.post('/api/auth/native/resend-verification/', {'email': 'ghost@example.com'},
                                    format='json')
         self.assertEqual((unknown.status_code, unknown.data), (202, response.data))
@@ -561,6 +661,174 @@ class NativePasswordResetTests(_NativeTestCase):
                 self.assertEqual(self.request_reset('flood@example.com').status_code, 202)
             self.assert_code(self.request_reset('flood@example.com'), 429, None)
         self.assertEqual(len(mail.outbox), 2)
+
+
+# ── Rate limits, client address and lockouts ─────────────────────────────
+
+@override_settings(**NATIVE)
+class NativeRateLimitTests(_NativeTestCase):
+    """Every throttled native view answers 429 too_many_attempts (never 500), per the documented key."""
+
+    def post(self, path, data, ip='10.3.0.1'):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(path, data, format='json', REMOTE_ADDR=ip)
+
+    def assert_limited(self, path, data, rates, *, other_ip_allowed=True, code='too_many_attempts'):
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, rates):
+            self.assertNotEqual(self.post(path, data).status_code, 429)
+            limited = self.post(path, data)
+            self.assertEqual(limited.status_code, 429, getattr(limited, 'data', limited.content[:200]))
+            if code:
+                self.assert_code(limited, 429, code)
+            self.assertGreaterEqual(int(limited['Retry-After']), 1)
+            if other_ip_allowed:
+                self.assertNotEqual(self.post(path, data, ip='10.3.0.2').status_code, 429)
+
+    def test_register_per_ip_and_per_email(self):
+        self.assert_limited('/api/auth/native/register/', {'email': 'a@example.com', 'password': PASSWORD},
+                            {'native_register': '1/hour'})
+        cache.clear()
+        self.assert_limited('/api/auth/native/register/', {'email': 'b@example.com', 'password': PASSWORD},
+                            {'native_register_email': '1/hour'}, other_ip_allowed=False)
+
+    def test_resend_verification_per_ip_and_per_email(self):
+        self.assert_limited('/api/auth/native/resend-verification/', {'email': 'a@example.com'},
+                            {'native_verify': '1/hour'})
+        cache.clear()
+        self.assert_limited('/api/auth/native/resend-verification/', {'email': 'a@example.com'},
+                            {'native_verify_email': '1/hour'}, other_ip_allowed=False)
+
+    def test_verify_email_per_link(self):
+        link = {'token': 'x' * 43, 'password': PASSWORD}
+        self.assert_limited('/api/auth/native/verify-email/', link, {'native_verify_link': '1/hour'},
+                            other_ip_allowed=False)
+        # Another link (another student behind the same NAT address) has its own budget.
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_verify_link': '1/hour'}):
+            self.assert_code(self.post('/api/auth/native/verify-email/', {**link, 'token': 'y' * 43}),
+                             400, 'invalid_or_expired_link')
+
+    @override_settings(GOOGLE_OAUTH_CLIENT_IDS=['web.apps.googleusercontent.com'])
+    def test_google_sign_in_and_confirm_link(self):
+        from google.auth import exceptions as google_exceptions
+
+        # Hermetic: Google's certificates are never fetched (503 google_unavailable instead).
+        with mock.patch('accounts.google_identity._fetch_certs_document',
+                        side_effect=google_exceptions.TransportError('no network in tests')):
+            self.assert_limited('/api/auth/google/', {'credential': 'not-a-jwt'}, {'google_signin': '1/min'})
+        cache.clear()
+        self.assert_limited('/api/auth/google/confirm-link/', {'token': 'not-a-link'}, {'google_signin': '1/min'})
+
+    def test_password_reset_per_ip(self):
+        # accounts.views keeps DRF's throttled body there (no code), as in supabase mode.
+        self.assert_limited('/api/auth/password-reset/', {'email': 'a@example.com'}, {'password_reset': '1/min'},
+                            code=None)
+
+
+@override_settings(**NATIVE)
+class NativeClientAddressTests(_NativeTestCase):
+    """Per-IP limits and lockouts key on crack_cms.client_ip: forged forwarding headers never count."""
+
+    def attempt(self, **meta):
+        return self.client.post('/api/auth/native/login/', {'email': 'a@example.com', 'password': 'x'},
+                                format='json', **meta)
+
+    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP')
+    def test_documented_header_without_num_proxies_cannot_be_steered(self):
+        """Verifier probe: TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP and no NUM_PROXIES let every
+        request with a new forged X-Forwarded-For / CF-Connecting-IP into a new bucket."""
+        with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': None}), \
+                mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_login': '1/min'}):
+            statuses = [
+                self.attempt(REMOTE_ADDR='10.9.9.9', HTTP_X_FORWARDED_FOR=forged, HTTP_CF_CONNECTING_IP=forged)
+                .status_code
+                for forged in ('198.51.100.1', '198.51.100.2', '198.51.100.3')
+            ]
+        self.assertEqual(statuses, [401, 429, 429])
+
+    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP')
+    def test_behind_railway_and_cloudflare_each_visitor_has_a_bucket(self):
+        railway_proxy = '100.64.0.2'
+        with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1}), \
+                mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'native_login': '1/min'}):
+            # Through Cloudflare: the hop Railway appended is a Cloudflare address, so CF-Connecting-IP counts.
+            via_cf = {'REMOTE_ADDR': railway_proxy, 'HTTP_X_FORWARDED_FOR': f'203.0.113.7, {CLOUDFLARE_EDGE}'}
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.7', **via_cf).status_code, 401)
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.7', **via_cf).status_code, 429)
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.8', **via_cf).status_code, 401)
+            # Around Cloudflare (the *.up.railway.app hostname): the visitor's own address, whatever it claims.
+            direct = {'REMOTE_ADDR': railway_proxy, 'HTTP_X_FORWARDED_FOR': '198.51.100.50, 198.51.100.9'}
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.20', **direct).status_code, 401)
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.21', **direct).status_code, 429)
+            spoofed_hop = {'REMOTE_ADDR': railway_proxy,
+                           'HTTP_X_FORWARDED_FOR': f'{CLOUDFLARE_EDGE}, 198.51.100.9'}  # a forged entry is not the hop
+            self.assertEqual(self.attempt(HTTP_CF_CONNECTING_IP='203.0.113.22', **spoofed_hop).status_code, 429)
+
+    @override_settings(TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP')
+    def test_axes_locks_the_visitor_not_the_edge(self):
+        make_user('edge', 'edge@example.com')
+        conf = {**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1}
+        via_cf = {'REMOTE_ADDR': '100.64.0.2', 'HTTP_X_FORWARDED_FOR': f'203.0.113.7, {CLOUDFLARE_EDGE}'}
+        with override_settings(REST_FRAMEWORK=conf):
+            for _ in range(5):
+                self.client.post('/api/auth/native/login/', {'email': 'edge@example.com', 'password': 'guess'},
+                                 format='json', HTTP_CF_CONNECTING_IP='203.0.113.7', **via_cf)
+            locked = self.client.post('/api/auth/native/login/', {'email': 'edge@example.com', 'password': PASSWORD},
+                                      format='json', HTTP_CF_CONNECTING_IP='203.0.113.7', **via_cf)
+            self.assert_code(locked, 429, 'too_many_attempts')
+            # Another visitor behind the same Cloudflare edge is not locked out.
+            other = self.client.post('/api/auth/native/login/', {'email': 'edge@example.com', 'password': PASSWORD},
+                                     format='json', HTTP_CF_CONNECTING_IP='203.0.113.99', **via_cf)
+            self.assertEqual(other.status_code, 200, other.data)
+
+
+@override_settings(
+    PASSWORD_HASHERS=FAST_HASHERS,
+    # The admin login page renders {% static %}; tests have no collected manifest.
+    STORAGES={**settings.STORAGES, 'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}},
+)
+class AxesLockoutParameterTests(TestCase):
+    """AXES_LOCKOUT_PARAMETERS per path: native sign-in per (account, IP); Django admin also per username."""
+
+    def setUp(self):
+        cache.clear()
+        self.staff = User.objects.create_user(username='staffer', email='staffer@example.com', password=PASSWORD,
+                                              is_staff=True, is_superuser=True, role='admin')
+        self.staff.email_verified_at = timezone.now()
+        self.staff.save(update_fields=['email_verified_at'])
+
+    def admin_login(self, password, ip):
+        client = Client()
+        response = client.post('/admin/login/?next=/admin/', {'username': 'staffer', 'password': password,
+                                                              'next': '/admin/'}, REMOTE_ADDR=ip)
+        return response, client
+
+    def test_admin_login_locks_the_username_from_anywhere(self):
+        response, client = self.admin_login(PASSWORD, '10.6.0.200')  # control: the password works
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('_auth_user_id', client.session)
+        for i in range(5):
+            response, _ = self.admin_login('guess', f'10.6.0.{i + 1}')  # five addresses, one username
+            self.assertNotEqual(response.status_code, 302)
+        response, client = self.admin_login(PASSWORD, '10.6.0.99')  # right password, fresh address
+        self.assertNotEqual(response.status_code, 302)
+        self.assertNotIn('_auth_user_id', client.session)
+
+    @override_settings(**NATIVE)
+    def test_native_sign_in_of_the_same_account_is_locked_per_address_only(self):
+        for i in range(5):
+            self.admin_login('guess', f'10.6.1.{i + 1}')
+        response = APIClient().post('/api/auth/native/login/', {'email': 'staffer@example.com', 'password': PASSWORD},
+                                    format='json', REMOTE_ADDR='10.6.1.99')
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_the_parameters_by_path(self):
+        from accounts.throttles import axes_lockout_parameters
+
+        factory = RequestFactory()
+        self.assertEqual(axes_lockout_parameters(factory.post('/api/auth/native/login/')), [['username', 'ip_address']])
+        self.assertEqual(axes_lockout_parameters(factory.post('/admin/login/')), ['username', 'ip_address'])
+        self.assertEqual(axes_lockout_parameters(factory.post('/api/auth/local/login/')), ['username', 'ip_address'])
+        self.assertEqual(settings.AXES_LOCKOUT_PARAMETERS, 'accounts.throttles.axes_lockout_parameters')
 
 
 # ── Supabase mode (the default) is unchanged ─────────────────────────────
@@ -650,8 +918,19 @@ class NativeDeployCheckTests(TestCase):
         found = self.ids(AUTH_PROVIDER='django', DEBUG=False, JWT_SIGNING_KEY='a-separate-signing-key-' + 'x' * 40,
                          GOOGLE_OAUTH_CLIENT_IDS=['web.apps.googleusercontent.com'],
                          EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend', EMAIL_HOST='smtp.example.com',
-                         TRUSTED_CLIENT_IP_HEADER='DO-Connecting-IP')
+                         TRUSTED_CLIENT_IP_HEADER='CF-Connecting-IP',
+                         REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 1})
         self.assertFalse({'accounts.W004', 'accounts.W005', 'accounts.W006', 'accounts.W007'} & found, found)
+
+    def test_a_client_ip_header_without_num_proxies_still_warns(self):
+        """Verifier probe: the header alone satisfied W007, although it is never read behind the proxy."""
+        for header in ('CF-Connecting-IP', 'DO-Connecting-IP'):
+            found = self.ids(AUTH_PROVIDER='django', DEBUG=False, TRUSTED_CLIENT_IP_HEADER=header,
+                             REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': None})
+            self.assertIn('accounts.W007', found, header)
+        found = self.ids(AUTH_PROVIDER='django', DEBUG=False, TRUSTED_CLIENT_IP_HEADER='',
+                         REST_FRAMEWORK={**settings.REST_FRAMEWORK, 'NUM_PROXIES': 0})
+        self.assertNotIn('accounts.W007', found)  # 0 = no proxy in front: REMOTE_ADDR is the client
 
     def test_supabase_mode_has_no_native_warnings(self):
         found = self.ids(AUTH_PROVIDER='supabase', DEBUG=False, JWT_SIGNING_KEY='')

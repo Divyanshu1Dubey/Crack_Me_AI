@@ -221,9 +221,11 @@ def plausible_access_token_claims(token: str, now: float | None = None):
 def _verification_rate_per_ip() -> int:
     """GoTrue calls allowed per client IP per minute (0 = no limit).
 
-    Off by default while the client address is unknown: without
-    TRUSTED_CLIENT_IP_HEADER / NUM_PROXIES every request carries the proxy's
-    address, so the budget would be one bucket for the whole site.
+    Off by default while the client address is unknown: without NUM_PROXIES
+    or a TRUSTED_CLIENT_IP_HEADER that can be read (crack_cms.client_ip:
+    a Cloudflare header needs NUM_PROXIES behind a platform proxy) every
+    request carries the proxy's address, so the budget would be one bucket
+    for the whole site.
     """
     configured = _config_value("SUPABASE_AUTH_VERIFY_RATE_PER_IP")
     if configured is not None:
@@ -231,14 +233,9 @@ def _verification_rate_per_ip() -> int:
             return max(0, int(configured))
         except (TypeError, ValueError):
             pass
-    from django.conf import settings
-    from rest_framework.settings import api_settings
+    from crack_cms.client_ip import client_ip_known
 
-    from crack_cms.client_ip import parse_num_proxies
-
-    trusted_ip = bool(str(getattr(settings, "TRUSTED_CLIENT_IP_HEADER", "") or "").strip())
-    trusted_ip = trusted_ip or parse_num_proxies(api_settings.NUM_PROXIES) is not None
-    return _DEFAULT_VERIFY_RATE_PER_IP if trusted_ip else 0
+    return _DEFAULT_VERIFY_RATE_PER_IP if client_ip_known() else 0
 
 
 def _within_verification_budget(ip: str, store) -> bool:

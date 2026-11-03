@@ -979,9 +979,11 @@ class AuthSession(models.Model):
     ``sid`` is the ``session_id`` claim of its tokens and the
     ``UserDevice.session_id`` of the device using it, so the device cap of
     accounts.device_limits applies unchanged. ``refresh_jti`` is the only
-    refresh token that may rotate; ``previous_refresh_jti`` is accepted for
-    an access token only within NATIVE_AUTH_REFRESH_REUSE_SECONDS of a
-    rotation (another tab rotated first). Any other reuse revokes the session.
+    refresh token that may rotate; ``previous_refresh_jti`` is answered (with
+    tokens equivalent to the current ones) only within
+    NATIVE_AUTH_REFRESH_REUSE_SECONDS of a rotation (another tab rotated
+    first, or the rotation's answer was lost). Any other reuse revokes the
+    session.
     """
 
     METHOD_CHOICES = [
@@ -1027,14 +1029,18 @@ class AuthSession(models.Model):
 
 
 class PendingSignup(models.Model):
-    """A sign-up waiting for its emailed verification link.
+    """A sign-up waiting for its emailed verification link (one row per sign-up).
 
-    The account row is created only when the link is opened
-    (POST /api/auth/native/verify-email/), so an unverified sign-up cannot
-    squat an address. Only a SHA-256 digest of the emailed token is stored.
+    The account row is created only when a link is opened
+    (POST /api/auth/native/verify-email/ {token, password}), so an unverified
+    sign-up cannot squat an address. Several sign-ups of one address are
+    separate rows: a later one never changes an earlier one's password, and
+    the password typed when opening a link picks the row that becomes the
+    account (accounts.native_auth). Only a SHA-256 digest of the emailed token
+    is stored.
     """
 
-    email = models.EmailField(max_length=254, unique=True, help_text='Lower-cased.')
+    email = models.EmailField(max_length=254, db_index=True, help_text='Lower-cased.')
     password = models.CharField(max_length=128, help_text='make_password() hash.')
     username = models.CharField(max_length=150, blank=True, default='')
     first_name = models.CharField(max_length=150, blank=True, default='')

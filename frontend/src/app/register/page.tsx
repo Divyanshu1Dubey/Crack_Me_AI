@@ -171,8 +171,9 @@ export default function RegisterPage() {
                         {isDjangoAuth ? (
                             <p className="text-sm text-muted-foreground break-words">
                                 We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
-                                Open it to finish creating your account; you will be signed in. Already have an account
-                                with this email? Then the email tells you how to sign in instead.
+                                Open it and enter the password you just chose to finish creating your account; you will
+                                be signed in. Already have an account with this email? Then the email tells you how to
+                                sign in instead.
                             </p>
                         ) : (
                             <p className="text-sm text-muted-foreground break-words">

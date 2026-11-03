@@ -1,16 +1,25 @@
-"""Per-email rate limits for the Django-native sign-in (AUTH_PROVIDER=django).
+"""Rate limits and lockout rules for the Django-native sign-in (AUTH_PROVIDER=django).
 
-DRF's ScopedRateThrottle keys anonymous requests on the client IP. A
-distributed attack on ONE account (many IPs, one email) is limited here
-instead: the cache key is a SHA-256 of the lower-cased email, so no address
-is stored in the cache. Rates live in REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']
-(``*_email`` scopes, settings.py).
+Per client IP: the sign-in views use ``crack_cms.throttling.ClientIPScopedRateThrottle``,
+keyed on ``crack_cms.client_ip.get_client_ip`` -- the address django-axes
+uses -- so forged X-Forwarded-For / CF-Connecting-IP headers never open a
+new bucket.
+
+Per email: a distributed attack on ONE account (many IPs, one email) is
+limited here: the cache key is a SHA-256 of the lower-cased email, so no
+address is stored in the cache. Rates live in
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] (``*_email`` scopes, settings.py).
 
 * ``EmailRateThrottle`` subclasses are DRF view throttles reading
   ``request.data['email']``: every request counts (each one may send a mail).
 * ``email_limit_reached`` / ``record_email_hit`` are the same buckets used by
   hand, for limits that must count only some outcomes (failed sign-ins) or an
   email that is not in the request body (the address of a Google token).
+* ``NativeVerifyLinkThrottle``: attempts per emailed link (its digest), so
+  students sharing one carrier-grade NAT address do not share a bucket.
+
+``axes_lockout_parameters`` (settings.AXES_LOCKOUT_PARAMETERS) chooses what
+django-axes locks after AXES_FAILURE_LIMIT failures.
 """
 from __future__ import annotations
 
@@ -18,6 +27,30 @@ import hashlib
 
 from django.core.cache import cache as default_cache
 from rest_framework.throttling import SimpleRateThrottle
+
+from crack_cms.throttling import StrictClientIPIdentMixin
+
+# Native sign-in endpoints (accounts/urls.py): a lockout per (account, client
+# IP) there, with the per-email limit above for distributed attacks.
+NATIVE_AUTH_PATH_PREFIX = '/api/auth/native/'
+
+
+def axes_lockout_parameters(request_or_attempt, credentials=None):
+    """django-axes lockout parameters (AXES_LOCKOUT_PARAMETERS) for a request or a stored AccessAttempt.
+
+    * The Django-native sign-in (/api/auth/native/*): one lockout per
+      (username, client IP) combination, so nobody can lock a student out
+      from elsewhere; the per-email limit (native_login_email) slows a
+      distributed attack on one account.
+    * Everything else -- Django admin (/admin/login/) and the dev-only local
+      login -- keeps the separate username and client-IP lockouts it always
+      had: five failures for a staff username from anywhere lock that
+      username for AXES_COOLOFF_TIME.
+    """
+    path = str(getattr(request_or_attempt, 'path_info', '') or '')
+    if path.startswith(NATIVE_AUTH_PATH_PREFIX):
+        return [['username', 'ip_address']]
+    return ['username', 'ip_address']
 
 
 def normalized_email(value) -> str:
@@ -62,12 +95,28 @@ class PasswordResetEmailThrottle(EmailRateThrottle):
     scope = 'password_reset_email'
 
 
-class NativeRefreshThrottle(SimpleRateThrottle):
+class NativeVerifyLinkThrottle(SimpleRateThrottle):
+    """Attempts per emailed verification link (``request.data`` token, and uid), keyed on its digest."""
+
+    scope = 'native_verify_link'
+    cache_format = 'throttle_link_%(scope)s_%(ident)s'
+
+    def get_cache_key(self, request, view):
+        data = getattr(request, 'data', None)
+        token = data.get('token') if hasattr(data, 'get') else None
+        if not isinstance(token, str) or not token or len(token) > 4096:
+            return None  # the view refuses the request anyway
+        uid = data.get('uid') if hasattr(data, 'get') else None
+        value = f'{uid if isinstance(uid, str) else ""}|{token}'
+        return self.cache_format % {'scope': self.scope, 'ident': hashlib.sha256(value.encode('utf-8')).hexdigest()}
+
+
+class NativeRefreshThrottle(StrictClientIPIdentMixin, SimpleRateThrottle):
     """Token refreshes / sign-outs per native session (the refresh token's verified ``session_id``).
 
     Keyed on the session rather than the client IP, so visitors behind one
     proxy address never share a bucket; a request without a valid refresh
-    token falls back to the client IP.
+    token falls back to the client IP (crack_cms.client_ip).
     """
 
     scope = 'native_refresh'

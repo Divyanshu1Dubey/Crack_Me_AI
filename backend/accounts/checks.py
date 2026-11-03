@@ -27,9 +27,13 @@ accounts.W005  GOOGLE_OAUTH_CLIENT_IDS is empty: "Sign in with Google" is off, s
                accounts that only ever signed in with Google need a password reset.
 accounts.W006  No real mail backend outside DEBUG (console / locmem / dummy / file):
                verification, password-reset and Google-link emails never arrive.
-accounts.W007  Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: behind the
-               platform proxy django-axes sees the proxy address, so five failed
-               sign-ins for an account lock it out for every visitor.
+accounts.W007  NUM_PROXIES is not set: the sign-in rate limits and django-axes key on
+               the address that connected to Django -- behind the platform proxy
+               that address is the proxy's, shared by every visitor, so five failed
+               sign-ins for an account lock it out for everyone. A
+               TRUSTED_CLIENT_IP_HEADER alone does not help: it is only read when
+               the hop the proxy appended to X-Forwarded-For (NUM_PROXIES) is the
+               edge's (crack_cms/client_ip.py).
 
 The Supabase checks only run in supabase mode when Supabase sign-in is
 configured (SUPABASE_URL); W003 outside DEBUG; W004-W007 in django mode. They
@@ -164,18 +168,24 @@ def native_auth_mail_check(app_configs=None, **kwargs):
 
 @checks.register(checks.Tags.security, deploy=True)
 def native_auth_client_ip_check(app_configs=None, **kwargs):
+    from crack_cms.client_ip import parse_num_proxies
+
     if not django_auth_enabled() or settings.DEBUG:
         return []
-    num_proxies = (getattr(settings, 'REST_FRAMEWORK', {}) or {}).get('NUM_PROXIES')
-    if num_proxies is not None or str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', '') or '').strip():
+    num_proxies = parse_num_proxies((getattr(settings, 'REST_FRAMEWORK', {}) or {}).get('NUM_PROXIES'))
+    if num_proxies is not None:
         return []
+    header = str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', '') or '').strip()
     return [checks.Warning(
-        'Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: sign-in lockouts see the proxy address.',
+        'NUM_PROXIES is not set: sign-in rate limits and lockouts key on the proxy address'
+        + (f' ({header} is not read without it).' if header else '.'),
         hint=(
-            'django-axes locks an account after 5 failed sign-ins per (account, client IP). Behind the '
-            'platform proxy every visitor has the proxy address, so one attacker locks the account out for '
-            'everyone. Check GET /api/health/client-ip/ as an admin, then set NUM_PROXIES and/or '
-            'TRUSTED_CLIENT_IP_HEADER (settings.py, client-IP notes).'
+            'django-axes locks an account after 5 failed sign-ins per (account, client IP), and the sign-in '
+            'rate limits count per client IP. Behind the platform proxy every visitor has the proxy address, '
+            'so one attacker locks an account out for everyone and the limits are shared by all visitors. Set '
+            'NUM_PROXIES to the number of proxies that append to X-Forwarded-For (Railway: 1), plus '
+            'TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP behind Cloudflare; then check GET /api/health/client-ip/ '
+            'as an admin (settings.py, client-IP notes).'
         ),
         id='accounts.W007',
     )]

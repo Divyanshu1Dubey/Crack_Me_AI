@@ -32,6 +32,7 @@ User = get_user_model()
 
 T0 = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
 PASSWORD = 'Imported-Passw0rd!z'
+LEAKED = 'Published-In-Git-1!'  # stands for a password once committed to the repository
 FAST_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher', 'accounts.hashers.SupabaseBcryptPasswordHasher']
 
 
@@ -197,6 +198,75 @@ class ImportPasswordTests(_ImportTestCase):
             self.assertFalse(row.has_usable_password())
             self.assertIsNotNone(row.supabase_uid)  # linked, so Google / reset still work
 
+    def leaked_file(self, tmp, *passwords):
+        path = Path(tmp) / 'published-passwords.txt'
+        path.write_text('\n'.join(passwords) + '\n', encoding='utf-8')
+        return str(path)
+
+    def test_published_passwords_are_never_imported(self):
+        """Verifier finding: 12 Supabase hashes were of a password committed to the repository."""
+        leaked_row = django_row('leaky', 'leaky@example.com')
+        fine_row = django_row('fine', 'fine@example.com')
+        users = [
+            auth_user('leaky@example.com', password=gotrue_hash(LEAKED)),
+            auth_user('fine@example.com', password=gotrue_hash()),
+            auth_user('demo@example.com', password=gotrue_hash(LEAKED)),       # no Django row
+            auth_user('realnew@example.com', password=gotrue_hash()),          # no Django row
+        ]
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(command_module, '_inside_git_work_tree', return_value=False):
+            path = self.leaked_file(tmp, 'some-other-published-pw', LEAKED)
+            dry = self.run_import(users, (), '--create-missing', '--leaked-password-file', path)
+            output = self.run_import(users, (), '--apply', '--create-missing', '--leaked-password-file', path)
+        for text in (dry, output):
+            self.assertNotIn(LEAKED, text)
+            counts = self.counts(text)
+            self.assertEqual(counts['PASSWORD_WITHHELD_LEAKED'], 1)
+            self.assertEqual(counts['MISSING_LEAKED_PASSWORD'], 1)
+            self.assertEqual(counts['CREATE'], 1)
+        leaked_row.refresh_from_db()
+        fine_row.refresh_from_db()
+        self.assertFalse(leaked_row.has_usable_password())
+        self.assertIsNotNone(leaked_row.supabase_uid)  # still linked: "Forgot password" / Google work
+        self.assertTrue(fine_row.check_password(PASSWORD))
+        self.assertFalse(User.objects.filter(email='demo@example.com').exists())
+        self.assertTrue(User.objects.get(email='realnew@example.com').check_password(PASSWORD))
+
+    def test_a_published_hash_imported_earlier_is_reported_and_kept_for_the_withhold_command(self):
+        row = django_row('early', 'early@example.com')
+        user = auth_user('early@example.com', password=gotrue_hash(LEAKED))
+        self.run_import([user], (), '--apply')  # an earlier run without the list
+        row.refresh_from_db()
+        self.assertTrue(row.password.startswith('supabase_bcrypt$'))
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(command_module, '_inside_git_work_tree', return_value=False):
+            output = self.run_import([user], (), '--apply', '--leaked-password-file', self.leaked_file(tmp, LEAKED))
+        self.assertEqual(self.counts(output)[si.NOTE_WITHHELD_HASH_PRESENT], 1)
+        self.assertIn('withhold_leaked_passwords', output)
+        row.refresh_from_db()
+        self.assertTrue(row.password.startswith('supabase_bcrypt$'))  # the import never undoes; the command does
+
+    def test_no_password_for_uid(self):
+        a = django_row('ua', 'ua@example.com')
+        b = django_row('ub', 'ub@example.com')
+        au = auth_user(a.email, uid='aaaa2222-0000-4000-8000-000000000001', password=gotrue_hash())
+        bu = auth_user(b.email, uid='bbbb3333-0000-4000-8000-000000000002', password=gotrue_hash())
+        output = self.run_import([au, bu], (), '--apply', '--no-password-for-uid', 'aaaa2222')
+        self.assertEqual(self.counts(output)['PASSWORD_WITHHELD_LISTED'], 1)
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertFalse(a.has_usable_password())
+        self.assertEqual(a.supabase_uid, au.id)
+        self.assertTrue(b.check_password(PASSWORD))
+        with self.assertRaisesMessage(CommandError, 'no single auth user'):
+            self.run_import([au, bu], (), '--no-password-for-uid', 'ffffffff')
+
+    def test_the_published_password_file_must_be_outside_the_repository(self):
+        inside = Path(settings.BASE_DIR) / 'published-passwords.txt'
+        with self.assertRaisesMessage(CommandError, 'git work tree'):
+            self.run_import([], (), '--leaked-password-file', str(inside))
+        self.assertFalse(inside.exists())
+
     def test_a_usable_student_password_is_replaced_unless_kept(self):
         replaced = django_row('rep', 'rep@example.com', password='Django-Old-1!')
         kept = django_row('keep', 'keep@example.com', password='Django-Old-2!')
@@ -341,6 +411,31 @@ class ImportSafetyTests(_ImportTestCase):
             connect.assert_called_once()
         self.assertNotIn('s3cret', str(failed.exception))
 
+    def test_every_host_libpq_would_use_must_be_local(self):
+        """Verifier probe: ?host= in the query string (and PGHOST / PGHOSTADDR) passed as local."""
+        local = command_module._source_is_local
+        for url in ('postgresql://crack_super@127.0.0.1:55432/crack_restore', 'postgresql://localhost/x',
+                    'postgresql://[::1]:5432/x', 'postgresql:///x', 'postgresql:///x?host=/var/run/postgresql',
+                    'postgresql://localhost/x?hostaddr=127.0.0.1'):
+            self.assertTrue(local(url, environ={}), url)
+        for url in ('postgresql:///railway?host=remote-db.example.com&port=24963',
+                    'postgresql://localhost/railway?host=db.example.com',
+                    'postgresql://localhost/x?hostaddr=10.1.2.3',
+                    'postgresql://localhost,db.example.com/x',
+                    'postgresql://localhost/x?service=prod',
+                    'postgresql://db.example.com:5432/x',
+                    'not a url at all ='):
+            self.assertFalse(local(url, environ={}), url)
+        self.assertFalse(local('postgresql:///x', environ={'PGHOST': 'db.example.net'}))
+        self.assertFalse(local('postgresql://localhost/x', environ={'PGHOSTADDR': '203.0.113.9'}))
+        self.assertFalse(local('postgresql://localhost/x', environ={'PGSERVICE': 'prod'}))
+        self.assertTrue(local('postgresql://localhost/x', environ={'PGHOST': 'db.example.com'}))  # URL host wins
+        with mock.patch('psycopg.connect') as connect:
+            with self.assertRaisesMessage(CommandError, 'remote host'):
+                call_command('import_supabase_auth', '--source-url', 'postgresql:///railway?host=db.example.com',
+                             stdout=io.StringIO())
+            connect.assert_not_called()
+
     def test_a_local_source_url_is_read_only_and_closed(self):
         conn = mock.MagicMock()
         cursor = conn.cursor.return_value.__enter__.return_value
@@ -353,23 +448,17 @@ class ImportSafetyTests(_ImportTestCase):
         reader.assert_called_once_with(cursor, 'auth')
         conn.close.assert_called_once()
 
-    def test_allow_privileged_password_imports_only_the_named_admin(self):
-        """--allow-privileged-password <uid>: the owner keeps one admin's Supabase password; every other
-        privileged hash is still withheld."""
-        keep = django_row('owner', 'owner@example.com', role='admin', is_staff=True)
-        other = django_row('second', 'second@example.com', role='admin', is_staff=True)
-        keep_au = auth_user(keep.email, uid='7777aaaa-0000-4000-8000-000000000001', password=gotrue_hash())
-        other_au = auth_user(other.email, uid='8888bbbb-0000-4000-8000-000000000002', password=gotrue_hash())
-        output = self.run_import([keep_au, other_au], (), '--apply', '--allow-privileged-password', '7777aaaa')
-        counts = self.counts(output)
-        self.assertEqual(counts['PASSWORD_WITHHELD_PRIVILEGED'], 1)
-        keep.refresh_from_db()
-        other.refresh_from_db()
-        self.assertTrue(keep.has_usable_password())
-        self.assertTrue(keep.password.startswith('supabase_bcrypt$'))
-        self.assertTrue(keep.check_password(PASSWORD))
-        self.assertFalse(other.has_usable_password())
-        self.assertTrue(keep.is_staff and keep.role == 'admin')  # privileges unchanged
+    def test_privileged_hashes_have_no_override(self):
+        """An admin / staff Supabase hash is never imported: the --allow-privileged-password option is gone."""
+        admin = django_row('owner', 'owner@example.com', role='admin', is_staff=True)
+        admin_au = auth_user(admin.email, uid='7777aaaa-0000-4000-8000-000000000001', password=gotrue_hash())
+        with self.assertRaises(CommandError):
+            self.run_import([admin_au], (), '--apply', '--allow-privileged-password', '7777aaaa')
+        output = self.run_import([admin_au], (), '--apply')
+        self.assertEqual(self.counts(output)['PASSWORD_WITHHELD_PRIVILEGED'], 1)
+        admin.refresh_from_db()
+        self.assertFalse(admin.has_usable_password())
+        self.assertEqual(admin.supabase_uid, admin_au.id)  # linked: "Forgot password" / Google still work
 
     def test_only_uid_accepts_a_unique_prefix(self):
         a = auth_user('pa@example.com', uid='aaaa1111-0000-4000-8000-000000000001')
@@ -386,6 +475,84 @@ class ImportSafetyTests(_ImportTestCase):
     def test_without_a_source_url_sqlite_has_no_auth_schema(self):
         with self.assertRaisesMessage(CommandError, 'no Supabase auth schema'):
             call_command('import_supabase_auth', stdout=io.StringIO())
+
+
+@override_settings(PASSWORD_HASHERS=FAST_HASHERS, AUTH_PROVIDER='django')
+class WithholdLeakedPasswordsTests(TestCase):
+    """manage.py withhold_leaked_passwords: publicly known passwords become unusable, sessions end."""
+
+    def setUp(self):
+        from accounts.management.commands import withhold_leaked_passwords as withhold_module
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / 'published.txt'
+        self.path.write_text(f'{LEAKED}\nanother-published-one\n', encoding='utf-8')
+        patcher = mock.patch.object(withhold_module, 'inside_git_work_tree', return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def run_withhold(self, *args):
+        out = io.StringIO()
+        call_command('withhold_leaked_passwords', *args, stdout=out, stderr=io.StringIO())
+        return out.getvalue()
+
+    def test_dry_run_then_apply(self):
+        from accounts.hashers import encoded_from_supabase_hash
+        from accounts.models import AuthSession
+        from accounts.native_sessions import issue_session_tokens
+
+        imported = django_row('imp', 'imp@example.com')
+        User.objects.filter(pk=imported.pk).update(password=encoded_from_supabase_hash(gotrue_hash(LEAKED)))
+        rehashed = django_row('reh', 'reh@example.com', password=LEAKED)          # signed in since: re-hashed
+        admin = django_row('adm', 'adm@example.com', password=LEAKED, role='admin', is_staff=True)
+        safe = django_row('safe', 'safe@example.com', password='A-private-passw0rd!')
+        google_only = django_row('gonly', 'gonly@example.com')                     # unusable password
+        session = issue_session_tokens(User.objects.get(pk=rehashed.pk), None, 'password')
+
+        dry = self.run_withhold('--password-file', str(self.path), '-v', '2')
+        self.assertIn('publicly known: 3 (staff / admin: 1)', dry)
+        self.assertIn(f'ids: {imported.pk}, {rehashed.pk}, {admin.pk}', dry)
+        self.assertNotIn(LEAKED, dry)
+        self.assertNotIn('@', dry)
+        self.assertTrue(User.objects.get(pk=rehashed.pk).check_password(LEAKED))  # nothing written
+
+        applied = self.run_withhold('--password-file', str(self.path), '--apply')
+        self.assertIn('Passwords made unusable: 3; native sessions ended: 1.', applied)
+        for pk in (imported.pk, rehashed.pk, admin.pk):
+            self.assertFalse(User.objects.get(pk=pk).has_usable_password(), pk)
+        self.assertTrue(User.objects.get(pk=safe.pk).check_password('A-private-passw0rd!'))
+        self.assertFalse(User.objects.get(pk=google_only.pk).has_usable_password())
+        self.assertEqual(AuthSession.objects.get(sid=session['session_id']).revoked_reason, 'admin')
+        logs = AdminAuditLog.objects.filter(action='session_revoke', metadata__reason='leaked_password')
+        self.assertEqual(logs.count(), 3)
+        self.assertNotIn(LEAKED, json.dumps(list(logs.values_list('metadata', flat=True))))
+        self.assertIn('publicly known: 0', self.run_withhold('--password-file', str(self.path)))  # idempotent
+
+    def test_user_ids_without_a_file_only_touch_imported_hashes(self):
+        from accounts.hashers import encoded_from_supabase_hash
+
+        imported = django_row('imp2', 'imp2@example.com')
+        User.objects.filter(pk=imported.pk).update(password=encoded_from_supabase_hash(gotrue_hash(LEAKED)))
+        changed_since = django_row('chg', 'chg@example.com', password='Chosen-after-reset-1!')
+        output = self.run_withhold('--user-id', str(imported.pk), '--user-id', str(changed_since.pk), '--apply')
+        self.assertIn('Passwords made unusable: 1;', output)
+        self.assertIn('another usable password', output)
+        self.assertFalse(User.objects.get(pk=imported.pk).has_usable_password())
+        self.assertTrue(User.objects.get(pk=changed_since.pk).check_password('Chosen-after-reset-1!'))
+
+    def test_refusals(self):
+        from accounts.management.commands import withhold_leaked_passwords as withhold_module
+
+        with self.assertRaisesMessage(CommandError, '--password-file PATH and/or --user-id'):
+            self.run_withhold()
+        with mock.patch.object(withhold_module, 'inside_git_work_tree', return_value=True):
+            with self.assertRaisesMessage(CommandError, 'git work tree'):
+                self.run_withhold('--password-file', str(self.path))
+        empty = Path(self.tmp.name) / 'empty.txt'
+        empty.write_text('\n \n', encoding='utf-8')
+        with self.assertRaisesMessage(CommandError, 'no password'):
+            self.run_withhold('--password-file', str(empty))
 
 
 class _FakeCursor:
