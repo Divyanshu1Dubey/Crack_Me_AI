@@ -71,23 +71,23 @@ class ExposesEmailTests(SimpleTestCase):
     def test_the_local_part_in_any_case_with_a_suffix_or_cut_shows_the_address(self):
         long_local = 'a' * 150
         for username, email in [
-            ('rahul.k', 'Rahul.K@gmail.com'),
-            ('RAHUL.K_2', 'rahul.k@gmail.com'),
+            ('rahul.k', 'Rahul.K@gmail.example.com'),
+            ('RAHUL.K_2', 'rahul.k@gmail.example.com'),
             ('a' * 140, f'{long_local}@example.com'),
             ('a' * 130 + '_3', f'{long_local}@example.com'),
-            ('someone@else.org', 'rahul@gmail.com'),
+            ('someone@else.example.org', 'rahul@gmail.example.com'),
         ]:
             with self.subTest(username=username):
                 self.assertTrue(exposes_email(username, email))
 
     def test_other_handles_do_not(self):
         for username, email in [
-            ('cardio_queen', 'rahul@gmail.com'),
-            ('rahul_k', 'rahul@gmail.com'),
+            ('cardio_queen', 'rahul@gmail.example.com'),
+            ('rahul_k', 'rahul@gmail.example.com'),
             ('rahul', ''),
-            ('', 'rahul@gmail.com'),
-            (None, 'rahul@gmail.com'),
-            (12345, 'rahul@gmail.com'),
+            ('', 'rahul@gmail.example.com'),
+            (None, 'rahul@gmail.example.com'),
+            (12345, 'rahul@gmail.example.com'),
         ]:
             with self.subTest(username=username):
                 self.assertFalse(exposes_email(username, email))
@@ -95,10 +95,10 @@ class ExposesEmailTests(SimpleTestCase):
     def test_same_rule_as_the_leaderboard(self):
         long_local = 'b' * 150
         for username, email in [
-            ('rahul.k', 'rahul.k@gmail.com'), ('Rahul.K_12', 'rahul.k@gmail.com'),
-            ('rahul.k_x', 'rahul.k@gmail.com'), ('cardio', 'rahul@gmail.com'), ('a@b', 'x@y.com'),
-            ('b' * 140, f'{long_local}@x.com'), ('b' * 130 + '_4', f'{long_local}@x.com'),
-            ('learner', 'learner_1@x.com'), ('rahul', ''), ('learner_1a2b3c4d', 'meera@x.com'),
+            ('rahul.k', 'rahul.k@gmail.example.com'), ('Rahul.K_12', 'rahul.k@gmail.example.com'),
+            ('rahul.k_x', 'rahul.k@gmail.example.com'), ('cardio', 'rahul@gmail.example.com'), ('a@b', 'x@y.example.com'),
+            ('b' * 140, f'{long_local}@x.example.com'), ('b' * 130 + '_4', f'{long_local}@x.example.com'),
+            ('learner', 'learner_1@x.example.com'), ('rahul', ''), ('learner_1a2b3c4d', 'meera@x.example.com'),
         ]:
             with self.subTest(username=username, email=email):
                 self.assertEqual(exposes_email(username, email), _public_name(username, email) is None)
@@ -112,13 +112,13 @@ class NewAccountUsernameTests(TestCase):
             self.assertEqual(generate_handle(User), 'learner_cafef00d')
 
     def test_no_name_or_a_name_that_shows_the_address_gets_a_generated_handle(self):
-        email = 'rahul.k@gmail.com'
-        for requested in (None, '', '   ', 12345, {'x': 1}, 'rahul.k', 'Rahul.K_2', 'rahul.k@gmail.com', 'me@other.org'):
+        email = 'rahul.k@gmail.example.com'
+        for requested in (None, '', '   ', 12345, {'x': 1}, 'rahul.k', 'Rahul.K_2', 'rahul.k@gmail.example.com', 'me@other.example.org'):
             with self.subTest(requested=requested):
                 self.assertRegex(username_for_new_account(User, requested, email), GENERATED)
 
     def test_a_chosen_name_is_kept_and_made_unique_in_any_case(self):
-        email = 'meera@gmail.com'
+        email = 'meera@gmail.example.com'
         self.assertEqual(username_for_new_account(User, ' cardio_queen ', email), 'cardio_queen')
         User.objects.create_user(username='cardio_queen', email='other@example.com')
         self.assertEqual(username_for_new_account(User, 'Cardio_Queen', email), 'Cardio_Queen_2')
@@ -126,26 +126,26 @@ class NewAccountUsernameTests(TestCase):
     def test_a_suffix_that_would_show_the_address_gives_a_generated_handle(self):
         User.objects.create_user(username='abc', email='one@example.com')
         User.objects.create_user(username='abc_2', email='two@example.com')
-        self.assertRegex(username_for_new_account(User, 'abc', 'abc_3@gmail.com'), GENERATED)
+        self.assertRegex(username_for_new_account(User, 'abc', 'abc_3@gmail.example.com'), GENERATED)
         # A long name (its suffixed variants used to be the address's 130-char
         # cut, an endless-loop risk) is over 30 characters: a generated handle.
         local = 'a' * 135
         User.objects.create_user(username=local + 'x', email='three@example.com')
-        self.assertRegex(username_for_new_account(User, local + 'x', f'{local}@gmail.com'), GENERATED)
+        self.assertRegex(username_for_new_account(User, local + 'x', f'{local}@gmail.example.com'), GENERATED)
 
     def test_the_suffix_search_is_bounded(self):
         for name in ('doc', 'doc_2', 'doc_3'):
             User.objects.create_user(username=name, email=f'{name}@example.com')
         with mock.patch('accounts.handles._MAX_SUFFIX', 3):
-            self.assertRegex(username_for_new_account(User, 'doc', 'meera@gmail.com'), GENERATED)
+            self.assertRegex(username_for_new_account(User, 'doc', 'meera@gmail.example.com'), GENERATED)
 
     def test_a_name_the_settings_form_refuses_gets_a_generated_handle(self):
         # It used to be kept as given: anyone could sign up as "admin" or
         # "CrackLabs_Official" and post as the team.
         for requested in REFUSED_SIGN_UP_NAMES:
             with self.subTest(requested=requested):
-                self.assertIsNotNone(handle_error(requested, user=SimpleNamespace(pk=None, email='meera@gmail.com'), User=User))
-                self.assertRegex(username_for_new_account(User, requested, 'meera@gmail.com'), GENERATED)
+                self.assertIsNotNone(handle_error(requested, user=SimpleNamespace(pk=None, email='meera@gmail.example.com'), User=User))
+                self.assertRegex(username_for_new_account(User, requested, 'meera@gmail.example.com'), GENERATED)
 
     def test_a_trusted_admin_may_keep_a_team_name_but_not_a_malformed_one(self):
         self.assertEqual(
@@ -160,40 +160,40 @@ class NewAccountUsernameTests(TestCase):
         name = 'a' * 29 + 'b'
         User.objects.create_user(username=name, email='one@example.com')
         User.objects.create_user(username='a' * 28 + '_2', email='two@example.com')
-        chosen = username_for_new_account(User, name, 'meera@gmail.com')
+        chosen = username_for_new_account(User, name, 'meera@gmail.example.com')
         self.assertEqual(chosen, 'a' * 28 + '_3')
         self.assertLessEqual(len(chosen), HANDLE_MAX_LENGTH)
-        self.assertIsNone(handle_error(chosen, user=SimpleNamespace(pk=None, email='meera@gmail.com'), User=User))
+        self.assertIsNone(handle_error(chosen, user=SimpleNamespace(pk=None, email='meera@gmail.example.com'), User=User))
 
     def test_a_suffixed_variant_that_is_a_team_name_gives_a_generated_handle(self):
         # 29 characters, not reserved; cut to 28 for '_2' it reads "administrator".
         name = 'administrator' + '_' * 15 + 'x'
         User.objects.create_user(username=name, email='one@example.com')
-        self.assertRegex(username_for_new_account(User, name, 'meera@gmail.com'), GENERATED)
+        self.assertRegex(username_for_new_account(User, name, 'meera@gmail.example.com'), GENERATED)
 
 
 class SupabaseSignUpHandleTests(_SupabaseAuthTestCase):
     def test_a_google_sign_up_gets_a_generated_handle_not_its_address(self):
-        identity = _identity('rahul.sharma@gmail.com', user_metadata={'full_name': 'Rahul Sharma'})
+        identity = _identity('rahul.sharma@gmail.example.com', user_metadata={'full_name': 'Rahul Sharma'})
         r = self.bearer('tok-google', identity).get(PROFILE)
         self.assertEqual(r.status_code, 200, r.data)
         self.assertRegex(r.data['username'], GENERATED)
         self.assertNotIn('rahul', r.data['username'].lower())
         self.assertEqual(r.data['first_name'], 'Rahul')
-        user = User.objects.get(email='rahul.sharma@gmail.com')
+        user = User.objects.get(email='rahul.sharma@gmail.example.com')
         # Learners with a generated handle are listed by it on the leaderboard.
         self.assertEqual(_public_name(user.username, user.email), user.username)
 
     def test_the_handle_chosen_at_sign_up_is_kept(self):
-        identity = _identity('meera@gmail.com', user_metadata={'username': 'cardio_queen'})
+        identity = _identity('meera@gmail.example.com', user_metadata={'username': 'cardio_queen'})
         r = self.bearer('tok-chosen', identity).get(PROFILE)
         self.assertEqual(r.status_code, 200, r.data)
         self.assertEqual(r.data['username'], 'cardio_queen')
 
     def test_a_sign_up_name_that_shows_the_address_is_replaced(self):
         for token, email, chosen in (
-            ('tok-local', 'priya.n@gmail.com', 'priya.n'),
-            ('tok-address', 'arjun.m@gmail.com', 'arjun.m@gmail.com'),
+            ('tok-local', 'priya.n@gmail.example.com', 'priya.n'),
+            ('tok-address', 'arjun.m@gmail.example.com', 'arjun.m@gmail.example.com'),
         ):
             with self.subTest(chosen=chosen):
                 r = self.bearer(token, _identity(email, user_metadata={'username': chosen})).get(PROFILE)
@@ -202,7 +202,7 @@ class SupabaseSignUpHandleTests(_SupabaseAuthTestCase):
 
     def test_a_non_text_username_in_metadata_does_not_break_the_first_sign_in(self):
         # It used to raise AttributeError (500) on .strip().
-        r = self.bearer('tok-number', _identity('num@gmail.com', user_metadata={'username': 12345})).get(PROFILE)
+        r = self.bearer('tok-number', _identity('num@gmail.example.com', user_metadata={'username': 12345})).get(PROFILE)
         self.assertEqual(r.status_code, 200, r.data)
         self.assertRegex(r.data['username'], GENERATED)
 
@@ -211,7 +211,7 @@ class SupabaseSignUpHandleTests(_SupabaseAuthTestCase):
         # Supabase sign-up call) sent: team names, HTML, 120 characters, 'a'.
         for i, chosen in enumerate(REFUSED_SIGN_UP_NAMES):
             with self.subTest(chosen=chosen):
-                identity = _identity(f'learner{i}@gmail.com', user_metadata={'username': chosen})
+                identity = _identity(f'learner{i}@gmail.example.com', user_metadata={'username': chosen})
                 r = self.bearer(f'tok-refused-{i}', identity).get(PROFILE)
                 self.assertEqual(r.status_code, 200, r.data)
                 self.assertRegex(r.data['username'], GENERATED)
@@ -224,7 +224,7 @@ class SupabaseSignUpHandleTests(_SupabaseAuthTestCase):
         self.assertEqual(r.status_code, 200, r.data)
         self.assertEqual((r.data['username'], r.data['role']), ('CrackLabs_Support', 'admin'))
         # The same name claimed only in user_metadata (anyone can set it) is not a pass.
-        identity = _identity('fake@gmail.com', user_metadata={'username': 'CrackLabs_Help', 'role': 'admin'})
+        identity = _identity('fake@gmail.example.com', user_metadata={'username': 'CrackLabs_Help', 'role': 'admin'})
         r = self.bearer('tok-fake-admin', identity).get(PROFILE)
         self.assertEqual(r.status_code, 200, r.data)
         self.assertRegex(r.data['username'], GENERATED)
@@ -260,7 +260,7 @@ class LocalRegisterHandleTests(TestCase):
 class ProfileUsernameTests(TestCase):
     def setUp(self):
         cache.clear()
-        self.user = User.objects.create_user(username='learner_0a1b2c3d', email='rahul.k@gmail.com', password=PASSWORD)
+        self.user = User.objects.create_user(username='learner_0a1b2c3d', email='rahul.k@gmail.example.com', password=PASSWORD)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -281,7 +281,7 @@ class ProfileUsernameTests(TestCase):
             ('x' * 31, '3 to 30 characters'),
             ('dr rahul', 'letters, numbers'),
             ('dr-rahul', 'letters, numbers'),
-            ('rahul@clinic.org', 'email address'),
+            ('rahul@clinic.example.org', 'email address'),
             ('___', 'at least one letter or number'),
             ('rahul.k', 'part of your email'),
             ('RAHUL.K_2', 'part of your email'),
@@ -298,13 +298,13 @@ class ProfileUsernameTests(TestCase):
         self.assertEqual(self.user.username, 'learner_0a1b2c3d')
 
     def test_a_handle_used_by_another_account_is_refused_in_any_case(self):
-        User.objects.create_user(username='Cardio_Queen', email='meera@gmail.com', password=PASSWORD)
+        User.objects.create_user(username='Cardio_Queen', email='meera@gmail.example.com', password=PASSWORD)
         r = self.patch(username='cardio_queen')
         self.assertEqual(r.status_code, 400, r.data)
         self.assertIn(HANDLE_TAKEN_MESSAGE, str(r.data['username']))
 
     def test_a_handle_taken_between_the_check_and_the_save_is_a_400(self):
-        User.objects.create_user(username='twin_name', email='twin@gmail.com', password=PASSWORD)
+        User.objects.create_user(username='twin_name', email='twin@gmail.example.com', password=PASSWORD)
         with mock.patch('accounts.handles.handle_error', return_value=None):
             r = self.patch(username='twin_name', college='AIIMS')
         self.assertEqual(r.status_code, 400, r.data)
@@ -333,10 +333,10 @@ class ProfileUsernameTests(TestCase):
                 self.assertEqual((self.user.username, self.user.college), (legacy, 'AIIMS Delhi'))
 
     def test_the_email_stays_read_only(self):
-        r = self.patch(email='other@gmail.com', username='cardio_queen')
+        r = self.patch(email='other@gmail.example.com', username='cardio_queen')
         self.assertEqual(r.status_code, 200, r.data)
         self.user.refresh_from_db()
-        self.assertEqual((self.user.email, self.user.username), ('rahul.k@gmail.com', 'cardio_queen'))
+        self.assertEqual((self.user.email, self.user.username), ('rahul.k@gmail.example.com', 'cardio_queen'))
 
 
 class UsernameChangeThrottleTests(TestCase):
@@ -350,8 +350,8 @@ class UsernameChangeThrottleTests(TestCase):
 
     def setUp(self):
         cache.clear()
-        self.user = User.objects.create_user(username='learner_0a1b2c3d', email='prober@gmail.com', password=PASSWORD)
-        User.objects.create_user(username='rahul.sharma', email='rahul.sharma@gmail.com', password=PASSWORD)
+        self.user = User.objects.create_user(username='learner_0a1b2c3d', email='prober@gmail.example.com', password=PASSWORD)
+        User.objects.create_user(username='rahul.sharma', email='rahul.sharma@gmail.example.com', password=PASSWORD)
         self.client = APIClient()
         self.client.force_authenticate(self.user)
 
@@ -391,7 +391,7 @@ class UsernameChangeThrottleTests(TestCase):
         for i in range(self.LIMIT + 1):
             self.patch(username=f'probe_{i}')
         self.assertEqual(self.patch(username='probe_x').status_code, 429)
-        other = User.objects.create_user(username='learner_99887766', email='other@gmail.com', password=PASSWORD)
+        other = User.objects.create_user(username='learner_99887766', email='other@gmail.example.com', password=PASSWORD)
         client = APIClient()
         client.force_authenticate(other)
         r = self.patch(client, username='cardio_queen')
@@ -540,10 +540,10 @@ class RenameEmailDerivedUsernamesTests(_SupabaseAuthTestCase):
     def setUp(self):
         super().setUp()
         make = User.objects.create_user
-        self.rahul = make(username='rahul.sharma', email='rahul.sharma@gmail.com', password=None)
-        self.priya = make(username='Priya_2', email='priya@gmail.com', password=None)
-        self.address = make(username='someone@mail.com', email='someone@mail.com', password=None)
-        self.chosen = make(username='cardio_queen', email='meera@gmail.com', password=None)
+        self.rahul = make(username='rahul.sharma', email='rahul.sharma@gmail.example.com', password=None)
+        self.priya = make(username='Priya_2', email='priya@gmail.example.com', password=None)
+        self.address = make(username='someone@mail.example.com', email='someone@mail.example.com', password=None)
+        self.chosen = make(username='cardio_queen', email='meera@gmail.example.com', password=None)
         self.admin = make(username='boss', email='boss@cracklabs.app', password=PASSWORD, role='admin', is_staff=True)
         self.staff = make(username='ops', email='ops@cracklabs.app', password=PASSWORD, is_staff=True)
         self.students = (self.rahul, self.priya, self.address)
@@ -586,7 +586,7 @@ class RenameEmailDerivedUsernamesTests(_SupabaseAuthTestCase):
     def test_a_renamed_learner_still_signs_in_and_keeps_the_new_handle(self):
         self.run_command('--apply')
         handle = User.objects.get(pk=self.rahul.pk).username
-        identity = _identity('rahul.sharma@gmail.com', user_metadata={'username': 'rahul.sharma'})
+        identity = _identity('rahul.sharma@gmail.example.com', user_metadata={'username': 'rahul.sharma'})
         r = self.bearer('tok-rahul', identity).get(PROFILE)
         self.assertEqual(r.status_code, 200, r.data)
         self.assertEqual((r.data['id'], r.data['username']), (self.rahul.pk, handle))
@@ -623,10 +623,10 @@ class EmailDerivedUsernameMigrationTests(TestCase):
     def setUp(self):
         cache.clear()
         make = User.objects.create_user
-        self.rahul = make(username='rahul.sharma', email='rahul.sharma@gmail.com', password=None)
-        self.priya = make(username='PRIYA_2', email='priya@gmail.com', password=None)
-        self.address = make(username='someone@mail.com', email='someone@mail.com', password=None)
-        self.chosen = make(username='cardio_queen', email='meera@gmail.com', password=None)
+        self.rahul = make(username='rahul.sharma', email='rahul.sharma@gmail.example.com', password=None)
+        self.priya = make(username='PRIYA_2', email='priya@gmail.example.com', password=None)
+        self.address = make(username='someone@mail.example.com', email='someone@mail.example.com', password=None)
+        self.chosen = make(username='cardio_queen', email='meera@gmail.example.com', password=None)
         self.admin = make(username='boss', email='boss@cracklabs.app', password=PASSWORD, role='admin', is_staff=True)
         self.root = make(username='root.user', email='root.user@cracklabs.app', password=PASSWORD, is_superuser=True)
         self.before = dict(User.objects.values_list('pk', 'username'))
@@ -652,7 +652,7 @@ class EmailDerivedUsernameMigrationTests(TestCase):
         self.assertEqual(self.migrate_forward(), after)
 
     def test_after_the_migration_the_taken_answer_reveals_no_hidden_name(self):
-        prober = User.objects.create_user(username='learner_0a1b2c3d', email='prober@gmail.com', password=PASSWORD)
+        prober = User.objects.create_user(username='learner_0a1b2c3d', email='prober@gmail.example.com', password=PASSWORD)
         client = APIClient()
         client.force_authenticate(prober)
         self.assertEqual(client.patch(PROFILE, {'username': 'Rahul.Sharma'}, format='json').status_code, 400)
