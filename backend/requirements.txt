@@ -13,7 +13,7 @@ psycopg[binary]>=3.2
 google-generativeai>=0.8
 google-genai>=1.0
 groq>=0.11
-openai>=1.0
+openai>=2.32.0
 gunicorn>=22.0
 whitenoise>=6.7
 cerebras-cloud-sdk>=1.0
@@ -24,9 +24,9 @@ django-axes>=7.0
 # Argon2 password hasher (industry-standard, PWH winner)
 argon2-cffi>=21.3
 # Phase 7: Monitoring & structured logging
-sentry-sdk[django]>=2.0
+sentry-sdk[django]>=2.58.0
 ddtrace>=4.15.6
-python-json-logger>=3.0
+python-json-logger>=4.1.0
 # PDF parsing for NEET PG
 PyMuPDF>=1.23.0
 # Admin Import Center parsers (material_importer/parser/: DOCX, PDF, PPTX).
@@ -38,7 +38,7 @@ python-pptx==1.0.2
 # Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
 django-redis>=5.4
 # Supabase admin operations
-supabase>=2.0
+supabase>=2.28.3
 razorpay>=1.3.0
 # Phase 3: Video generation & Background tasks
 edge-tts>=6.1
