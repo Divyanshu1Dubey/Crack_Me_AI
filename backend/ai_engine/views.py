@@ -1967,6 +1967,21 @@ class PageScreenshotView(AITutorThrottleMixin, APIView):
             return None
 
 
+class KnowledgeHealthView(APIView):
+    """Admin-only, read-only health of the textbook search store
+    (ported from feat/ai-production-unification; see ai_engine/rag_health.py)."""
+
+    def get_permissions(self):
+        return _get_admin_permission()
+
+    def get(self, request):
+        from .rag_health import rag_store_health
+
+        report = rag_store_health()
+        report.pop('path', None)  # don't expose server paths
+        return Response(report)
+
+
 class AIStatusView(APIView):
     """Check which AI providers are initialized (admin-only in production)."""
     permission_classes = property(lambda self: _get_admin_permission())
