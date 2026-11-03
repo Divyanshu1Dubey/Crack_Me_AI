@@ -136,8 +136,13 @@ Measured with the commands above; every number is reproducible from them.
   prints the recovered letter each time; in the two cases checkable from the text alone the printed key
   is the medically correct answer and the stored `A` is not.
 * Import defects seen in the queue (not repaired yet): 135 questions (NEET PG 2025: 124, INI-CET 2025:
-  11) whose option D holds the source's answer-key table instead of the option; 515 NEET PG 2025 stems
-  that start with ":". A repair changes the content hash: repair first, then recover and import again.
+  11) whose option D holds the source's answer-key table instead of the option (113 with the real
+  option text before the table, 22 with nothing else); 515 NEET PG 2025 stems that start with ":".
+  The existing `fix_answer_label_leaks` covers the first kind; its dry run on the restore: 758 questions
+  with answer labels in the text, 673 to repair (245 empty keys filled from the printed label, now
+  through `change_answer_key`, source `management_command`; 33 conflicts with the stored key kept), 85 to
+  deactivate for manual review. A repair changes the content hash: repair first, then recover and import
+  the signals again.
 
 ## 6. Production rollout (`cracklabs`)
 
@@ -148,8 +153,13 @@ Nothing of this runs on its own: the deploy does not run migrations yet (see `DE
    `QuestionAttemptLog` row per existing `QuestionAttempt` and files combined topic notes under
    `exam_type='all'`), `evidence.0001`, `reference_corpus.0001`, `key_audit.0001`, `key_audit.0002`.
    Check first with `python manage.py migrate --plan`.
-3. Dry-run, then apply, the imports against `cracklabs` with the files made on the local restore
+3. Optional, an owner decision: `fix_answer_label_leaks` (dry run, then `--apply`) on the restore and on
+   `cracklabs` alike. It hides the 85 rows it cannot repair from students until they are fixed. Because
+   it changes the content, run `ai_eval.recover_source_keys` on the restore again afterwards (the printed
+   keys are re-read against the repaired text); the AI reviews of repaired questions were made on the
+   old text and are skipped by the hash check, as they should be.
+4. Dry-run, then apply, the imports against `cracklabs` with the files made on the local restore
    (`source_keys_v2.jsonl`, `pass1_reviews_hashed.jsonl`): lines whose question changed in production
    since the restore are skipped by the hash check.
-4. `audit_answer_keys` (dry run), then `--apply`.
-5. Review in `/admin/review-queue`: start with "Printed key differs".
+5. `audit_answer_keys` (dry run), then `--apply`.
+6. Review in `/admin/review-queue`: start with "Printed key differs".

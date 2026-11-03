@@ -53,6 +53,9 @@ from django.db import transaction
 from django.db.models import Q
 
 from questions.answer_leak import PREFILTER_WORDS, PUBLIC_TEXT_FIELDS, plan_repair, row_has_answer_label
+from questions.content_hashes import stem_hash
+from questions.content_hooks import on_question_changed
+from questions.editorial import change_answer_key
 from questions.models import Question, QuestionRevisionSnapshot
 
 # SQL pre-filter: a row can only carry a label or a correctness flag if one
@@ -60,6 +63,7 @@ from questions.models import Question, QuestionRevisionSnapshot
 _PREFILTER_WORDS = PREFILTER_WORDS
 _REFERENCE_RE = re.compile(r"(?<![A-Za-z])(?i:reference)\s*:")
 SNAPSHOT_REASON = 'Before fix_answer_label_leaks'
+KEY_REASON = 'Empty key filled from the answer label printed in the imported text (fix_answer_label_leaks).'
 
 
 def _snapshot_state(question) -> dict:
@@ -126,21 +130,36 @@ class Command(BaseCommand):
                 plan = plan_repair(row)
                 if not plan.needed:
                     continue
+                old_key, old_hash = row.correct_answer or '', stem_hash(row)
                 QuestionRevisionSnapshot.objects.create(
                     question=row, changed_by=None, reason=SNAPSHOT_REASON, snapshot=_snapshot_state(row),
                 )
                 update_fields = ['needs_review']
                 row.needs_review = True
+                changes = dict(plan.changes)
+                # A key read from the label fills an EMPTY key only (plan_repair never changes a stored
+                # key); it goes through the one key writer so it has an AnswerKeyChange record.
+                new_key = '' if plan.deactivate else changes.pop('correct_answer', '')
                 if plan.deactivate:
                     row.is_active = False
                     update_fields.append('is_active')
                     held += 1
                 else:
-                    for name, value in plan.changes.items():
+                    for name, value in changes.items():
                         setattr(row, name, value)
                         update_fields.append(name)
                     changed += 1
                 row.save(update_fields=update_fields)
+                if new_key:
+                    change_answer_key(
+                        row, new_key, actor=None, source='management_command', reason=KEY_REASON,
+                        evidence=[{'kind': 'note', 'text': 'Answer label printed in the imported question text '
+                                                           '(fix_answer_label_leaks).'}],
+                    )
+                    Question.objects.filter(pk=row.pk).update(needs_review=True)   # still to be reviewed
+                if not plan.deactivate:
+                    transaction.on_commit(lambda row=row, old_key=old_key, old_hash=old_hash: on_question_changed(
+                        row, old_key=old_key, old_stem_hash=old_hash, reason='answer-label repair'))
         self.stdout.write(self.style.SUCCESS(
             f'\nApplied: {changed} repaired, {held} deactivated for review '
             f'(revision snapshots: "{SNAPSHOT_REASON}").'
