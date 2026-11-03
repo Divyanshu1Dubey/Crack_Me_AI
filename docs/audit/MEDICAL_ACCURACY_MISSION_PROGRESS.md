@@ -1,6 +1,6 @@
 # Medical accuracy mission — progress log
 
-_Last updated: 2026-11-03. Every number below was measured on that date unless marked otherwise. The earlier
+_Last updated: 2026-11-03 (wave 2a added). Every number below was measured on that date unless marked otherwise. The earlier
 version of this file (2026-11-02) described wave 1 as complete and verified; it was not, see "Corrections"._
 
 ## Where the work lives
@@ -37,6 +37,31 @@ version of this file (2026-11-02) described wave 1 as complete and verified; it 
   the recovered keys agreed with the AI review 90.2 % of the time against 37 % for the stored keys (measured
   2026-11-02; the recovery script is not yet a management command).
 
+## Wave 2a: the answer-key audit on real data (2026-11-03)
+
+Commits `ff1be80`, `a404b17`, `73fdc41` and the docs commit on `medical-accuracy-2`; full description in
+[`../ANSWER_KEY_AUDIT.md`](../ANSWER_KEY_AUDIT.md).
+
+- Problems found in the ported wave-1 audit and fixed: publisher keys were read from a hard-coded local
+  file (no signal could reach a deployment); `--dry-run` was ignored and not the default; every run wiped
+  the stored reviews; a question with no signal at all was "likely_correct" (confidence 0.8); confirming
+  a key on a 10-character reason made it "verified", and deactivated / dropped questions were labelled
+  "verified"; the editor and queue endpoints passed a client-supplied dict into `setattr` on the question
+  (`explanation_fields`); `rescore_key_change(apply=True)` marked changes re-scored without re-scoring.
+- New: `key_audit.classify` (pure, tested rules), DB-backed signals (`SourceKey`, imported reviews, human
+  decisions from `AnswerKeyChange` / `AuditResolution` / verification), dry-run-default
+  `import_source_keys`, `import_review_signals`, `audit_answer_keys`, `ai_eval.recover_source_keys`
+  (content hashes), the review queue page `/admin/review-queue` with a reviewed batch for printed keys.
+- `crack_local` (measured): 5,085 printed keys imported (2,045 confident mismatches with the stored key),
+  2,634 AI reviews imported; audit of 10,013 active questions: needs review 3,829, insufficient evidence
+  5,952, likely correct 170, image missing 62, verified 0; 2,685 suggested keys (2,045 from confident
+  printed keys). Skewed exam years: NEET PG 2025 / 2018 / 2020 / 2021 and INI-CET 2025 (70-96 % keyed A).
+- Checks: backend full suite 1,941 OK before the last audit commits (key_audit 44 tests after them),
+  frontend unit 389/389, tsc, eslint, `next build`; the page was exercised with Playwright on the local
+  stack at 1440 and 390 px (no console / API errors, no horizontal overflow).
+- Import defects found (not repaired): 135 questions whose option D holds the source's answer table,
+  515 NEET PG 2025 stems starting with ":".
+
 ## Corrections to the 2026-11-02 version
 
 - "All waves implemented, tested and verified" was not true: the full suite had 2 failures
@@ -52,12 +77,14 @@ version of this file (2026-11-02) described wave 1 as complete and verified; it 
 
 ## Next
 
-1. Wave 2 (frontend + wiring): admin review queue (`app/admin/review-queue`), editor panels (key change,
-   explanation suggestion, provenance), evidence components (student citations ≤ 240 chars, admin page
-   viewer), notes UI; post-test review media (backend + results page).
-2. Answer-key audit on real data: AI first pass for the remaining 7,379 questions; source-key recovery as a
-   management command; both feed the review queue as signals (never automatic key changes).
-3. Corpus: OCR for the 26 deferred sources, the remaining embeddings (or BM25-only with a benchmark), the
+1. Production: merge, migrate `cracklabs` (`questions.0042`, `evidence.0001`, `reference_corpus.0001`,
+   `key_audit.0001`-`0002`), then the dry-run imports and the audit (runbook: `ANSWER_KEY_AUDIT.md` §6).
+2. Repair the two import defects above with a dry-run command (then recover and import the signals again,
+   since the content hashes change).
+3. Wave 2 remainder: editor panels (key change, explanation suggestion, provenance), evidence components
+   (student citations ≤ 240 chars, admin page viewer), notes UI; post-test review media (backend + results
+   page).
+4. AI first pass for the remaining 7,379 questions (review signals only); a second, independent pass where
+   a reviewer disagrees with the key.
+5. Corpus: OCR for the 26 deferred sources, the remaining embeddings (or BM25-only with a benchmark), the
    retrieval / answer benchmarks.
-4. Production: apply the four migrations on `cracklabs` (Railway does not run `release.sh` yet), then switch
-   the flags on step by step.

@@ -56,6 +56,12 @@ class ClassifyRuleTests(SimpleTestCase):
         r = self.run_rules(key='')
         self.assertEqual((r.status, r.reason), ('needs_review', 'invalid_or_missing_key'))
 
+    def test_invalid_key_takes_the_printed_key_as_suggestion(self):
+        r = self.run_rules(key='', signals=[rules.Signal('invalid_or_missing_key', 'empty')],
+                           source_keys=[source_key('C')])
+        self.assertEqual((r.status, r.reason, r.suggested_key, r.suggested_from),
+                         ('needs_review', 'invalid_or_missing_key', 'C', 'source_key_mismatch'))
+
     def test_nothing_known_is_insufficient_evidence_not_likely_correct(self):
         r = self.run_rules()
         self.assertEqual((r.status, r.reason, r.priority), ('insufficient_evidence', 'no_evidence', 0.0))

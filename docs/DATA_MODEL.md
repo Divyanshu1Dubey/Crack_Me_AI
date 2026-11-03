@@ -835,3 +835,17 @@ See [`API_REFERENCE.md`](./API_REFERENCE.md) for the full per-endpoint spec.
 
 **Indexes**: `(question, is_active)`
 
+
+---
+
+## `key_audit` app (answer-key audit, 2026-11)
+
+Verified from `backend/key_audit/models.py` (migrations `0001_initial`, `0002_source_keys_and_decision_context`).
+Rules, commands and the review queue: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT.md).
+
+| Model | Key fields | Notes |
+|---|---|---|
+| `QuestionAudit` | `question` (1:1), `status`, `status_reason`, `stored_key`, `original_key`, `key_provenance`, `suggested_key`, `priority`, `signals` (JSON), `reviews` (JSON: AI reviews and official keys), `evidence_run` (FK `reference_corpus.EvidenceRun`), `evidence_summary`, `is_stale`, `content_changed_at`, `method_version`, `audited_at` | written by `audit_answer_keys` / `key_audit.services`; `Question.answer_key_status` mirrors `status`; never changes a key |
+| `SourceKey` | `question` (FK), `source_file`, `source_sha256`, `question_page`, `question_number`, `answer_page`, `chapter`, `source_exam`, `source_year`, `printed_letter`, `letter`, `option_order`, `method`, `located`, `stem_hash`, `recovery_version`, `recovered_at`, `imported_at` | unique (`question`, `source_file`, `question_page`, `question_number`); loaded by `import_source_keys`; `confident` = located and option order checked |
+| `AuditResolution` | `question`, `audit`, `resolution`, `reason`, `evidence`, `key_change` (FK `questions.AnswerKeyChange`), `status_before`, `stored_key`, `stem_hash`, `resolved_by`, `resolved_at` | immutable (save after create / delete raise) |
+| `ReviewClaim` | `question` (1:1), `claimed_by`, `claimed_at`, `expires_at` | 15-minute claim in the review queue |

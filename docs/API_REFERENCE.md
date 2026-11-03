@@ -739,6 +739,19 @@ Admin-only. Jobs: `jobs/` (newest 200, filters `?status=&batch_run=&parent_exam=
 
 Job rows carry `exam` (the job's exam, or its material's exam hint), `exam_label` (display name) and `material_filename`. Batch `status`, `total_jobs`, `completed_jobs` and `failed_jobs` are computed from the batch's jobs, not read from stored counters. Stale-job recovery: [`BATCH_SYSTEM.md`](./BATCH_SYSTEM.md#ingestion-platform-jobs).
 
+### Answer-key review queue — `/api/key-audit/`
+
+Admin only (`IsControlTowerAdmin`, throttle scope `review_queue`). Full rules: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT.md#4-review-queue).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/key-audit/queue/` | Audits by priority (paginated, `page_size` <= 100); filters `status` (comma list), `reason`, `exam`, `year`, `suggested_from`, `has_suggestion`, `unclaimed`, `q`, `include_inactive` |
+| GET | `/api/key-audit/queue/summary/` | Counts by status, reason, open signal and suggestion source |
+| GET | `/api/key-audit/queue/<question_id>/` | One audit: question, signals, printed source keys, reviews, decisions, key history, claim |
+| POST / DELETE | `/api/key-audit/queue/<question_id>/claim/` | Claim for 15 minutes (`409 {code: "claimed"}`) / release |
+| POST | `/api/key-audit/queue/<question_id>/resolve/` | Record a decision; `409 {code: "claimed" \| "key_changed"}`, `400` for invalid evidence or non-explanation fields |
+| POST | `/api/key-audit/queue/accept-source-keys/` | Accept the confident printed key for up to 25 ticked questions (per-item results) |
+
 ### Admin Import Center — `/api/admin/import/`
 
 Staff-only material importer (upload, batches, review queue, publish). See [`IMPORT_API.md`](./IMPORT_API.md).

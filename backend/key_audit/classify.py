@@ -215,23 +215,26 @@ def collect(inp: AuditInput) -> tuple:
             signals.append(Signal('official_key_disagrees', f'{source} gives {best}', at=_parse(review.get('at')),
                                   suggested_key=best, data={'official_source': source}))
 
-    confident_match = any(row.get('confident') and _letter(row.get('letter')) == key for row in inp.source_keys)
+    confident_match = bool(key) and any(
+        row.get('confident') and _letter(row.get('letter')) == key for row in inp.source_keys)
     for row in inp.source_keys:
         letter = _letter(row.get('letter'))
-        if not letter or not key:
+        if not letter:
             continue
         where = f"{row.get('source_file', '?')} p.{row.get('question_page', '?')} Q{row.get('question_number', '?')}"
-        if letter == key:
+        if key and letter == key:
             if row.get('confident'):
                 agreements.append(Agreement('source_key', f'printed key {letter} in {where}'))
             continue
         if not row.get('confident') and confident_match:
             continue   # an unchecked reading loses to a confident one that agrees with the key
+        # Also without a valid stored key: the printed letter is then the suggestion the reviewer needs.
         code = 'source_key_mismatch' if row.get('confident') else 'source_key_mismatch_unverified'
         why = '' if row.get('confident') else (
             ' (stem not found in the source text)' if not row.get('located') else ' (option order not checked)')
         signals.append(Signal(code, f'{where} prints {row.get("printed_letter") or letter}'
-                                    f'{"" if letter == row.get("printed_letter") else f" = {letter} here"}; stored {key}{why}',
+                                    f'{"" if letter == row.get("printed_letter") else f" = {letter} here"}; '
+                                    f'{f"stored {key}" if key else "no valid stored key"}{why}',
                               at=row.get('imported_at'), suggested_key=letter,
                               data={k: row.get(k) for k in ('source_file', 'question_page', 'answer_page',
                                                             'question_number', 'method', 'option_order', 'located')}))
