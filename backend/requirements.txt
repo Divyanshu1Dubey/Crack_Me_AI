@@ -56,6 +56,13 @@ moviepy>=2.0,<3
 django-q2>=1.6
 # Knowledge Base: embeddings + optional pgvector + local reranker
 sentence-transformers>=2.7.0
+# The servers have no GPU: install the CPU build of PyTorch (pulled in by
+# sentence-transformers). The default Linux wheel bundles ~3 GB of CUDA
+# libraries, which overflowed Railway's build disk. Pinned to an exact +cpu
+# build so a newer CUDA wheel on PyPI can never win the version comparison.
+# Railway runs Python 3.12 (backend/.python-version); 2.15.0+cpu has cp312 wheels.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu; sys_platform == "linux"
 numpy>=1.26
 # Security floors for transitive dependencies: the first versions without
 # known advisories (pip-audit, 2026-11-01). Without them pip keeps older,
