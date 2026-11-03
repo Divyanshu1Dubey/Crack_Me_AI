@@ -333,7 +333,9 @@ CI_YML = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 class RazorpayCspTests(SimpleTestCase):
     def test_risk_detection_bundle_and_beacons_are_allowed(self):
         config = json.loads(VERCEL_JSON.read_text(encoding="utf-8"))
-        headers = {h["key"]: h["value"] for block in config["headers"] for h in block["headers"]}
+        # The site-wide block; /ads/(.*) is the sandboxed partner-ad pages (own, looser CSP).
+        headers = {h["key"]: h["value"] for block in config["headers"]
+                   if block["source"] != "/ads/(.*)" for h in block["headers"]}
         csp = {}
         for directive in headers["Content-Security-Policy"].split(";"):
             parts = directive.split()
