@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, MailCheck, UserPlus } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
@@ -10,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { extractApiErrorMessage } from '@/lib/api';
 import { AuthApiError, resendVerificationEmail } from '@/lib/localAuth';
 import {
@@ -37,7 +37,6 @@ export default function RegisterPage() {
     const [googleBusy, setGoogleBusy] = useState(false);
     const { register, oauthLogin, googleLogin, isSupabaseAuth, authMode, googleSignInEnabled } = useAuth();
     const isDjangoAuth = authMode === 'django';
-    const router = useRouter();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -66,7 +65,7 @@ export default function RegisterPage() {
                 setConfirmationSentTo(form.email.trim());
                 return;
             }
-            router.push('/dashboard');
+            navigateAfterAuthChange('/dashboard');
         } catch (err: unknown) {
             if (err instanceof AuthApiError) {
                 // Django-native sign-up: {detail, code} (invalid_email,
@@ -104,7 +103,7 @@ export default function RegisterPage() {
         try {
             const signedIn = await googleLogin(credential);
             const isAdmin = signedIn?.is_admin === true || (signedIn?.role || '').toLowerCase() === 'admin';
-            router.push(isAdmin ? '/admin' : '/dashboard');
+            navigateAfterAuthChange(isAdmin ? '/admin' : '/dashboard');
         } catch (err: unknown) {
             const code = err instanceof AuthApiError ? err.code || '' : '';
             setErrorCode(code);
@@ -171,8 +170,9 @@ export default function RegisterPage() {
                         {isDjangoAuth ? (
                             <p className="text-sm text-muted-foreground break-words">
                                 We sent a confirmation link to <span className="font-semibold text-foreground">{confirmationSentTo}</span>.
-                                Open it to finish creating your account; you will be signed in. Already have an account
-                                with this email? Then the email tells you how to sign in instead.
+                                Open it and enter the password you just chose to finish creating your account; you will
+                                be signed in. Already have an account with this email? Then the email tells you how to
+                                sign in instead.
                             </p>
                         ) : (
                             <p className="text-sm text-muted-foreground break-words">

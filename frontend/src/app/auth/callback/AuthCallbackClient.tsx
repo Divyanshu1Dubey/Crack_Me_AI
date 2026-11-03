@@ -6,6 +6,7 @@ import type { EmailOtpType } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { authAPI } from '@/lib/api';
 import { consumePostAuthPath } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { safeInternalPath } from '@/lib/auth-redirect';
 import { isDjangoAuthBuild } from '@/lib/localSession';
 
@@ -123,7 +124,7 @@ export default function AuthCallbackClient() {
           || (isRecovery ? '/reset-password' : '')
           || rememberedPath
           || (isAdmin ? '/admin' : '/dashboard');
-        router.replace(destination);
+        navigateAfterAuthChange(destination, { replace: true });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Authentication callback failed.';
         router.replace(`/login?authError=${encodeURIComponent(message)}`);

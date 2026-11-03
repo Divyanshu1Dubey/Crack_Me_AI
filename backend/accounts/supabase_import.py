@@ -25,12 +25,19 @@ Rules (docs: design section 3 of the auth-recovery plan):
   row existed may belong to someone else. Those rows are CHECK_NEWER_IDENTITY
   until an operator reviews them (``--include-newer-identities``).
 * Password hashes (GoTrue bcrypt) are imported as ``supabase_bcrypt$<hash>``
-  (accounts.hashers), never for admin / staff / superuser rows, auth users
-  flagged admin in app_metadata, or the addresses given with
-  ``--no-password-for``. A usable Django password of a student is replaced
-  (``--keep-django-passwords`` keeps it); a row that is already linked keeps
-  whatever usable password it has, so a re-run never undoes a sign-in's
-  re-hash or a password change.
+  (accounts.hashers), never for admin / staff / superuser rows or auth users
+  flagged admin in app_metadata (there is no override), never for the
+  addresses / auth user ids given with ``--no-password-for`` /
+  ``--no-password-for-uid``, and never when the hash is one of the published
+  passwords of ``--leaked-password-file`` (accounts.leaked_passwords). An auth
+  user without a Django row whose password is such a published one is not
+  created (MISSING_LEAKED_PASSWORD). A usable Django password of a student is
+  replaced (``--keep-django-passwords`` keeps it); a row that is already
+  linked keeps whatever usable password it has, so a re-run never undoes a
+  sign-in's re-hash or a password change. A row that still holds a hash the
+  plan now withholds (imported by an earlier run) is reported
+  (WITHHELD_HASH_ALREADY_IMPORTED): ``manage.py withhold_leaked_passwords``
+  makes it unusable.
 * Google identities (auth.identities provider='google') become
   ``UserIdentity(provider='google', subject=<provider_id>)`` when
   identity_data.sub agrees; a subject already attached to another account is
@@ -70,6 +77,7 @@ ALREADY_LINKED = 'ALREADY_LINKED'
 LINK = 'LINK'
 CREATE = 'CREATE'
 MISSING_NOT_CREATED = 'MISSING_NOT_CREATED'      # no row; needs --create-missing
+MISSING_LEAKED_PASSWORD = 'MISSING_LEAKED_PASSWORD'  # no row, and its password is a published one: not created
 AMBIGUOUS_AUTH_EMAIL = 'AMBIGUOUS_AUTH_EMAIL'    # two auth users share the address
 AMBIGUOUS_DJANGO_EMAIL = 'AMBIGUOUS_DJANGO_EMAIL'  # two rows share the address
 CONFLICT_LINKED_ELSEWHERE = 'CONFLICT_LINKED_ELSEWHERE'
@@ -84,11 +92,13 @@ PW_REPLACED = 'PASSWORD_REPLACED'                # a usable student password is 
 PW_KEPT_DJANGO = 'PASSWORD_KEPT_DJANGO'          # a usable Django password is kept
 PW_UNCHANGED = 'PASSWORD_UNCHANGED'              # the row already holds this hash
 PW_WITHHELD_PRIVILEGED = 'PASSWORD_WITHHELD_PRIVILEGED'
-PW_WITHHELD_LISTED = 'PASSWORD_WITHHELD_LISTED'  # --no-password-for
+PW_WITHHELD_LISTED = 'PASSWORD_WITHHELD_LISTED'  # --no-password-for / --no-password-for-uid
+PW_WITHHELD_LEAKED = 'PASSWORD_WITHHELD_LEAKED'  # one of the --leaked-password-file passwords
 PW_NONE = 'PASSWORD_NONE'                        # no bcrypt hash in Supabase (Google-only, ...)
 PW_NOT_APPLICABLE = 'PASSWORD_NOT_APPLICABLE'    # the account is not written
 
 PASSWORD_WRITES = (PW_IMPORTED, PW_REPLACED)
+PASSWORD_WITHHELD = (PW_WITHHELD_PRIVILEGED, PW_WITHHELD_LISTED, PW_WITHHELD_LEAKED)
 
 # ── Google identity outcomes ────────────────────────────────────────────
 ID_IMPORT = 'IDENTITY_IMPORT'
@@ -104,6 +114,8 @@ NOTE_AUTH_BANNED = 'AUTH_BANNED'
 NOTE_ROW_BLOCKED = 'ROW_BLOCKED'                 # linked, stays blocked
 NOTE_IDENTITY_EMAIL_DIFFERS = 'IDENTITY_EMAIL_DIFFERS'
 NOTE_EMAIL_DIFFERS_FROM_ROW = 'AUTH_EMAIL_DIFFERS_FROM_ROW'  # ALREADY_LINKED with another address
+# The row still holds the Supabase hash this plan withholds (an earlier import wrote it).
+NOTE_WITHHELD_HASH_PRESENT = 'WITHHELD_HASH_ALREADY_IMPORTED'
 
 BCRYPT_ONLY = re.compile(r'^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}\Z')
 _SCHEMA_RE = re.compile(r'^[a-z_][a-z0-9_]{0,62}\Z')
@@ -356,11 +368,12 @@ class ImportOptions:
     include_newer_identities: bool = False
     keep_django_passwords: bool = False
     no_password_emails: frozenset = frozenset()
+    # Auth user ids whose hash is never imported (--no-password-for-uid).
+    no_password_uids: frozenset = frozenset()
+    # Published passwords (--leaked-password-file): a hash of one of them is never imported.
+    leaked_passwords: tuple = ()
     only_uids: frozenset = frozenset()
     exclude_uids: frozenset = frozenset()
-    # Supabase auth user ids of admin/staff accounts whose password hash the OWNER explicitly asked to
-    # keep (--allow-privileged-password). Every other privileged hash stays withheld.
-    allow_privileged_password_uids: frozenset = frozenset()
 
 
 @dataclass
@@ -414,14 +427,20 @@ class Plan:
 
 
 def _password_outcome(au: AuthUser, klass: str, row: DjangoRow | None, opts: ImportOptions) -> str:
+    from .leaked_passwords import supabase_hash_is_one_of
+
     encoded = encoded_from_supabase_hash(au.encrypted_password)
     if not encoded:
         return PW_NONE
-    if ((row is not None and row.privileged) or au.flagged_admin()) and au.id not in opts.allow_privileged_password_uids:
+    # Admin / staff hashes are never imported (no override): such accounts set a
+    # new password ("Forgot password", manage.py changepassword) or use Google.
+    if (row is not None and row.privileged) or au.flagged_admin():
         return PW_WITHHELD_PRIVILEGED
     listed = opts.no_password_emails
-    if au.email_key in listed or (row is not None and row.email_key in listed):
+    if au.email_key in listed or (row is not None and row.email_key in listed) or au.id in opts.no_password_uids:
         return PW_WITHHELD_LISTED
+    if supabase_hash_is_one_of(au.encrypted_password, opts.leaked_passwords):
+        return PW_WITHHELD_LEAKED
     if row is None:
         return PW_IMPORTED  # CREATE
     if row.password == encoded:
@@ -466,6 +485,7 @@ def plan_import(auth_users, auth_identities, django_rows, existing_google_subjec
 
     ``existing_google_subjects``: {subject: user pk} of UserIdentity(provider='google').
     """
+    from .leaked_passwords import supabase_hash_is_one_of
     from .supabase_rest_auth import is_original_identity
 
     now = now or timezone.now()
@@ -539,6 +559,13 @@ def plan_import(auth_users, auth_identities, django_rows, existing_google_subjec
         if klass == AMBIGUOUS_DJANGO_EMAIL:
             mapped_pks.update(r.pk for r in by_email.get(au.email_key, []))
         account_row = row if klass in (ALREADY_LINKED, LINK) else None
+        if klass in (CREATE, MISSING_NOT_CREATED) and supabase_hash_is_one_of(
+            au.encrypted_password, options.leaked_passwords,
+        ):
+            # No Django row, and its password is a published one (a demo / test
+            # account, most likely): never recreated, with or without
+            # --create-missing. If it was a real person, they sign up again.
+            klass = MISSING_LEAKED_PASSWORD
 
         if klass == CREATE and au.flagged_admin():
             notes.append(NOTE_ADMIN_FLAG_IGNORED)
@@ -551,6 +578,11 @@ def plan_import(auth_users, auth_identities, django_rows, existing_google_subjec
         writes = klass in WRITING_CLASSES
         if writes:
             decision.password = _password_outcome(au, klass, account_row, options)
+            if (
+                account_row is not None and decision.password in PASSWORD_WITHHELD
+                and account_row.password == decision.encoded_password
+            ):
+                notes.append(NOTE_WITHHELD_HASH_PRESENT)
         account_email_key = account_row.email_key if account_row is not None else au.email_key
         decision.identities = _identity_decisions(
             au, identities_by_user.get(au.id, []), decision.row_pk, account_email_key,

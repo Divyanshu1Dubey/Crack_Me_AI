@@ -289,9 +289,16 @@ export const resendVerificationEmail = async (email: string): Promise<string> =>
   return typeof data.detail === 'string' ? data.detail : 'If this email needs confirming, we sent a new link.';
 };
 
-/** POST /auth/native/verify-email/ with the link's {token} (new sign-up) or {uid, token} (existing account). */
-export const verifyEmailLink = (link: { token: string; uid?: string | null }): Promise<TokenAuthResult> =>
-  signIn('/auth/native/verify-email/', link.uid ? { uid: link.uid, token: link.token } : { token: link.token });
+/**
+ * POST /auth/native/verify-email/: the link's {uid, token} (existing account), or {token, password}
+ * for a new sign-up -- the password chosen at sign-up, so that opening a mail never creates an account
+ * with a password somebody else chose (backend codes `password_required` / `password_mismatch`).
+ */
+export const verifyEmailLink = (link: { token: string; uid?: string | null; password?: string }): Promise<TokenAuthResult> =>
+  signIn(
+    '/auth/native/verify-email/',
+    link.uid ? { uid: link.uid, token: link.token } : { token: link.token, password: link.password ?? '' },
+  );
 
 /** POST /auth/password-reset/ (django mode: 202 for any address). */
 export const requestPasswordReset = async (email: string): Promise<void> => {

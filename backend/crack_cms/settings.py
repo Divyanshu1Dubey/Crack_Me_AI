@@ -13,7 +13,7 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-from crack_cms.client_ip import parse_num_proxies
+from crack_cms.client_ip import num_proxies_from_env
 from crack_cms.db_config import server_side_cursors_unsupported, statement_timeout_option
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -79,9 +79,12 @@ if SENTRY_DSN:
     try:
         from sentry_sdk.scrubber import DEFAULT_DENYLIST, EventScrubber
 
+        # Plus the edge secret header of crack_cms/client_ip.py (request headers are scrubbed by name).
+        _edge_secret_header = (os.getenv('TRUSTED_CLIENT_IP_SECRET_HEADER', '') or 'X-Edge-Auth').strip().lower()
         _sentry_extra['event_scrubber'] = EventScrubber(
             denylist=[*DEFAULT_DENYLIST, 'new_password', 'current_password', 'old_password', 'password2',
-                      'refresh', 'access', 'credential', 'id_token', 'access_token', 'refresh_token'],
+                      'refresh', 'access', 'credential', 'id_token', 'access_token', 'refresh_token',
+                      _edge_secret_header, _edge_secret_header.replace('-', '_')],
             recursive=True,
         )
     except ImportError:  # pragma: no cover - older sentry-sdk
@@ -358,7 +361,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    # Refuses the default password once committed in bootstrap_admin.py (public history).
+    {'NAME': 'accounts.password_validators.PublishedPasswordValidator'},
 ]
+# Extra SHA-256 digests for PublishedPasswordValidator (accounts/password_validators.py).
+PUBLISHED_PASSWORD_SHA256 = os.getenv('PUBLISHED_PASSWORD_SHA256', '').strip()
 
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
@@ -377,49 +384,56 @@ AUTHENTICATION_BACKENDS = [
 ]
 AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
 AXES_COOLOFF_TIME = timedelta(minutes=30)  # 30-minute lockout
-# One lockout per (username, client IP) COMBINATION. The flat list
-# ['username', 'ip_address'] meant two separate lockouts in axes 8: anyone
-# could lock a known username out from anywhere, and five failures from any
-# visitor locked out everyone behind the same proxy address. Per-email DRF
-# throttles (accounts/throttles.py) slow a distributed attack on one account.
-AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
-# The client address, not the proxy's (TRUSTED_CLIENT_IP_HEADER / NUM_PROXIES,
-# else REMOTE_ADDR; crack_cms/client_ip.py).
+# What is locked, per request path (accounts.throttles.axes_lockout_parameters):
+# the Django-native sign-in (/api/auth/native/*) locks one (username, client IP)
+# COMBINATION -- nobody can lock a student out from elsewhere; per-email DRF
+# throttles slow a distributed attack on one account. Django admin and the
+# dev-only local login keep the separate username and client-IP lockouts
+# (['username', 'ip_address']): five failures for a staff username from
+# anywhere lock it for AXES_COOLOFF_TIME.
+AXES_LOCKOUT_PARAMETERS = 'accounts.throttles.axes_lockout_parameters'
+# The client address, not the proxy's (TRUSTED_CLIENT_IP_HEADER from its edge /
+# NUM_PROXIES, else REMOTE_ADDR; crack_cms/client_ip.py).
 AXES_CLIENT_IP_CALLABLE = 'crack_cms.client_ip.get_client_ip'
 AXES_RESET_ON_SUCCESS = True  # Reset counter on successful login
 
-# Client IP behind proxies. DRF's throttles key anonymous traffic on the
-# client IP; without NUM_PROXIES DRF uses the whole, client-controlled
-# X-Forwarded-For string, so a new prefix per request is a new throttle
-# bucket. Set NUM_PROXIES to the number of proxies in front of Django that
-# append to X-Forwarded-For (DRF then takes that entry from the right).
-# Unset keeps DRF's historical behaviour. The question-bank limiter
-# (questions/middleware.py, via crack_cms/client_ip.py) reads the same value
-# and falls back to REMOTE_ADDR while it is unset. TRUSTED_CLIENT_IP_HEADER
-# (e.g. "CF-Connecting-IP", "DO-Connecting-IP") is honoured by that limiter
-# only; set it only when every request reaches Django through that edge.
+# Client IP behind proxies (crack_cms/client_ip.py). django-axes, the
+# question-bank limiter (questions/middleware.py) and DRF's throttles
+# (crack_cms/throttling.py) all key on crack_cms.client_ip.get_client_ip:
+#   * NUM_PROXIES: the number of proxies in front of Django that append to
+#     X-Forwarded-For. The entry that many places from the right is the PEER,
+#     the address that connected to the outermost of them. Explicit only (no
+#     platform default: set it after checking the endpoint below). Unset: the
+#     peer is REMOTE_ADDR, DRF's throttles keep their historical key (the raw,
+#     client-controlled X-Forwarded-For), and so do the sign-in throttles
+#     unless a trusted edge header is configured (accounts.W007,
+#     security_posture_check).
+#   * TRUSTED_CLIENT_IP_HEADER (e.g. "CF-Connecting-IP"): the edge's client
+#     address. TRUSTED_CLIENT_IP_HEADER_FROM restricts it to requests whose
+#     peer is the edge ("cloudflare" = Cloudflare's published ranges; CIDRs;
+#     "any"). Unset means "any", the behaviour before the setting existed: the
+#     restriction is opt-in because it relies on NUM_PROXIES pointing at the
+#     Cloudflare hop -- if the platform's edge appends another hop, every
+#     visitor would share that address. With TRUSTED_CLIENT_IP_SECRET set, the
+#     header also needs that value in TRUSTED_CLIENT_IP_SECRET_HEADER (e.g.
+#     added by a Cloudflare Transform Rule). With the restriction on, a request
+#     that reaches the service around the edge (the *.up.railway.app hostname)
+#     is keyed on its peer whatever it sends.
 #
-# Production (both default to unset; see backend/.env.example): behind the
-# DigitalOcean / Cloudflare edge REMOTE_ADDR is the proxy, shared by every
-# visitor, so until one of them is set the limiter counts all anonymous
-# traffic -- and the first request of every new or refreshed login token --
-# in that proxy's bucket (security_posture_check logs a warning).
-#   1. Look at what the edge sends: as an admin, GET /api/health/client-ip/
-#      echoes REMOTE_ADDR, X-Forwarded-For and the platform client-IP
-#      headers of your own request (crack_cms/diagnostics.py).
-#   2. TRUSTED_CLIENT_IP_HEADER=DO-Connecting-IP on DigitalOcean App
-#      Platform: DO's own edge sets it on every request. Do not use
-#      CF-Connecting-IP there -- the default *.ondigitalocean.app hostname
-#      stays reachable around Cloudflare, and a client can send that header
-#      itself. Verify before relying on it: send a forged
-#      CF-Connecting-IP / DO-Connecting-IP to /api/health/client-ip/ and
-#      check which value reaches Django.
-#   3. NUM_PROXIES=<n> where X-Forwarded-For ends with your address followed
-#      by n-1 proxy addresses (usually 1). DRF's throttles read only this
-#      one, so set it as well -- TRUSTED_CLIENT_IP_HEADER alone leaves DRF
-#      keying on the raw X-Forwarded-For (security_posture_check warns).
-NUM_PROXIES = parse_num_proxies(os.getenv('NUM_PROXIES'))
+# Railway behind Cloudflare (docs/DEPLOY_RAILWAY.md): TRUSTED_CLIENT_IP_HEADER=
+# CF-Connecting-IP; after the check below, NUM_PROXIES=1 and
+# TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare. Verify on the deployed service:
+# as an admin, GET /api/health/client-ip/ (crack_cms/diagnostics.py) shows
+# REMOTE_ADDR, X-Forwarded-For, the edge headers, the peer, whether the edge
+# header was honoured and the resulting address -- through api.cracklabs.app
+# the peer must be a Cloudflare address and client_ip your own address; on the
+# *.up.railway.app hostname, with a forged CF-Connecting-IP / X-Forwarded-For,
+# client_ip must still be your real address.
+NUM_PROXIES = num_proxies_from_env(os.environ)  # explicit only (crack_cms/client_ip.py)
 TRUSTED_CLIENT_IP_HEADER = os.getenv('TRUSTED_CLIENT_IP_HEADER', '').strip()
+TRUSTED_CLIENT_IP_HEADER_FROM = os.getenv('TRUSTED_CLIENT_IP_HEADER_FROM', '').strip()
+TRUSTED_CLIENT_IP_SECRET_HEADER = os.getenv('TRUSTED_CLIENT_IP_SECRET_HEADER', '').strip()
+TRUSTED_CLIENT_IP_SECRET = os.getenv('TRUSTED_CLIENT_IP_SECRET', '').strip()
 # The one edge country header analytics ingest trusts
 # (analytics/views_internal.py), e.g. CF-IPCountry or X-Vercel-IP-Country;
 # 'none' stores no country. Unset: the country header of the edge
@@ -456,8 +470,9 @@ if AUTH_PROVIDER not in ('supabase', 'django'):
 GOOGLE_OAUTH_CLIENT_IDS = [c for c in re.split(r'[\s,]+', os.getenv('GOOGLE_OAUTH_CLIENT_IDS', '')) if c]
 # A native session ends this long after sign-in whatever its refreshes.
 NATIVE_AUTH_SESSION_MAX_DAYS = _env_int('NATIVE_AUTH_SESSION_MAX_DAYS', 60)
-# A refresh token that was just rotated still gets an access token for this
-# long (another tab rotated first); any later reuse revokes the session.
+# A refresh token that was just rotated is still answered for this long, with
+# tokens equivalent to the current ones (another tab rotated first, or the
+# rotation's answer was lost); any later reuse revokes the session.
 NATIVE_AUTH_REFRESH_REUSE_SECONDS = _env_int('NATIVE_AUTH_REFRESH_REUSE_SECONDS', 20)
 NATIVE_AUTH_ALLOW_SIGNUP = os.getenv('NATIVE_AUTH_ALLOW_SIGNUP', 'true').strip().lower() in ('1', 'true', 'yes')
 # Password-reset links (django.contrib.auth.tokens.default_token_generator)
@@ -492,10 +507,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'crack_cms.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'NUM_PROXIES': NUM_PROXIES,
+    # DRF's classes with the client address of crack_cms/client_ip.py once
+    # NUM_PROXIES is set (crack_cms/throttling.py).
     'DEFAULT_THROTTLE_CLASSES': (
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.ScopedRateThrottle',
+        'crack_cms.throttling.AnonRateThrottle',
+        'crack_cms.throttling.UserRateThrottle',
+        'crack_cms.throttling.ScopedRateThrottle',
     ),
     'DEFAULT_THROTTLE_RATES': {
         'anon': os.getenv('DRF_THROTTLE_ANON', '120/min'),
@@ -523,13 +540,17 @@ REST_FRAMEWORK = {
         'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
         # Django-native sign-in (accounts/native_auth.py, accounts/throttles.py).
         # '*_email' scopes are keyed on a SHA-256 of the lower-cased email,
-        # the others on the client IP (NUM_PROXIES) or the signed-in user.
+        # native_verify_link on the emailed link, the others on the client IP
+        # (crack_cms.client_ip) or the signed-in user. The per-IP rates leave
+        # room for carrier-grade NAT (many students behind one mobile IPv4
+        # address); the per-email ones bound what reaches one inbox.
         'native_login': os.getenv('DRF_THROTTLE_NATIVE_LOGIN', '10/min'),
         'native_login_email': os.getenv('DRF_THROTTLE_NATIVE_LOGIN_EMAIL', '10/hour'),
-        'native_register': os.getenv('DRF_THROTTLE_NATIVE_REGISTER', '5/hour'),
+        'native_register': os.getenv('DRF_THROTTLE_NATIVE_REGISTER', '20/hour'),
         'native_register_email': os.getenv('DRF_THROTTLE_NATIVE_REGISTER_EMAIL', '3/hour'),
         'native_refresh': os.getenv('DRF_THROTTLE_NATIVE_REFRESH', '60/min'),
-        'native_verify': os.getenv('DRF_THROTTLE_NATIVE_VERIFY', '10/hour'),
+        'native_verify': os.getenv('DRF_THROTTLE_NATIVE_VERIFY', '30/hour'),
+        'native_verify_link': os.getenv('DRF_THROTTLE_NATIVE_VERIFY_LINK', '10/hour'),
         'native_verify_email': os.getenv('DRF_THROTTLE_NATIVE_VERIFY_EMAIL', '3/hour'),
         'native_password_change': os.getenv('DRF_THROTTLE_NATIVE_PASSWORD_CHANGE', '10/hour'),
         'password_reset_email': os.getenv('DRF_THROTTLE_PASSWORD_RESET_EMAIL', '3/hour'),

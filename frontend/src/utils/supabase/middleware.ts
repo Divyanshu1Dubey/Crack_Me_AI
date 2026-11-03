@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
-import { assertSupabaseConfig } from './config';
+import { getSupabaseConfig } from './config';
 import { isTokenAuthBuild, LOCAL_ADMIN_COOKIE, LOCAL_SESSION_COOKIE } from '@/lib/localSession';
 
 const PROTECTED_ROUTE_PREFIXES = [
@@ -35,11 +35,32 @@ const isProtectedRoute = (pathname: string) =>
 
 const isAdminPath = (pathname: string) => pathname === '/admin' || pathname.startsWith('/admin/');
 
+/**
+ * An App Router prefetch (or a browser speculative prefetch), not a navigation. The router keeps
+ * prefetch answers in its client cache: a redirect given to a signed-out prefetch of /questions
+ * was replayed after the visitor signed in, and every protected link led back to /login. So the
+ * gates below never redirect prefetches; the real navigation is still gated (and the pages gate
+ * client-side; the API authenticates every request).
+ */
+const isPrefetchRequest = (request: NextRequest) => {
+  const headers = request.headers;
+  return (
+    headers.get('next-router-prefetch') === '1'
+    || headers.has('next-router-segment-prefetch')
+    || (headers.get('purpose') || '').toLowerCase() === 'prefetch'
+    || (headers.get('sec-purpose') || '').toLowerCase().includes('prefetch')
+  );
+};
+
+/** A gate's redirect to `target`; a prefetch passes through instead (see isPrefetchRequest). */
+const gateRedirect = (request: NextRequest, target: URL) =>
+  isPrefetchRequest(request) ? NextResponse.next() : NextResponse.redirect(target);
+
 /** /login?next=<path + query>, so a deep link survives the sign-in. */
 const loginRedirect = (request: NextRequest) => {
   const loginUrl = new URL('/login', request.url);
   loginUrl.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.redirect(loginUrl);
+  return gateRedirect(request, loginUrl);
 };
 
 const parseAdminEmailAllowlist = () => {
@@ -104,15 +125,29 @@ const localSessionGate = (request: NextRequest) => {
     return loginRedirect(request);
   }
   if (isAdminPath(pathname) && request.cookies.get(LOCAL_ADMIN_COOKIE)?.value !== '1') {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return gateRedirect(request, new URL('/dashboard', request.url));
   }
   return NextResponse.next();
 };
 
+/**
+ * Navigation guard only (the API authenticates every request), so it must never
+ * take the site down: a throw here is Vercel's MIDDLEWARE_INVOCATION_FAILED on
+ * every page. Explicit NEXT_PUBLIC_AUTH_MODE=supabase without Supabase keys, or
+ * any unexpected error, lets the request through.
+ */
 export const updateSession = async (request: NextRequest) => {
-  if (isTokenAuthBuild()) return localSessionGate(request);
+  try {
+    if (isTokenAuthBuild()) return localSessionGate(request);
+    const config = getSupabaseConfig();
+    if (!config.isConfigured) return NextResponse.next();
+    return await supabaseSessionGate(request, config.supabaseUrl, config.supabaseKey);
+  } catch {
+    return NextResponse.next();
+  }
+};
 
-  const { supabaseUrl, supabaseKey } = assertSupabaseConfig('middleware');
+const supabaseSessionGate = async (request: NextRequest, supabaseUrl: string, supabaseKey: string) => {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -187,7 +222,7 @@ export const updateSession = async (request: NextRequest) => {
   // them there to set the new password (updateUser needs that session).
   if (isAuthenticated && (pathname === '/login' || pathname === '/register' || pathname === '/forgot-password')) {
     const redirectPath = authData?.user ? (isAdminUser(authData.user as Parameters<typeof isAdminUser>[0]) ? '/admin' : '/dashboard') : '/dashboard';
-    return NextResponse.redirect(new URL(redirectPath, request.url));
+    return gateRedirect(request, new URL(redirectPath, request.url));
   }
 
   return response;

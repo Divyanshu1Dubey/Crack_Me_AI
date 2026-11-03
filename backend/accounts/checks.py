@@ -27,13 +27,20 @@ accounts.W005  GOOGLE_OAUTH_CLIENT_IDS is empty: "Sign in with Google" is off, s
                accounts that only ever signed in with Google need a password reset.
 accounts.W006  No real mail backend outside DEBUG (console / locmem / dummy / file):
                verification, password-reset and Google-link emails never arrive.
-accounts.W007  Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: behind the
-               platform proxy django-axes sees the proxy address, so five failed
-               sign-ins for an account lock it out for every visitor.
+accounts.W007  The client address is not hardened: either TRUSTED_CLIENT_IP_HEADER is
+               read from any peer (TRUSTED_CLIENT_IP_HEADER_FROM unset / "any" and no
+               TRUSTED_CLIENT_IP_SECRET), so a request sent to the origin directly
+               can name its own address (fresh rate-limit buckets and lockout keys),
+               or neither NUM_PROXIES nor the header is set, so lockouts key on the
+               proxy address shared by every visitor (crack_cms/client_ip.py).
+accounts.E001  (an Error, not deploy-only, outside DEBUG) TRUSTED_CLIENT_IP_HEADER_FROM
+               restricts the header but NUM_PROXIES is not set: every visitor would
+               share the proxy address. ``migrate`` (release.sh) refuses to run, so
+               the deploy stops before that configuration serves anyone.
 
 The Supabase checks only run in supabase mode when Supabase sign-in is
-configured (SUPABASE_URL); W003 outside DEBUG; W004-W007 in django mode. They
-make no network calls.
+configured (SUPABASE_URL); W003 outside DEBUG; W004-W007 in django mode; E001 in
+both modes. They make no network calls.
 """
 from __future__ import annotations
 
@@ -164,18 +171,64 @@ def native_auth_mail_check(app_configs=None, **kwargs):
 
 @checks.register(checks.Tags.security, deploy=True)
 def native_auth_client_ip_check(app_configs=None, **kwargs):
+    from crack_cms.client_ip import parse_num_proxies
+
     if not django_auth_enabled() or settings.DEBUG:
         return []
-    num_proxies = (getattr(settings, 'REST_FRAMEWORK', {}) or {}).get('NUM_PROXIES')
-    if num_proxies is not None or str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', '') or '').strip():
+    num_proxies = parse_num_proxies((getattr(settings, 'REST_FRAMEWORK', {}) or {}).get('NUM_PROXIES'))
+    header = str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER', '') or '').strip()
+    restricted = _client_ip_header_restricted()
+    secret = bool(str(getattr(settings, 'TRUSTED_CLIENT_IP_SECRET', '') or '').strip())
+    hardening = (
+        'Check GET /api/health/client-ip/ as an admin: if the right-most X-Forwarded-For entry of a request '
+        'through Cloudflare is a Cloudflare address, set NUM_PROXIES=1 and TRUSTED_CLIENT_IP_HEADER_FROM='
+        'cloudflare; otherwise add a Cloudflare Transform Rule header with TRUSTED_CLIENT_IP_SECRET. Removing '
+        "the service's public *.up.railway.app domain closes the obvious way around Cloudflare, not every one "
+        '(docs/DEPLOY_RAILWAY.md).'
+    )
+    if header and not restricted and not secret:
+        return [checks.Warning(
+            f'{header} is read from any peer: a request sent to the origin directly (around Cloudflare) can name '
+            'its own client address, getting fresh sign-in rate-limit buckets and lockout keys.',
+            hint='The per-email limits still cap guessing on one account, not credential stuffing across accounts. '
+                 + hardening,
+            id='accounts.W007',
+        )]
+    if num_proxies is None and not header:
+        return [checks.Warning(
+            'The client address is unknown (neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set): lockouts '
+            'key on the proxy address and the rate limits on the raw, client-supplied X-Forwarded-For.',
+            hint='Behind the platform proxy every visitor has the proxy address, so one attacker can lock an account '
+                 'out for everyone. Set TRUSTED_CLIENT_IP_HEADER=CF-Connecting-IP behind Cloudflare. ' + hardening,
+            id='accounts.W007',
+        )]
+    return []
+
+
+def _client_ip_header_restricted() -> bool:
+    value = str(getattr(settings, 'TRUSTED_CLIENT_IP_HEADER_FROM', '') or '').strip().lower()
+    return bool(value) and value != 'any'
+
+
+@checks.register(checks.Tags.security)
+def client_ip_restriction_needs_proxy_depth(app_configs=None, **kwargs):
+    """accounts.E001: TRUSTED_CLIENT_IP_HEADER_FROM restricted without NUM_PROXIES (outside DEBUG).
+
+    Not a deploy-only check on purpose: ``migrate`` (release.sh) refuses to run, so the deploy stops and the
+    previous version keeps serving. In that state the peer is REMOTE_ADDR, the platform proxy shared by every
+    visitor: the restricted header is never read, every visitor shares one sign-in bucket and anyone can lock a
+    username for everyone through django-axes.
+    """
+    from crack_cms.client_ip import parse_num_proxies
+
+    if settings.DEBUG or not _client_ip_header_restricted():
         return []
-    return [checks.Warning(
-        'Neither NUM_PROXIES nor TRUSTED_CLIENT_IP_HEADER is set: sign-in lockouts see the proxy address.',
-        hint=(
-            'django-axes locks an account after 5 failed sign-ins per (account, client IP). Behind the '
-            'platform proxy every visitor has the proxy address, so one attacker locks the account out for '
-            'everyone. Check GET /api/health/client-ip/ as an admin, then set NUM_PROXIES and/or '
-            'TRUSTED_CLIENT_IP_HEADER (settings.py, client-IP notes).'
-        ),
-        id='accounts.W007',
+    if parse_num_proxies((getattr(settings, 'REST_FRAMEWORK', {}) or {}).get('NUM_PROXIES')) is not None:
+        return []
+    return [checks.Error(
+        'TRUSTED_CLIENT_IP_HEADER_FROM restricts the client-IP header but NUM_PROXIES is not set: every visitor '
+        'would share the proxy address in the rate limits and lockouts.',
+        hint='Set NUM_PROXIES (Railway: 1, after checking GET /api/health/client-ip/), or unset '
+             'TRUSTED_CLIENT_IP_HEADER_FROM (docs/DEPLOY_RAILWAY.md).',
+        id='accounts.E001',
     )]

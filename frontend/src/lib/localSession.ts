@@ -5,10 +5,14 @@
  * instead of Supabase.
  *
  * NEXT_PUBLIC_AUTH_MODE (inlined at build time):
- *   unset / anything else  Supabase (the default; behaviour unchanged)
+ *   supabase               Supabase (needs NEXT_PUBLIC_SUPABASE_URL + a key)
  *   local                  dev-only email/password (/api/auth/local/*, DEBUG backends)
  *   django                 Django-native sign-in (/api/auth/native/*, Google ID
  *                          tokens); the backend must run AUTH_PROVIDER=django
+ *   unset / anything else  Supabase when its URL and key are set, otherwise
+ *                          django: without Supabase keys the Supabase mode
+ *                          cannot sign anyone in (and its middleware threw on
+ *                          every request, MIDDLEWARE_INVOCATION_FAILED).
  *
  * "local" and "django" are the token modes: SimpleJWT access/refresh tokens in
  * localStorage (crack_local_access / crack_local_refresh) and the presence
@@ -24,7 +28,13 @@ export type AuthBuildMode = 'supabase' | 'local' | 'django';
 /** The sign-in this build uses (NEXT_PUBLIC_AUTH_MODE, read at call time so tests can switch it). */
 export const authBuildMode = (): AuthBuildMode => {
   const raw = (process.env.NEXT_PUBLIC_AUTH_MODE || '').trim().toLowerCase();
-  return raw === 'local' || raw === 'django' ? raw : 'supabase';
+  if (raw === 'local' || raw === 'django' || raw === 'supabase') return raw;
+  // Direct process.env.NEXT_PUBLIC_* reads so Next.js inlines them (edge + browser).
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseKey = (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  ).trim();
+  return supabaseUrl && supabaseKey ? 'supabase' : 'django';
 };
 
 /** Dev-only local auth (NEXT_PUBLIC_AUTH_MODE=local). */

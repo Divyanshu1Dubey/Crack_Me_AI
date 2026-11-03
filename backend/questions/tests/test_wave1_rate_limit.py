@@ -113,15 +113,28 @@ class RateLimitIdentityTests(_FrozenLimiterMixin, TestCase):
             self.assertEqual(self._get(remote=proxy, HTTP_X_FORWARDED_FOR="203.0.113.6").status_code, 200)
 
     def test_trusted_platform_header_is_honoured_when_configured(self):
-        with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP"):
+        # With TRUSTED_CLIENT_IP_HEADER_FROM=cloudflare (opt-in), CF-Connecting-IP counts only for
+        # requests that came through Cloudflare (the peer is one of Cloudflare's addresses;
+        # crack_cms/client_ip.py).
+        cloudflare = "173.245.48.10"
+        with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP", TRUSTED_CLIENT_IP_HEADER_FROM="cloudflare"):
             for _ in range(3):
-                self.assertEqual(self._get(HTTP_CF_CONNECTING_IP="203.0.113.10").status_code, 200)
-            self.assertEqual(self._get(HTTP_CF_CONNECTING_IP="203.0.113.10").status_code, 429)
-            self.assertEqual(self._get(HTTP_CF_CONNECTING_IP="203.0.113.11").status_code, 200)
-            # A value that is not an IP address falls back to REMOTE_ADDR.
-            request = self.factory.get("/api/questions/", REMOTE_ADDR="10.0.0.7", HTTP_CF_CONNECTING_IP="not-an-ip")
+                self.assertEqual(self._get(remote=cloudflare, HTTP_CF_CONNECTING_IP="203.0.113.10").status_code, 200)
+            self.assertEqual(self._get(remote=cloudflare, HTTP_CF_CONNECTING_IP="203.0.113.10").status_code, 429)
+            self.assertEqual(self._get(remote=cloudflare, HTTP_CF_CONNECTING_IP="203.0.113.11").status_code, 200)
+            # A value that is not an IP address falls back to the peer.
+            request = self.factory.get("/api/questions/", REMOTE_ADDR=cloudflare, HTTP_CF_CONNECTING_IP="not-an-ip")
+            request.user = AnonymousUser()
+            self.assertEqual(rate_limit_identity(request), f"ip:{cloudflare}")
+            # From anywhere else the header is the client's own claim and is ignored.
+            request = self.factory.get("/api/questions/", REMOTE_ADDR="10.0.0.7", HTTP_CF_CONNECTING_IP="203.0.113.12")
             request.user = AnonymousUser()
             self.assertEqual(rate_limit_identity(request), "ip:10.0.0.7")
+        # Without the restriction (the default) the header counts from any peer, as before.
+        with override_settings(TRUSTED_CLIENT_IP_HEADER="CF-Connecting-IP"):
+            request = self.factory.get("/api/questions/", REMOTE_ADDR="10.0.0.7", HTTP_CF_CONNECTING_IP="203.0.113.12")
+            request.user = AnonymousUser()
+            self.assertEqual(rate_limit_identity(request), "ip:203.0.113.12")
 
     def test_platform_header_is_ignored_when_not_configured(self):
         for i in range(3):

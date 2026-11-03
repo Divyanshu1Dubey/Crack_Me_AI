@@ -189,6 +189,21 @@ class GoogleSignInRuleTests(_GoogleTestCase):
                          400, 'invalid_or_expired_link')
         self.assertEqual(self.google(self.credential(sub='sub-legacy', email='legacy@gmail.com')).status_code, 200)
 
+    def test_the_link_never_adds_a_second_google_account(self):
+        """confirm-link refuses an account that meanwhile got another Google identity (as Settings does)."""
+        user = _student('one', 'doc@gmail.com')
+        self.google(self.credential(sub='sub-first'))
+        [token] = [t for m in mail.outbox for t in re.findall(r'/connect-google#token=(\S+)', m.body)]
+        UserIdentity.objects.create(user=user, provider='google', subject='sub-other', source='operator')
+        self.assert_code(self.client.post('/api/auth/google/confirm-link/', {'token': token}, format='json'),
+                         409, 'google_already_linked')
+        self.assertEqual(list(UserIdentity.objects.filter(user=user).values_list('subject', flat=True)), ['sub-other'])
+        self.assertFalse(AuthSession.objects.exists())
+        # And a sign-in with yet another Google account of that address mails no link at all.
+        mail.outbox.clear()
+        self.assert_code(self.google(self.credential(sub='sub-third')), 409, 'google_already_linked')
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_the_link_stops_working_after_an_email_change(self):
         user = _student('mover', 'mover@gmail.com')
         self.google(self.credential(sub='sub-mover', email='mover@gmail.com'))

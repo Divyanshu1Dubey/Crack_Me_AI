@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, LogIn, Mail } from 'lucide-react';
 import AuthShell from '@/components/AuthShell';
@@ -9,6 +9,7 @@ import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { extractApiErrorMessage } from '@/lib/api';
 import { safeInternalPath } from '@/lib/auth-redirect';
 import { AuthApiError, resendVerificationEmail } from '@/lib/localAuth';
@@ -45,7 +46,6 @@ export default function LoginClient() {
         isSupabaseAuth, authMode, googleSignInEnabled,
     } = useAuth();
     const isDjangoAuth = authMode === 'django';
-    const router = useRouter();
     const searchParams = useSearchParams();
     const authErrorFromCallback = (searchParams.get('authError') || '').trim();
 
@@ -61,7 +61,7 @@ export default function LoginClient() {
     // middleware cannot tell a valid session from a stale presence cookie).
     useEffect(() => {
         if (!isDjangoAuth || authLoading || !user || signingIn.current) return;
-        router.replace(destinationFor(user));
+        navigateAfterAuthChange(destinationFor(user), { replace: true });
     }, [isDjangoAuth, authLoading, user]);
 
     const clearMessages = () => {
@@ -92,7 +92,9 @@ export default function LoginClient() {
             // the `user` captured at render time — the render-time
             // snapshot is still the pre-login (often stale or null) value.
             const signedIn = await login(identifier, password);
-            router.push(destinationFor(signedIn));
+            // Full page load: the router cache may hold redirects to /login for the
+            // protected links prefetched while signed out (lib/authNavigation.ts).
+            navigateAfterAuthChange(destinationFor(signedIn));
         } catch (err: unknown) {
             signingIn.current = false;
             if (err instanceof AuthApiError) {
@@ -128,7 +130,7 @@ export default function LoginClient() {
         signingIn.current = true;
         try {
             const signedIn = await googleLogin(credential);
-            router.push(destinationFor(signedIn));
+            navigateAfterAuthChange(destinationFor(signedIn));
         } catch (err: unknown) {
             signingIn.current = false;
             if (err instanceof AuthApiError) {

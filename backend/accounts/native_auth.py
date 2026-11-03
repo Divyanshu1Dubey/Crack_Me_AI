@@ -6,7 +6,7 @@ Mounted under /api/auth/ (accounts/urls.py):
   POST native/refresh/              {refresh}                    -> 200 {access, refresh?, session_id}
   POST native/logout/               {refresh?} (+ bearer)        -> 200
   POST native/register/             {email, password, username?, first_name?, last_name?} -> 202
-  POST native/verify-email/         {token} | {uid, token}       -> 201 / 200 tokens
+  POST native/verify-email/         {token, password} | {uid, token} -> 201 / 200 tokens
   POST native/resend-verification/  {email}                      -> 202
   POST native/password/             {current_password, new_password} (bearer) -> 200
   POST google/                      {credential}                 -> 200 / 201 tokens (accounts.google_identity)
@@ -25,15 +25,22 @@ PasswordResetConfirmView, 410 in supabase mode); in django mode they call
 
 Rules:
 * Sign-in is by email only (case-insensitive, exactly one account). Unknown
-  emails cost one password hash like known ones (ModelBackend's dummy hash)
+  emails and blocked accounts cost one password hash like any other account
   and get the same 401 ``invalid_credentials``. django-axes counts failures
   per (account, client IP) -- 429 ``too_many_attempts`` -- and a per-email
-  limit counts failed attempts from every IP (accounts.throttles).
+  limit counts failed attempts from every IP (accounts.throttles). Per-IP
+  limits key on crack_cms.client_ip (forged forwarding headers stop counting
+  once the client address is hardened; docs/DEPLOY_RAILWAY.md).
 * ``403 account_blocked`` and ``401 email_not_confirmed`` are only answered
   after the right password; the latter also mails a verification link.
-* Sign-up creates no account: a PendingSignup holds the hashed password until
-  the emailed link is opened (POST native/verify-email/ {token}); the answer is
-  the same 202 whether or not the address is taken.
+* Sign-up creates no account: each sign-up is its own PendingSignup (the
+  hashed password, a digest of the emailed token) until a link is opened; the
+  answer is the same 202 whether or not the address is taken. A later sign-up
+  with the same address never changes an earlier one -- it may be someone
+  else's. Opening a link (POST native/verify-email/ {token, password}) needs
+  the password of one of that address's sign-ups: the link proves the
+  mailbox, the password picks the sign-up, so nobody else's password ends up
+  on the account. ``400 password_mismatch`` otherwise (the link stays usable).
 * Accounts that predate native sign-in without a verified email get an
   emailed {uid, token} link (EmailVerificationTokenGenerator): single-use
   (it covers email_verified_at) and valid EMAIL_VERIFICATION_MAX_AGE seconds.
@@ -66,8 +73,9 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import base36_to_int, urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import exceptions, permissions, status
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+
+from crack_cms.throttling import ClientIPScopedRateThrottle
 
 from .auth_mode import auth_provider, django_auth_enabled
 from .device_limits import session_id_from_claims
@@ -85,6 +93,7 @@ from .throttles import (
     NativeRefreshThrottle,
     NativeRegisterEmailThrottle,
     NativeVerifyEmailThrottle,
+    NativeVerifyLinkThrottle,
     consume_email_quota,
     email_digest,
     email_limit_reached,
@@ -99,11 +108,18 @@ VERIFY_EMAIL_SCOPE = 'native_verify_email'
 _MAX_PASSWORD_CHARS = 4096
 _PENDING_TOKEN_BYTES = 32
 _DEFAULT_VERIFICATION_MAX_AGE = 86400
+# Open sign-ups kept per address; a newer one evicts the oldest.
+MAX_PENDING_SIGNUPS_PER_EMAIL = 5
 
 INVALID_CREDENTIALS = 'Incorrect email or password.'
 BLOCKED_DETAIL = 'This account has been blocked. Contact support if you think this is a mistake.'
 INVALID_LINK_DETAIL = 'This link is invalid or has expired. Please request a new one.'
 TOO_MANY_DETAIL = 'Too many attempts. Please wait a few minutes and try again.'
+PASSWORD_REQUIRED_DETAIL = 'Enter the password you chose when you signed up.'
+PASSWORD_MISMATCH_DETAIL = (
+    'That is not the password you chose when you signed up with this email. Enter it again, '
+    'or sign up again to choose a new one.'
+)
 
 
 def signup_enabled() -> bool:
@@ -205,8 +221,9 @@ def send_pending_verification(email: str, token: str, name: str = '') -> None:
         'Confirm your email for CrackLabs',
         (
             f'Hi{" " + name if name else ""},\n\n'
-            'Thanks for signing up for CrackLabs. Open this link to confirm your email address and '
-            f'finish creating your account (it works once, for {hours} hours):\n{link}\n\n'
+            'Thanks for signing up for CrackLabs. Open this link and enter the password you chose to '
+            f'confirm your email address and finish creating your account (it works once, for {hours} '
+            f'hours):\n{link}\n\n'
             'If you did not sign up, ignore this email: no account is created.\n\n'
             'The CrackLabs Team'
         ),
@@ -214,8 +231,41 @@ def send_pending_verification(email: str, token: str, name: str = '') -> None:
     )
 
 
-def send_legacy_verification(user, *, check_quota: bool = True) -> bool:
-    """Mail an {uid, token} link that verifies an existing account's email. True when queued."""
+LEGACY_VERIFICATION_REASONS = ('password', 'google', 'resend')
+
+
+def _legacy_verification_text(reason: str, link: str) -> str:
+    if reason == 'password':
+        # Sent only after the CORRECT password was entered: say so, and what to do if it was not the owner.
+        return (
+            'Someone just signed in to CrackLabs with this email address and its correct password. Before '
+            'the first sign-in we need to confirm the address. If it was you, open this link (it works '
+            f'once; it signs you in):\n{link}\n\n'
+            'If it was NOT you, someone knows your password: do not open the link, and choose a new '
+            f'password now: {_frontend_url("/forgot-password")}\n\n'
+        )
+    if reason == 'google':
+        return (
+            'Someone just signed in to CrackLabs with the Google account connected to your CrackLabs '
+            'account. Before the first sign-in we need to confirm this email address. If it was you, open '
+            f'this link (it works once; it signs you in):\n{link}\n\n'
+            'If it was NOT you, do not open the link and contact support.\n\n'
+        )
+    return (
+        'We were asked to send a new link to confirm the email address of your CrackLabs account. Open '
+        f'this link (it works once; it signs you in):\n{link}\n\n'
+        'If you did not ask for it, ignore this email: nothing changes.\n\n'
+    )
+
+
+def send_legacy_verification(user, *, reason: str, check_quota: bool = True) -> bool:
+    """Mail an {uid, token} link that verifies an existing account's email. True when queued.
+
+    ``reason``: 'password' (a sign-in with the correct password), 'google' (a
+    Google sign-in of the linked identity) or 'resend' (someone asked for a new link).
+    """
+    if reason not in LEGACY_VERIFICATION_REASONS:
+        raise ValueError(f'unknown verification reason {reason!r}')
     if not user.email or not user.is_active or user.email_verified_at is not None:
         return False
     if check_quota and not consume_email_quota(VERIFY_EMAIL_SCOPE, user.email):
@@ -225,13 +275,7 @@ def send_legacy_verification(user, *, check_quota: bool = True) -> bool:
     name = user.first_name or user.username
     _mail(
         'Confirm your email for CrackLabs',
-        (
-            f'Hi {name},\n\n'
-            'Please confirm your email address to keep signing in to CrackLabs. Open this link '
-            f'(it works once):\n{link}\n\n'
-            'If you did not try to sign in, you can ignore this email.\n\n'
-            'The CrackLabs Team'
-        ),
+        f'Hi {name},\n\n{_legacy_verification_text(reason, link)}The CrackLabs Team',
         user.email,
     )
     return True
@@ -309,11 +353,17 @@ def signed_in_response(request, user, method: str, http_status: int = status.HTT
 # ── Views ───────────────────────────────────────────────────────────────
 
 class _NativeView(APIView):
-    """Anonymous native-auth endpoint: 404 unless AUTH_PROVIDER=django, ``{detail, code}`` errors."""
+    """Anonymous native-auth endpoint: 404 unless AUTH_PROVIDER=django, ``{detail, code}`` errors.
+
+    Per-IP limits (``throttle_scope``) key on crack_cms.client_ip.get_client_ip,
+    the address django-axes uses. Forged X-Forwarded-For / CF-Connecting-IP
+    headers stop opening new buckets once the client address is hardened
+    (accounts.W007; docs/DEPLOY_RAILWAY.md).
+    """
 
     permission_classes = [permissions.AllowAny]
     authentication_classes: list = []
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ClientIPScopedRateThrottle]
 
     def initial(self, request, *args, **kwargs):
         if not django_auth_enabled():
@@ -383,6 +433,8 @@ class NativeLoginView(_NativeView):
 
         rows = list(User.objects.filter(email__iexact=email).order_by('pk')[:2])
         row = rows[0] if len(rows) == 1 else None
+        if row is not None and not row.is_active:
+            return self._blocked_account(request, row, email, password)
         # No single account: a name no account has (':' is never in a
         # username), so ModelBackend still hashes the password once (same
         # timing) and axes counts the failures of this address as well.
@@ -393,17 +445,39 @@ class NativeLoginView(_NativeView):
             return _error('too_many_attempts', TOO_MANY_DETAIL, status.HTTP_429_TOO_MANY_REQUESTS)
         if user is None:
             record_email_hit(LOGIN_EMAIL_SCOPE, email)
-            if row is not None and not row.is_active and check_password_hash(password, row.password):
-                return _error('account_blocked', BLOCKED_DETAIL, status.HTTP_403_FORBIDDEN)
             return _error('invalid_credentials', INVALID_CREDENTIALS, status.HTTP_401_UNAUTHORIZED)
         if user.email_verified_at is None:
-            send_legacy_verification(user)
+            send_legacy_verification(user, reason='password')
             return _error(
                 'email_not_confirmed',
                 'Please confirm your email address: we sent you a link. Open it, then sign in.',
                 status.HTTP_401_UNAUTHORIZED,
             )
         return signed_in_response(request, user, 'password')
+
+    @staticmethod
+    def _blocked_account(request, row, email, password):
+        """A blocked account: ONE password check, as for every other account; 'blocked' only with the right password.
+
+        authenticate() would check the password (ModelBackend) and then refuse
+        the inactive row, and a second check to tell "blocked" from "wrong
+        password" doubled the time of a failure -- which told anyone which
+        emails belong to blocked accounts. django-axes is consulted and told
+        about a failure as authenticate() does.
+        """
+        from axes.handlers.proxy import AxesProxyHandler
+        from django.contrib.auth.signals import user_login_failed
+
+        credentials = {'username': row.get_username()}
+        record_email_hit(LOGIN_EMAIL_SCOPE, email)
+        if not AxesProxyHandler.is_allowed(request, credentials):
+            return _error('too_many_attempts', TOO_MANY_DETAIL, status.HTTP_429_TOO_MANY_REQUESTS)
+        if check_password_hash(password, row.password):  # no setter: never re-hashed
+            return _error('account_blocked', BLOCKED_DETAIL, status.HTTP_403_FORBIDDEN)
+        user_login_failed.send(sender=__name__, credentials=credentials, request=request)
+        if getattr(request, 'axes_locked_out', False):
+            return _error('too_many_attempts', TOO_MANY_DETAIL, status.HTTP_429_TOO_MANY_REQUESTS)
+        return _error('invalid_credentials', INVALID_CREDENTIALS, status.HTTP_401_UNAUTHORIZED)
 
 
 class NativeRefreshView(_NativeView):
@@ -444,7 +518,7 @@ def _optional_text(data, name: str, limit: int = 150) -> str:
 
 class NativeRegisterView(_NativeView):
     throttle_scope = 'native_register'
-    throttle_classes = [ScopedRateThrottle, NativeRegisterEmailThrottle]
+    throttle_classes = [ClientIPScopedRateThrottle, NativeRegisterEmailThrottle]
 
     def post(self, request):
         from .models import PendingSignup
@@ -480,17 +554,24 @@ class NativeRegisterView(_NativeView):
             token = secrets.token_urlsafe(_PENDING_TOKEN_BYTES)
             with transaction.atomic():
                 PendingSignup.objects.filter(expires_at__lt=now - timedelta(days=7)).delete()
-                PendingSignup.objects.update_or_create(
+                PendingSignup.objects.filter(email=email, expires_at__lte=now).delete()
+                # A sign-up of its own: an earlier sign-up with this address (maybe
+                # somebody else's) keeps its password and its link. The oldest
+                # open ones beyond the cap are dropped.
+                keep = list(
+                    PendingSignup.objects.filter(email=email).order_by('-created_at', '-pk')
+                    .values_list('pk', flat=True)[:MAX_PENDING_SIGNUPS_PER_EMAIL - 1]
+                )
+                PendingSignup.objects.filter(email=email).exclude(pk__in=keep).delete()
+                PendingSignup.objects.create(
                     email=email,
-                    defaults={
-                        'password': make_password(password),
-                        'username': username,
-                        'first_name': first_name,
-                        'last_name': last_name,
-                        'token_hash': _hash_token(token),
-                        'expires_at': now + timedelta(seconds=_verification_max_age()),
-                        'ip_address': client_ip(request),
-                    },
+                    password=make_password(password),
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
+                    token_hash=_hash_token(token),
+                    expires_at=now + timedelta(seconds=_verification_max_age()),
+                    ip_address=client_ip(request),
                 )
             send_pending_verification(email, token, first_name)
         return Response(
@@ -534,7 +615,13 @@ def _create_account_from_pending(pending):
 
 
 class NativeVerifyEmailView(_NativeView):
+    """Open an emailed link: {token, password} finishes a sign-up, {uid, token} confirms an existing account.
+
+    Limited per client IP (native_verify) and per link (native_verify_link).
+    """
+
     throttle_scope = 'native_verify'
+    throttle_classes = [ClientIPScopedRateThrottle, NativeVerifyLinkThrottle]
 
     def post(self, request):
         data = request.data if hasattr(request.data, 'get') else {}
@@ -542,30 +629,62 @@ class NativeVerifyEmailView(_NativeView):
         uid = data.get('uid')
         if uid:
             return self._verify_existing_account(request, uid, token)
-        return self._verify_pending_signup(request, token)
+        return self._verify_pending_signup(request, token, data.get('password'))
 
-    def _verify_pending_signup(self, request, token):
+    def _verify_pending_signup(self, request, token, password):
+        """Create the account of the sign-up whose password is given; the link proves the mailbox.
+
+        Every link mailed to an address goes to the same inbox, so any open
+        link of that address will do; the password chooses WHICH sign-up of
+        the address becomes the account. Someone who signed up with another
+        person's address cannot get that person to create an account with the
+        stranger's password just by opening the mail.
+        """
         from .models import PendingSignup
 
         User = get_user_model()
         if not isinstance(token, str) or not 16 <= len(token) <= 256:
             return _error('invalid_or_expired_link', INVALID_LINK_DETAIL, status.HTTP_400_BAD_REQUEST)
+        if not isinstance(password, str) or not password:
+            return _error('password_required', PASSWORD_REQUIRED_DETAIL, status.HTTP_400_BAD_REQUEST)
         outcome, user = None, None
+        now = timezone.now()
         with transaction.atomic():
-            pending = PendingSignup.objects.select_for_update().filter(token_hash=_hash_token(token)).first()
+            # Lock every sign-up row of the address in one order (pk), then re-read this link's row
+            # under the lock: two links of one address verified at the same moment used to lock
+            # their own row first and then each other's (a deadlock, one request failed).
+            found = PendingSignup.objects.filter(token_hash=_hash_token(token)).only('pk', 'email').first()
+            rows = (
+                list(PendingSignup.objects.select_for_update().filter(email=found.email).order_by('pk'))
+                if found is not None else []
+            )
+            pending = next((row for row in rows if row.pk == found.pk), None) if found is not None else None
             if pending is None:
-                outcome = 'invalid'
-            elif pending.expires_at <= timezone.now():
+                outcome = 'invalid'  # unknown link, or consumed by a concurrent request
+            elif pending.expires_at <= now:
                 pending.delete()
                 outcome = 'invalid'
             elif User.objects.filter(email__iexact=pending.email).exists():
-                pending.delete()
+                PendingSignup.objects.filter(email=pending.email).delete()
                 outcome = 'exists'
             else:
-                user = _create_account_from_pending(pending)
-                pending.delete()
+                # This link's own sign-up first, then the address's other open ones, newest first.
+                open_signups = sorted(
+                    (row for row in rows if row.expires_at > now),
+                    key=lambda p: (p.pk != pending.pk, -p.created_at.timestamp(), -p.pk),
+                )
+                chosen = None
+                if len(password) <= _MAX_PASSWORD_CHARS:
+                    chosen = next((p for p in open_signups if check_password_hash(password, p.password)), None)
+                if chosen is None:
+                    outcome = 'mismatch'  # nothing is consumed: the owner may type it again
+                else:
+                    user = _create_account_from_pending(chosen)
+                    PendingSignup.objects.filter(email=pending.email).delete()
         if outcome == 'invalid':
             return _error('invalid_or_expired_link', INVALID_LINK_DETAIL, status.HTTP_400_BAD_REQUEST)
+        if outcome == 'mismatch':
+            return _error('password_mismatch', PASSWORD_MISMATCH_DETAIL, status.HTTP_400_BAD_REQUEST)
         if outcome == 'exists':
             return _error(
                 'account_exists', 'An account with this email already exists. Please sign in.',
@@ -590,7 +709,7 @@ class NativeVerifyEmailView(_NativeView):
 
 class NativeResendVerificationView(_NativeView):
     throttle_scope = 'native_verify'
-    throttle_classes = [ScopedRateThrottle, NativeVerifyEmailThrottle]
+    throttle_classes = [ClientIPScopedRateThrottle, NativeVerifyEmailThrottle]
 
     def post(self, request):
         from .models import PendingSignup
@@ -600,17 +719,22 @@ class NativeResendVerificationView(_NativeView):
         email = normalized_email(data.get('email'))
         if email:
             rows = list(User.objects.filter(email__iexact=email).order_by('pk')[:2])
-            pending = PendingSignup.objects.filter(email=email).first()
+            now = timezone.now()
+            pending = (
+                PendingSignup.objects.filter(email=email, expires_at__gt=now).order_by('-created_at', '-pk').first()
+            )
             if not rows and pending is not None:
+                # A new link for the newest sign-up (its password is unchanged; any
+                # link of the address works with the password of any of its sign-ups).
                 token = secrets.token_urlsafe(_PENDING_TOKEN_BYTES)
                 PendingSignup.objects.filter(pk=pending.pk).update(
                     token_hash=_hash_token(token),
-                    expires_at=timezone.now() + timedelta(seconds=_verification_max_age()),
+                    expires_at=now + timedelta(seconds=_verification_max_age()),
                 )
                 send_pending_verification(email, token, pending.first_name)
             elif len(rows) == 1:
                 # The view throttle already counted this request for the address.
-                send_legacy_verification(rows[0], check_quota=False)
+                send_legacy_verification(rows[0], reason='resend', check_quota=False)
         return Response(
             {'detail': 'If this email needs confirming, we sent a new link.'},
             status=status.HTTP_202_ACCEPTED,

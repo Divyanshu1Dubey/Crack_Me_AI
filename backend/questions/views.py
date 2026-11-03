@@ -13,7 +13,7 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from rest_framework import viewsets, generics, permissions, status, filters
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.throttling import ScopedRateThrottle
+from crack_cms.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -3385,7 +3385,7 @@ class QuestionFeedbackViewSet(viewsets.ModelViewSet):
 
     def get_throttles(self):
         """Rate-limit unauthenticated feedback to prevent spam."""
-        from rest_framework.throttling import AnonRateThrottle
+        from crack_cms.throttling import AnonRateThrottle
         if self.action == 'create' and not self.request.user.is_authenticated:
             return [AnonRateThrottle()]
         return super().get_throttles()

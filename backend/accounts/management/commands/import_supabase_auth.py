@@ -7,7 +7,9 @@ transaction per account, idempotent: a second run changes nothing).
 Source (read-only, token columns are never read):
   * --source-url postgresql://crack_super@127.0.0.1:55432/crack_restore
     (a restore that still has the ``auth`` schema). Only local hosts unless
-    --allow-remote-source. The URL is never printed.
+    --allow-remote-source: every host / hostaddr libpq would use -- from the
+    URL, its query string, or PGHOST / PGHOSTADDR -- must be this machine.
+    The URL is never printed.
   * otherwise the default database, when it has <schema>.users.
 
 Usage:
@@ -15,15 +17,23 @@ Usage:
   ... --apply --create-missing             write (and create the accounts without a Django row)
   ... --include-newer-identities           also link CHECK_NEWER_IDENTITY rows (after review)
   ... --only-uid UID / --exclude-uid UID   restrict to / skip auth users
-  ... --no-password-for EMAIL / --no-password-file PATH   never import these hashes (QA accounts)
+  ... --leaked-password-file PATH          never import a hash of these published passwords
+                                           (one per line, file outside the repo); a rowless
+                                           auth user with such a password is not created
+  ... --no-password-for EMAIL / --no-password-file PATH / --no-password-for-uid UID
+                                           never import these hashes (QA accounts, ...)
   ... --keep-django-passwords              keep usable Django passwords of students
   ... --report PATH [--include-emails]     JSON report (emails as SHA-256 unless asked), outside the repo
 
+Admin / staff password hashes are never imported (there is no override):
+those accounts use "Forgot password", ``manage.py changepassword`` or Google.
+
 Output: counts per class; with -v 2 one line per auth user (Django id, uid
-prefix, email digest prefix). Never emails, names or hashes.
+prefix, email digest prefix). Never emails, names, hashes or passwords.
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -34,25 +44,57 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
 from accounts import supabase_import as si
+from accounts.leaked_passwords import PasswordFileError, inside_git_work_tree, read_password_file
 
 LOCAL_SOURCE_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 
 CLASS_ORDER = (
-    si.LINK, si.ALREADY_LINKED, si.CREATE, si.MISSING_NOT_CREATED, si.CHECK_NEWER_IDENTITY,
-    si.CONFLICT_LINKED_ELSEWHERE, si.AMBIGUOUS_DJANGO_EMAIL, si.AMBIGUOUS_AUTH_EMAIL,
+    si.LINK, si.ALREADY_LINKED, si.CREATE, si.MISSING_NOT_CREATED, si.MISSING_LEAKED_PASSWORD,
+    si.CHECK_NEWER_IDENTITY, si.CONFLICT_LINKED_ELSEWHERE, si.AMBIGUOUS_DJANGO_EMAIL, si.AMBIGUOUS_AUTH_EMAIL,
     si.SKIP_UNCONFIRMED, si.SKIP_NO_EMAIL, si.SKIP_DELETED, si.SKIP_ANONYMOUS, si.SKIP_SSO, si.SKIP_FILTERED,
 )
 
 
-def _source_is_local(url: str) -> bool:
-    host = (urlparse(url).hostname or '').strip().lower()
-    # No host: a Unix-domain socket on this machine.
-    return host in LOCAL_SOURCE_HOSTS or host == ''
+def _local_host(value: str) -> bool:
+    host = value.strip().lower()
+    # '' = libpq's default (a Unix-domain socket / localhost); '/...' = a socket directory.
+    return host == '' or host in LOCAL_SOURCE_HOSTS or host.startswith('/')
+
+
+def _local_hostaddr(value: str) -> bool:
+    value = value.strip()
+    if not value:
+        return True
+    try:
+        return ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        return False
+
+
+def _source_is_local(url: str, environ=None) -> bool:
+    """True when libpq would connect to this machine only.
+
+    libpq takes hosts from the URL authority AND its query string
+    (``?host=`` / ``?hostaddr=``, several comma-separated), and from PGHOST /
+    PGHOSTADDR when the URL names none; a service (``?service=`` / PGSERVICE)
+    can name any host. Every one of them must be local.
+    """
+    environ = os.environ if environ is None else environ
+    try:
+        from psycopg.conninfo import conninfo_to_dict
+
+        params = conninfo_to_dict(url)
+    except Exception:  # noqa: BLE001 - unparsable: not provably local
+        return False
+    if params.get('service') or environ.get('PGSERVICE'):
+        return False
+    hosts = str(params.get('host') or environ.get('PGHOST') or '')
+    hostaddrs = str(params.get('hostaddr') or environ.get('PGHOSTADDR') or '')
+    return all(_local_host(h) for h in hosts.split(',')) and all(_local_hostaddr(a) for a in hostaddrs.split(','))
 
 
 def _inside_git_work_tree(path: Path) -> bool:
-    resolved = path.resolve()
-    return any((parent / '.git').exists() for parent in (resolved.parent, *resolved.parent.parents))
+    return inside_git_work_tree(path)
 
 
 def load_source(options):
@@ -128,9 +170,13 @@ class Command(BaseCommand):
                             help='Never import the password hash of this address (repeatable).')
         parser.add_argument('--no-password-file', default='', metavar='PATH',
                             help='File with one address per line whose hashes are never imported.')
-        parser.add_argument('--allow-privileged-password', action='append', default=[], metavar='UID',
-                            help="Import the password hash of this admin/staff account's auth user id anyway "
-                                 '(owner decision; repeatable). All other privileged hashes stay withheld.')
+        parser.add_argument('--no-password-for-uid', action='append', default=[], metavar='UID',
+                            help='Never import the password hash of this auth user id (full id or unique prefix '
+                                 'of 8+ characters; repeatable).')
+        parser.add_argument('--leaked-password-file', default='', metavar='PATH',
+                            help='File (outside the git work tree) with published passwords, one per line exactly '
+                                 'as typed: a Supabase hash of one of them is never imported, and an auth user '
+                                 'without a Django row whose password is one of them is not created.')
         parser.add_argument('--only-uid', action='append', default=[], metavar='UID', help='Only these auth user ids.')
         parser.add_argument('--exclude-uid', action='append', default=[], metavar='UID', help='Skip these auth user ids.')
         parser.add_argument('--report', default='', metavar='PATH',
@@ -148,6 +194,19 @@ class Command(BaseCommand):
                 raise CommandError(f'Cannot read --no-password-file ({exc.__class__.__name__}).') from None
             emails.update(line.strip().lower() for line in lines if line.strip() and not line.lstrip().startswith('#'))
         return frozenset(emails)
+
+    def _leaked_passwords(self, options) -> tuple:
+        raw = (options['leaked_password_file'] or '').strip()
+        if not raw:
+            return ()
+        path = Path(raw)
+        if _inside_git_work_tree(path):
+            raise CommandError('Refusing to read --leaked-password-file inside a git work tree '
+                               '(keep the published passwords out of the repository).')
+        try:
+            return read_password_file(path)
+        except PasswordFileError as exc:
+            raise CommandError(f'--leaked-password-file: {exc}.') from None
 
     def _report_path(self, options):
         raw = (options['report'] or '').strip()
@@ -167,13 +226,14 @@ class Command(BaseCommand):
         apply_changes = bool(options['apply'])
         report_path = self._report_path(options)
         no_password_emails = self._no_password_emails(options)
+        leaked_passwords = self._leaked_passwords(options)
+        self._leaked_count = len(leaked_passwords)
 
         users, identities, referencing, source = load_source(options)
         try:
             only_uids = si.resolve_uids(options['only_uid'], users, '--only-uid')
             exclude_uids = si.resolve_uids(options['exclude_uid'], users, '--exclude-uid')
-            allow_privileged_uids = si.resolve_uids(options['allow_privileged_password'], users,
-                                                    '--allow-privileged-password')
+            no_password_uids = si.resolve_uids(options['no_password_for_uid'], users, '--no-password-for-uid')
         except si.SourceError as exc:
             raise CommandError(str(exc)) from None
         import_options = si.ImportOptions(
@@ -181,9 +241,10 @@ class Command(BaseCommand):
             include_newer_identities=bool(options['include_newer_identities']),
             keep_django_passwords=bool(options['keep_django_passwords']),
             no_password_emails=no_password_emails,
+            no_password_uids=no_password_uids,
+            leaked_passwords=leaked_passwords,
             only_uids=only_uids,
             exclude_uids=exclude_uids,
-            allow_privileged_password_uids=frozenset(allow_privileged_uids),
         )
         rows = [
             si.DjangoRow.from_user(u)
@@ -228,6 +289,9 @@ class Command(BaseCommand):
         mode = 'APPLY' if apply_changes else 'DRY RUN (nothing is written; --apply writes)'
         out(f'Supabase Auth import -- {mode}')
         out(f'Source: {source}, schema "{options["schema"]}"')
+        if self._leaked_count:
+            out(f'Published passwords (--leaked-password-file): {self._leaked_count}, checked against every '
+                'Supabase hash.')
         providers = {}
         for identity in identities:
             providers[identity.provider] = providers.get(identity.provider, 0) + 1
@@ -263,7 +327,19 @@ class Command(BaseCommand):
                 'Django password, or "Forgot password"). After review, link them with '
                 '--include-newer-identities [--only-uid UID].')
         if counts.get(si.MISSING_NOT_CREATED):
-            out('\nMISSING_NOT_CREATED: confirmed auth users without a Django account; --create-missing creates them.')
+            out('\nMISSING_NOT_CREATED: confirmed auth users without a Django account; --create-missing creates them. '
+                'Review them first (--report PATH outside the repo: created_at, last_sign_in_at) and pass '
+                '--exclude-uid UID for accounts that were deleted on purpose.')
+        if counts.get(si.CREATE):
+            out('\nCREATE: review these first (--report PATH outside the repo: created_at, last_sign_in_at); '
+                '--exclude-uid UID skips accounts that were deleted on purpose.')
+        if counts.get(si.MISSING_LEAKED_PASSWORD):
+            out('\nMISSING_LEAKED_PASSWORD: auth users without a Django account whose password is one of the '
+                'published ones (--leaked-password-file): never created. A real owner can sign up again.')
+        if plan.note_counts().get(si.NOTE_WITHHELD_HASH_PRESENT):
+            out(f'\n{si.NOTE_WITHHELD_HASH_PRESENT}: accounts that still hold a Supabase hash this run withholds '
+                '(an earlier import wrote it). Make those passwords unusable and end their sessions with '
+                '`manage.py withhold_leaked_passwords --password-file PATH` (or --user-id N) [--apply].')
 
         if int(options.get('verbosity', 1)) >= 2:
             out('\nPer auth user:')

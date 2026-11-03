@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import PasswordStrength from '@/components/PasswordStrength';
 import { authAPI } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { takeAuthFragment } from '@/lib/authFragment';
 import { AuthApiError, confirmPasswordReset } from '@/lib/localAuth';
 import { isDjangoAuthBuild } from '@/lib/localSession';
@@ -180,7 +181,7 @@ function DjangoResetPasswordForm() {
             } catch {
                 destination = '/login';
             }
-            window.setTimeout(() => router.replace(destination), 1500);
+            window.setTimeout(() => navigateAfterAuthChange(destination, { replace: true }), 1500);
         } catch (err: unknown) {
             if (err instanceof AuthApiError && err.code === 'invalid_or_expired_link') {
                 link.current = null;
