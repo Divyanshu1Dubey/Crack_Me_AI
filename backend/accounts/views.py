@@ -1436,19 +1436,46 @@ _PASSWORD_RESET_GONE = {
 
 
 class PasswordResetRequestView(APIView):
-    """Disabled: password reset goes through Supabase (resetPasswordForEmail).
+    """AUTH_PROVIDER=supabase (default): disabled, 410 -- reset goes through Supabase (resetPasswordForEmail).
 
     This endpoint used to email a Django uid/token link that the
     /reset-password page ignores (it calls supabase.auth.updateUser), so the
     mail could never work, and anyone could trigger it for any address.
     Returns 410 like the disabled local login/register endpoints.
+
+    AUTH_PROVIDER=django: 202 for any address; a single-use link
+    (FRONTEND_URL/reset-password#uid=..&token=..) is mailed when exactly one
+    active account has the email (accounts.native_auth.password_reset_request).
+    Limited per client IP (password_reset) and per address (password_reset_email).
     """
 
     permission_classes = [permissions.AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'password_reset'
 
+    def get_authenticators(self):
+        # django mode: anonymous (a stale bearer token must not turn "Forgot password" into a 401).
+        from .auth_mode import django_auth_enabled
+
+        return [] if django_auth_enabled() else super().get_authenticators()
+
+    def get_throttles(self):
+        from .auth_mode import django_auth_enabled
+
+        throttles = super().get_throttles()
+        if django_auth_enabled():
+            from .throttles import PasswordResetEmailThrottle
+
+            throttles.append(PasswordResetEmailThrottle())
+        return throttles
+
     def post(self, request):
+        from .auth_mode import django_auth_enabled
+
+        if django_auth_enabled():
+            from .native_auth import password_reset_request
+
+            return password_reset_request(request)
         return Response(_PASSWORD_RESET_GONE, status=status.HTTP_410_GONE)
 
 
@@ -1604,6 +1631,12 @@ class AdminUserBlockToggleView(APIView):
 
         target.is_active = not blocked
         target.save(update_fields=['is_active'])
+        if blocked:
+            # Django-native sessions (AUTH_PROVIDER=django) end now, refresh
+            # tokens included; Supabase sessions are refused per request.
+            from .native_sessions import revoke_user_sessions
+
+            revoke_user_sessions(target, 'blocked')
 
         create_admin_audit_log(
             actor=request.user,
@@ -2077,15 +2110,44 @@ class AdminSystemRestoreDataView(APIView):
         return Response({'message': f'Core data restore completed: {count} records loaded.', 'records': count})
 
 class PasswordResetConfirmView(APIView):
-    """Disabled (410): see PasswordResetRequestView.
+    """AUTH_PROVIDER=supabase (default): disabled (410), see PasswordResetRequestView.
 
     It set a Django password that no login path uses (sign-in is Supabase
     only) and could give staff a usable Django-admin password.
+
+    AUTH_PROVIDER=django: {uid, token, new_password} sets the password, marks
+    the email verified, revokes every session and signs in
+    (accounts.native_auth.password_reset_confirm). The token is single-use.
     """
 
     permission_classes = [permissions.AllowAny]
 
+    def get_authenticators(self):
+        from .auth_mode import django_auth_enabled
+
+        return [] if django_auth_enabled() else super().get_authenticators()
+
+    def get_throttles(self):
+        from .auth_mode import django_auth_enabled
+
+        if django_auth_enabled():
+            return [ScopedRateThrottle()]  # scope: throttle_scope below
+        return super().get_throttles()
+
+    @property
+    def throttle_scope(self):
+        from .auth_mode import django_auth_enabled
+
+        # Only in django mode, so the supabase-mode 410 keeps its old (default) throttles.
+        return 'password_reset' if django_auth_enabled() else None
+
     def post(self, request):
+        from .auth_mode import django_auth_enabled
+
+        if django_auth_enabled():
+            from .native_auth import password_reset_confirm
+
+            return password_reset_confirm(request)
         return Response(_PASSWORD_RESET_GONE, status=status.HTTP_410_GONE)
 
 
@@ -2115,6 +2177,18 @@ class UserDeviceListView(APIView):
         return Response(serializer.data)
 
 
+def _end_native_session_of(device) -> None:
+    """A logged-out device's Django-native session (AUTH_PROVIDER=django) ends too, refresh token included.
+
+    No-op for Supabase sessions (no AuthSession row): those are refused per
+    request (device_inactive) and signed out upstream by the authenticator.
+    """
+    if device.session_id:
+        from .native_sessions import revoke_session
+
+        revoke_session(device.session_id, 'device_logout')
+
+
 class UserDeviceLogoutView(APIView):
     """Log out a specific device (by setting is_active=False)."""
 
@@ -2128,6 +2202,7 @@ class UserDeviceLogoutView(APIView):
             device = UserDevice.objects.get(id=device_id, user=request.user, is_active=True)
             device.is_active = False
             device.save(update_fields=['is_active'])
+            _end_native_session_of(device)
             return Response({'message': 'Device logged out successfully.'})
         except UserDevice.DoesNotExist:
             return Response({'error': 'Device not found or already logged out.'}, status=status.HTTP_404_NOT_FOUND)
@@ -2231,6 +2306,7 @@ class AdminDeviceManageView(APIView):
             device = UserDevice.objects.get(id=device_id, user_id=user_id)
             device.is_active = False
             device.save(update_fields=['is_active'])
+            _end_native_session_of(device)
             create_admin_audit_log(
                 actor=request.user,
                 action='device_logout',

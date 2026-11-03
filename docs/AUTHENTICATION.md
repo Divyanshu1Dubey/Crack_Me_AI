@@ -4,9 +4,32 @@
 
 ---
 
+## 0. Django-native sign-in (production since 2026-11-03)
+
+Supabase is retired. Production runs with `AUTH_PROVIDER=django` (backend) and `NEXT_PUBLIC_AUTH_MODE=django`
+(frontend); the Supabase sections below describe the previous mode, which is still the code default.
+
+* **Endpoints** (`accounts/native_auth.py`, 404 outside django mode): `POST /api/auth/native/login/`,
+  `/refresh/`, `/logout/`, `/register/` (202; the account is created only from the emailed link),
+  `/verify-email/`, `/resend-verification/`, `/password/` (change); `POST /api/auth/password-reset/` and
+  `/password-reset/confirm/` (410 in supabase mode); `POST /api/auth/google/`, `/google/confirm-link/`,
+  `POST|DELETE /api/auth/google/link/`; `GET /api/auth/config/`. Token bodies `{access, refresh, session_id, user}`,
+  errors `{detail, code}`.
+* **Sessions** (`accounts/native_sessions.py`, model `AuthSession`): one per sign-in; refresh tokens rotate and a
+  reused old refresh token revokes the session; logout, password change / reset, device logout and blocking end
+  sessions. Device limits (2 free / 4 subscribed) are unchanged (`accounts/device_limits.py`).
+* **Existing users**: `manage.py import_supabase_auth --source-url <restore of the Supabase backup>` (dry run;
+  `--apply --create-missing` to write) links every Django account to its Supabase user, imports bcrypt password
+  hashes (`accounts/hashers.py`, verified and re-hashed to Argon2 on first sign-in; never for admin/staff) and
+  Google identities (`accounts.UserIdentity`, matched on Google's `sub`). Idempotent; ids never change.
+* **Google** (`accounts/google_identity.py`): ID token verified against `GOOGLE_OAUTH_CLIENT_IDS`; sign-in by `sub`
+  only. An unknown `sub` whose email belongs to an existing account gets `409 google_link_required` and an emailed
+  single-use link; admin/staff accounts are linked only by an operator (`409 account_link_required`).
+* **Throttles / lockout**: per-IP and per-email scopes (`accounts/throttles.py`); axes locks per (username, IP).
+
 ## 1. Two-Layer Auth Model
 
-CrackCMS signs users in with **Supabase Auth only** in production. The local username/password endpoints (`/api/auth/register/`, `/login/`, `/password-reset/…`) answer `410 Gone`. A Django-JWT path exists only for local development (`LOCAL_DEV_AUTH=1`, which requires `DEBUG=True`; see [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md)):
+CrackCMS signed users in with **Supabase Auth only** in production until 2026-11 (django mode above since). The local username/password endpoints (`/api/auth/register/`, `/login/`, `/password-reset/…`) answer `410 Gone`. A Django-JWT path exists only for local development (`LOCAL_DEV_AUTH=1`, which requires `DEBUG=True`; see [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md)):
 
 ```mermaid
 flowchart TB

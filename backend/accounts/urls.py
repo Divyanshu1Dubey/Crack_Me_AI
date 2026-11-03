@@ -1,7 +1,24 @@
 from django.urls import path
-from . import views
+from . import native_auth, views
 
 urlpatterns = [
+    # Which sign-in the backend runs (both modes) and the Django-native
+    # sign-in (AUTH_PROVIDER=django; every view below answers 404 in
+    # supabase mode). See accounts/native_auth.py.
+    path('config/', native_auth.AuthConfigView.as_view(), name='auth_config'),
+    path('native/login/', native_auth.NativeLoginView.as_view(), name='native_login'),
+    path('native/refresh/', native_auth.NativeRefreshView.as_view(), name='native_refresh'),
+    path('native/logout/', native_auth.NativeLogoutView.as_view(), name='native_logout'),
+    path('native/register/', native_auth.NativeRegisterView.as_view(), name='native_register'),
+    path('native/verify-email/', native_auth.NativeVerifyEmailView.as_view(), name='native_verify_email'),
+    path(
+        'native/resend-verification/', native_auth.NativeResendVerificationView.as_view(),
+        name='native_resend_verification',
+    ),
+    path('native/password/', native_auth.NativePasswordChangeView.as_view(), name='native_password_change'),
+    path('google/', native_auth.GoogleSignInView.as_view(), name='google_signin'),
+    path('google/confirm-link/', native_auth.GoogleConfirmLinkView.as_view(), name='google_confirm_link'),
+    path('google/link/', native_auth.GoogleLinkView.as_view(), name='google_link'),
     # Auth
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.LoginView.as_view(), name='login'),

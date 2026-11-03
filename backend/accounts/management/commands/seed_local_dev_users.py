@@ -47,6 +47,9 @@ class Command(BaseCommand):
             user.is_staff = kind == 'admin'
             user.is_superuser = False
             user.set_password(password)
+            # Django-native sign-in (AUTH_PROVIDER=django) requires a verified email.
+            if user.email_verified_at is None:
+                user.email_verified_at = timezone.now()
             user.save()
             TokenBalance.objects.get_or_create(user=user)
 

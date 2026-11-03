@@ -157,6 +157,16 @@ class Command(BaseCommand):
         parser.add_argument("--apply", action="store_true", help="Write the links (default: dry run)")
 
     def handle(self, *args, **options):
+        from accounts.auth_mode import django_auth_enabled
+
+        if django_auth_enabled():
+            # build.sh runs the dry run on every deploy; Supabase is not used
+            # (or reachable) in django mode, so there is nothing to link.
+            self.stdout.write(
+                "AUTH_PROVIDER=django: Supabase sign-in is off, nothing to link. Accounts and Google identities "
+                "come from `manage.py import_supabase_auth`."
+            )
+            return
         apply = bool(options["apply"])
         if options["all_privileged"]:
             if options["uid"] or options["replace"]:

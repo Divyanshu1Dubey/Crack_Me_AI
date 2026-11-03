@@ -102,6 +102,14 @@ class CustomUser(AbstractUser):
         max_length=64, unique=True, null=True, blank=True, default=None,
         help_text='Supabase Auth user id linked to this account (set on first sign-in).',
     )
+    # When this account proved it owns its email address: the Supabase import
+    # (email_confirmed_at), an emailed verification link, a completed password
+    # reset or a Google sign-up. Django-native sign-in (AUTH_PROVIDER=django,
+    # accounts.native_auth) requires it.
+    email_verified_at = models.DateTimeField(
+        null=True, blank=True, default=None,
+        help_text='When the email address was verified (native sign-in requires it).',
+    )
     phone = models.CharField(max_length=15, blank=True)
     college = models.CharField(max_length=200, blank=True, default='')
     session_key = models.CharField(
@@ -548,6 +556,15 @@ class AdminAuditLog(models.Model):
         ('system_attempt_reset', 'System Attempt Reset'),
         ('system_analytics_clear', 'System Analytics Clear'),
         ('system_rerun_evaluation', 'System Rerun Evaluation'),
+        # Medical-accuracy mission (2026-11): identity recovery and editorial audit trail.
+        ('identity_import', 'Identity Import'),
+        ('identity_link', 'Identity Link'),
+        ('recovery_link', 'Recovery Link'),
+        ('email_change', 'Email Change'),
+        ('session_revoke', 'Session Revoke'),
+        ('answer_key_change', 'Answer Key Change'),
+        ('evidence_review', 'Evidence Review'),
+        ('audit_resolution', 'Audit Resolution'),
     ]
 
     actor = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='admin_actions')
@@ -914,4 +931,119 @@ class UserDevice(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.device_name} ({self.ip_address})"
+
+
+# ─── Django-native sign-in (AUTH_PROVIDER=django; accounts.native_auth) ─────
+
+class UserIdentity(models.Model):
+    """An external sign-in identity of an account, matched on (provider, subject) only.
+
+    ``subject`` is the provider's stable account id (Google's ``sub``). The
+    email is informational and is never used to find an identity: an email
+    proves nothing about who signs in with it.
+    """
+
+    PROVIDER_GOOGLE = 'google'
+    PROVIDER_CHOICES = [(PROVIDER_GOOGLE, 'Google')]
+    SOURCE_CHOICES = [
+        ('supabase_import', 'Imported from Supabase Auth'),
+        ('signup', 'Signed up with this identity'),
+        ('email_confirmed', 'Linked through an emailed confirmation link'),
+        ('user_linked', 'Linked by the signed-in user'),
+        ('operator', 'Linked by an operator'),
+    ]
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='identities')
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
+    subject = models.CharField(max_length=255, help_text="The provider's account id (Google: sub).")
+    email = models.EmailField(max_length=254, blank=True, default='', help_text='Informational only; never matched.')
+    email_verified = models.BooleanField(default=False)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    supabase_identity_id = models.CharField(max_length=64, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_sign_in_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['provider', 'subject'], name='useridentity_provider_subject_uniq'),
+        ]
+        indexes = [models.Index(fields=['user', 'provider'], name='useridentity_user_provider_idx')]
+
+    def __str__(self):
+        return f'{self.user_id}: {self.provider}'
+
+
+class AuthSession(models.Model):
+    """A Django-native sign-in session (one per sign-in on one browser).
+
+    ``sid`` is the ``session_id`` claim of its tokens and the
+    ``UserDevice.session_id`` of the device using it, so the device cap of
+    accounts.device_limits applies unchanged. ``refresh_jti`` is the only
+    refresh token that may rotate; ``previous_refresh_jti`` is accepted for
+    an access token only within NATIVE_AUTH_REFRESH_REUSE_SECONDS of a
+    rotation (another tab rotated first). Any other reuse revokes the session.
+    """
+
+    METHOD_CHOICES = [
+        ('password', 'Email and password'),
+        ('google', 'Google'),
+        ('google_link', 'Google (emailed link confirmation)'),
+        ('reset', 'Password reset'),
+        ('verify', 'Email verification'),
+        ('local', 'Local development'),
+    ]
+    REVOKED_REASON_CHOICES = [
+        ('logout', 'Logout'),
+        ('password_reset', 'Password reset'),
+        ('password_change', 'Password change'),
+        ('refresh_reuse', 'Refresh token reuse'),
+        ('device_logout', 'Device logged out'),
+        ('blocked', 'Account blocked'),
+        ('admin', 'Revoked by an admin'),
+    ]
+
+    sid = models.CharField(max_length=64, unique=True)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='auth_sessions')
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    refresh_jti = models.CharField(max_length=64, blank=True, default='')
+    previous_refresh_jti = models.CharField(max_length=64, blank=True, default='')
+    rotated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(help_text='Absolute end of the session (NATIVE_AUTH_SESSION_MAX_DAYS).')
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=20, blank=True, default='', choices=REVOKED_REASON_CHOICES)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'revoked_at'], name='authsession_user_revoked_idx')]
+
+    def __str__(self):
+        return f'{self.user_id}: {self.method} session'
+
+    def is_active_at(self, now) -> bool:
+        return self.revoked_at is None and self.expires_at > now
+
+
+class PendingSignup(models.Model):
+    """A sign-up waiting for its emailed verification link.
+
+    The account row is created only when the link is opened
+    (POST /api/auth/native/verify-email/), so an unverified sign-up cannot
+    squat an address. Only a SHA-256 digest of the emailed token is stored.
+    """
+
+    email = models.EmailField(max_length=254, unique=True, help_text='Lower-cased.')
+    password = models.CharField(max_length=128, help_text='make_password() hash.')
+    username = models.CharField(max_length=150, blank=True, default='')
+    first_name = models.CharField(max_length=150, blank=True, default='')
+    last_name = models.CharField(max_length=150, blank=True, default='')
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    def __str__(self):
+        return f'pending sign-up {self.pk}'
 
