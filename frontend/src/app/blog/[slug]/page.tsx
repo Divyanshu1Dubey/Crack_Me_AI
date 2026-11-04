@@ -2,23 +2,26 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BlogPostLayout } from '@/components/BlogPostLayout';
 import { buildPageMetadata } from '@/lib/metadata';
-import { getAllPostSlugs, getPostBySlug, postSocialImagePath } from '@/lib/blog';
+import { linkRelatedPosts, loadBlogCatalog, loadBlogPost, postSocialImagePath } from '@/lib/blog';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
 }
 
-/**
- * Pre-render every known blog post at build time. New posts get picked up
- * automatically as long as they are registered in `src/lib/blog.ts`.
- */
+// Published posts from the database (edited at /admin/blog), regenerated at
+// most every 5 minutes (BLOG_REVALIDATE_SECONDS). A post published after the
+// build renders on its first request; a draft or deleted post is a 404.
+export const revalidate = 300;
+export const dynamicParams = true;
+
+/** Pre-render every published post at build time (the static posts if the API is unreachable). */
 export async function generateStaticParams() {
-    return getAllPostSlugs().map((slug) => ({ slug }));
+    return (await loadBlogCatalog()).map((post) => ({ slug: post.slug }));
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
-    const post = getPostBySlug(slug);
+    const post = await loadBlogPost(slug);
     if (!post) {
         return buildPageMetadata({
             title: 'Post not found — CrackCMS Blog',
@@ -46,7 +49,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogPostPage({ params }: PageProps) {
     const { slug } = await params;
-    const post = getPostBySlug(slug);
+    const [post, catalog] = await Promise.all([loadBlogPost(slug), loadBlogCatalog()]);
     if (!post) notFound();
+    // BlogPostLayout picks "Related reading" from the published posts.
+    linkRelatedPosts(post, catalog);
     return <BlogPostLayout post={post} />;
 }

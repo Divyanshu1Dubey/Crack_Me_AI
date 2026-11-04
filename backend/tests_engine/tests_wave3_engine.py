@@ -24,6 +24,7 @@ from rest_framework.test import APIClient
 from accounts.models_freemium import FreeShowcaseQuestion
 from analytics.models import UserTopicPerformance
 from questions.models import MistakeNotebook, Question, QuestionImage, Subject, Topic
+from tests_engine import views as te_views
 from tests_engine.entitlement import answer_visibility
 from tests_engine.models import QuestionResponse, Test, TestAttempt
 
@@ -323,57 +324,185 @@ class SharedRuleConsistencyTests(TestCase):
 
 
 class LockedPayloadTests(_ApiCase):
-    """GET /tests/<id>/ and /start/ carry no answer media of questions
-    outside the free set for a viewer without full access."""
+    """Answer media of test questions: the exam payload (GET /tests/<id>/
+    for students, /start/) carries none, for any viewer; /review/ returns
+    them after submit, on the rows whose answer the student may see.
+
+    Contract change (2026-11): the exam payload used to keep explanation
+    figures (with signed URLs) and the explanation video for premium
+    viewers and on free showcase questions, so a student could page through
+    the explanation figures in the zoom viewer, or play the video, in the
+    middle of a test. They now leave the exam payload for everyone, and the
+    results page reads them from /review/. The entitlement half of these
+    tests is unchanged: a free viewer never receives the explanation media
+    of a question outside the free set (locked, scholarship), neither during
+    the test nor in the review.
+    """
+
+    VIDEO = 'https://example.test/explain.mp4'
 
     def setUp(self):
         super().setUp()
         subject = Subject.objects.create(name='Wave3 Media', code='W3MEDIA')
-        self.showcase = _q(subject, 'media-showcase', showcase=True)
-        self.locked = _q(subject, 'media-locked')
+        self.showcase = _q(subject, 'media-showcase', showcase=True, video_url=self.VIDEO,
+                           video_status='completed')
+        self.locked = _q(subject, 'media-locked', video_url=self.VIDEO, video_status='completed')
         self.scholarship = _q(subject, 'media-scholarship', showcase=True, is_scholarship_eligible=True,
-                              video_url='https://example.test/explain.mp4', video_status='completed')
-        self.explanation_image = {}
-        for question in (self.showcase, self.locked, self.scholarship):
-            QuestionImage.objects.create(question=question, page_number=1, role='primary',
-                                         url=f'https://example.test/stem-{question.id}.png')
+                              video_url=self.VIDEO, video_status='completed')
+        self.questions = (self.showcase, self.locked, self.scholarship)
+        self.stem_image, self.explanation_image = {}, {}
+        for question in self.questions:
+            self.stem_image[question.id] = QuestionImage.objects.create(
+                question=question, page_number=1, role='primary',
+                url=f'https://example.test/stem-{question.id}.png',
+            ).id
             self.explanation_image[question.id] = QuestionImage.objects.create(
                 question=question, page_number=2, role='explanation',
                 url=f'https://example.test/explanation-{question.id}.png',
             ).id
         self.test = Test.objects.create(title='Wave3 media', test_type='mixed', negative_marking=False)
-        self.test.questions.set([self.showcase, self.locked, self.scholarship])
+        self.test.questions.set(self.questions)
 
     def _detail_rows(self):
         r = self.client.get(f'/api/tests/{self.test.id}/')
         self.assertEqual(r.status_code, 200, getattr(r, 'data', None))
         return {row['id']: row for row in r.data['questions']}
 
-    @staticmethod
-    def _roles(row):
-        return sorted(img.get('role') for img in row['images'])
-
-    def test_free_viewer_gets_no_locked_explanation_figures(self):
-        self.login(_user('w3-media-free'))
-        rows = self._detail_rows()
-        self.assertEqual(self._roles(rows[self.showcase.id]), ['explanation', 'primary'])
-        for question in (self.locked, self.scholarship):
+    def assert_no_answer_media(self, rows, who):
+        for question in self.questions:
             row = rows[question.id]
-            self.assertEqual(self._roles(row), ['primary'])
-            image_ids = {img['id'] for img in row['images'] + row['stem_images']}
-            self.assertNotIn(self.explanation_image[question.id], image_ids)
-        self.assertFalse(rows[self.scholarship.id]['is_showcase'])
-        self.assertIsNone(rows[self.scholarship.id]['video_url'])
+            self.assertEqual([img['id'] for img in row['images']], [self.stem_image[question.id]], who)
+            self.assertEqual([img['id'] for img in row['stem_images']], [self.stem_image[question.id]], who)
+            for field in ('video_url', 'video_status', 'page_screenshot', 'book_name', 'chapter'):
+                self.assertNotIn(field, row, who)
+            self.assertNotIn(f'images/{self.explanation_image[question.id]}/', str(row), who)
+            self.assertNotIn('explain.mp4', str(row), who)
 
-    def test_premium_viewer_keeps_them(self):
+    def _completed_attempt(self, user, picks=('C', 'A', 'C')):
+        """A scored attempt (a free student cannot start this test any more;
+        theirs date from before the rule, or from a premium period)."""
+        attempt = TestAttempt.objects.create(user=user, test=self.test, is_completed=True,
+                                             completed_at=timezone.now())
+        for question, letter in zip(self.questions, picks):
+            QuestionResponse.objects.create(attempt=attempt, question=question, selected_answer=letter,
+                                            is_correct=letter == question.correct_answer)
+        return attempt.id
+
+    def test_exam_payload_has_no_answer_media_for_any_student(self):
+        self.login(_user('w3-media-free'))
+        self.assert_no_answer_media(self._detail_rows(), 'free detail')
         self.login(_user('w3-media-premium', premium=True))
-        rows = self._detail_rows()
-        for question in (self.showcase, self.locked, self.scholarship):
-            self.assertEqual(self._roles(rows[question.id]), ['explanation', 'primary'])
+        self.assert_no_answer_media(self._detail_rows(), 'premium detail')
         started = self.start(self.test)
         self.assertEqual(started.status_code, 200, started.data)
-        by_id = {row['id']: row for row in started.data['questions']}
-        self.assertEqual(by_id[self.scholarship.id]['video_url'], 'https://example.test/explain.mp4')
+        self.assert_no_answer_media({row['id']: row for row in started.data['questions']}, 'premium start')
+
+    def test_admin_test_preview_keeps_the_stored_payload(self):
+        self.login(_user('w3-media-admin', role='admin'))
+        rows = self._detail_rows()
+        self.assertEqual(sorted(img['role'] for img in rows[self.locked.id]['images']), ['explanation', 'primary'])
+        self.assertEqual(rows[self.locked.id]['video_url'], self.VIDEO)
+
+    def test_free_review_has_the_explanation_media_of_free_questions_only(self):
+        user = self.login(_user('w3-media-review-free'))
+        rows = self.review(self.test, self._completed_attempt(user))
+        showcase = rows[self.showcase.id]
+        self.assertFalse(showcase['answer_locked'])
+        self.assertEqual([img['id'] for img in showcase['explanation_images']],
+                         [self.explanation_image[self.showcase.id]])
+        self.assertIn('?t=', showcase['explanation_images'][0]['url'])
+        self.assertEqual(showcase['explanation_images'][0]['role'], 'explanation')
+        self.assertEqual(showcase['video_url'], self.VIDEO)
+        for question in (self.locked, self.scholarship):
+            row = rows[question.id]
+            self.assertTrue(row['answer_locked'])
+            self.assertEqual(row['explanation_images'], [])
+            self.assertEqual([img['id'] for img in row['stem_images']], [self.stem_image[question.id]])
+            self.assertEqual({field: row[field] for field in te_views.REVIEW_VIDEO_FIELDS},
+                             dict.fromkeys(te_views.REVIEW_VIDEO_FIELDS))
+            self.assertNotIn(f'images/{self.explanation_image[question.id]}/', str(row))
+
+    def test_premium_review_returns_the_figures_and_the_video(self):
+        self.login(_user('w3-media-review-premium', premium=True))
+        attempt_id = self.start(self.test).data['attempt_id']
+        answers = [{'question_id': q.id, 'selected_answer': 'C'} for q in self.questions]
+        self.assertEqual(self.submit(self.test, attempt_id, answers).status_code, 200)
+        rows = self.review(self.test, attempt_id)
+        for question in self.questions:
+            row = rows[question.id]
+            self.assertFalse(row['answer_locked'])
+            self.assertEqual([img['id'] for img in row['explanation_images']],
+                             [self.explanation_image[question.id]])
+            self.assertEqual([img['id'] for img in row['stem_images']], [self.stem_image[question.id]])
+            self.assertEqual((row['video_url'], row['video_status']), (self.VIDEO, 'completed'))
+            self.assertEqual(row['video_subtitles_url'], 'https://example.test/explain.vtt')
+
+    def test_review_figure_urls_load_where_the_bare_url_is_refused(self):
+        user = self.login(_user('w3-media-review-url', premium=True))
+        rows = self.review(self.test, self._completed_attempt(user))
+        url = rows[self.locked.id]['explanation_images'][0]['url']
+        image_id = self.explanation_image[self.locked.id]
+        anonymous = APIClient()
+        bare = anonymous.get(f'/api/questions/images/{image_id}/serve/')
+        self.assertEqual(bare.status_code, 403)
+        self.assertEqual(bare.data['code'], 'image_token_required')
+        signed = anonymous.get(url.replace('http://testserver', ''))
+        self.assertEqual(signed.status_code, 302)   # stored public URL: redirect
+        self.assertEqual(signed['Location'], f'https://example.test/explanation-{self.locked.id}.png')
+
+    def test_an_option_figure_the_explanation_cites_is_reviewed_as_a_question_figure(self):
+        """An option's figure that the explanation also cites is an option figure everywhere
+        (questions.image_context.runtime_role, which resolve_runtime_image_role delegates to): the
+        student needs it during the test, and the review lists it with the question side, public URL.
+        (The old serializer rule read it as 'explanation' and the exam payload left it out.)"""
+        figure = QuestionImage.objects.create(question=self.locked, page_number=3, role='option',
+                                              url='https://example.test/option-b.png')
+        Question.objects.filter(pk=self.locked.pk).update(
+            option_b=f'B [[img:{figure.id}]]', explanation=f'{SECRET} see [[img:{figure.id}]]')
+        user = self.login(_user('w3-media-option-figure', premium=True))
+        exam_rows = self._detail_rows()
+        exam_images = {img['id']: img for img in exam_rows[self.locked.id]['images']}
+        self.assertIn(figure.id, exam_images)
+        self.assertEqual(exam_images[figure.id]['role'], 'option')
+        row = self.review(self.test, self._completed_attempt(user))[self.locked.id]
+        stem = {img['id']: img for img in row['stem_images']}
+        self.assertEqual(stem[figure.id]['role'], 'option')
+        self.assertEqual(stem[figure.id]['option_label'], 'B')
+        self.assertNotIn('?t=', stem[figure.id]['url'])
+        self.assertNotIn(figure.id, [img['id'] for img in row['explanation_images']])
+
+    def test_unfinished_video_is_not_linked(self):
+        Question.objects.filter(pk=self.locked.pk).update(video_status='processing')
+        user = self.login(_user('w3-media-review-processing', premium=True))
+        rows = self.review(self.test, self._completed_attempt(user))
+        row = rows[self.locked.id]
+        self.assertEqual(row['video_status'], 'processing')
+        self.assertIsNone(row['video_url'])
+
+    def test_review_does_not_scale_with_questions(self):
+        user = self.login(_user('w3-media-review-queries', premium=True))
+        subject = Subject.objects.create(name='Wave3 Review Queries', code='W3RQ')
+        counts = []
+        for n in (3, 12):
+            questions = [_q(subject, f'rq-{n}-{i}') for i in range(n)]
+            for question in questions:
+                QuestionImage.objects.create(question=question, page_number=1, role='primary',
+                                             url='https://example.test/s.png')
+                QuestionImage.objects.create(question=question, page_number=2, role='explanation',
+                                             url='https://example.test/e.png')
+            test = Test.objects.create(title=f'Wave3 review queries {n}', test_type='mixed')
+            test.questions.set(questions)
+            attempt = TestAttempt.objects.create(user=user, test=test, is_completed=True,
+                                                 completed_at=timezone.now())
+            for question in questions:
+                QuestionResponse.objects.create(attempt=attempt, question=question, selected_answer='C',
+                                                is_correct=True)
+            self.review(test, attempt.id)  # warm-up
+            with CaptureQueriesContext(connection) as ctx:
+                rows = self.review(test, attempt.id)
+            self.assertEqual(sum(len(row['explanation_images']) for row in rows.values()), n)
+            counts.append(len(ctx.captured_queries))
+        self.assertEqual(counts[0], counts[1])
 
 
 class FreeStartQueryCountTests(_ApiCase):

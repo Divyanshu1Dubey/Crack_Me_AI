@@ -358,7 +358,15 @@ class RepairCommandTests(_Base):
         self.assertFalse(QuestionRevisionSnapshot.objects.exists())
 
     def test_apply_repairs_holds_and_snapshots(self):
-        self._run('--apply')
+        from questions.models import AnswerKeyChange
+        with self.captureOnCommitCallbacks(execute=True):
+            self._run('--apply')
+        # A key filled from the label goes through change_answer_key (provenance), the repair is audited.
+        change = AnswerKeyChange.objects.get(question=self.empty_key)
+        self.assertEqual((change.old_key, change.new_key, change.source), ('', 'A', 'management_command'))
+        self.assertFalse(AnswerKeyChange.objects.filter(question=self.locked).exists())   # stored key kept
+        from key_audit.models import QuestionAudit
+        self.assertTrue(QuestionAudit.objects.filter(question=self.empty_key).exists())
         locked = Question.objects.get(pk=self.locked.pk)
         self.assertEqual(locked.option_d, 'I and IV only')
         self.assertEqual(locked.question_text, al.cut_at_answer_label(self.locked.question_text))

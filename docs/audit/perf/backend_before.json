@@ -1,0 +1,3135 @@
+{
+ "label": "before",
+ "generated_at": "2026-11-01T23:46:52",
+ "config": {
+  "runs": 10,
+  "rtt_ms": 0.0,
+  "gotrue_ms": 0.0,
+  "auth": "supabase",
+  "phases": "cold,warm",
+  "only": "",
+  "debug": true,
+  "db": {
+   "vendor": "postgresql",
+   "name": "crack_local",
+   "host": "127.0.0.1",
+   "server_version": "16.15"
+  },
+  "python": "3.14.3"
+ },
+ "fixtures": {
+  "q_img": 24056,
+  "q_show": 2005,
+  "q_neet": 6832,
+  "paper_source_test": 30
+ },
+ "fixture_sizes": {
+  "paper_questions": 118,
+  "test20_questions": 20
+ },
+ "endpoints": [
+  {
+   "key": "auth.profile",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/auth/profile/",
+   "first_ms": 190.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 15,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 9,
+     "duplicates": 6,
+     "sql_ms": 3.82,
+     "wall_p50_ms": 13.4,
+     "wall_p95_ms": 20.1,
+     "bytes": 776,
+     "gzip_bytes": 430,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      },
+      {
+       "count": 3,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 15,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 9,
+     "duplicates": 6,
+     "sql_ms": 3.62,
+     "wall_p50_ms": 13.2,
+     "wall_p95_ms": 14.1,
+     "bytes": 776,
+     "gzip_bytes": 429,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      },
+      {
+       "count": 3,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "auth.profile",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/auth/profile/",
+   "first_ms": 16.7,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 14,
+     "queries_min": 14,
+     "queries_max": 14,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 5,
+     "sql_ms": 3.2,
+     "wall_p50_ms": 12.4,
+     "wall_p95_ms": 41.5,
+     "bytes": 1013,
+     "gzip_bytes": 547,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 14,
+     "queries_min": 14,
+     "queries_max": 14,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 5,
+     "sql_ms": 3.02,
+     "wall_p50_ms": 11.8,
+     "wall_p95_ms": 12.9,
+     "bytes": 1013,
+     "gzip_bytes": 547,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "auth.tokens",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/auth/tokens/",
+   "first_ms": 14.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 4,
+     "sql_ms": 2.68,
+     "wall_p50_ms": 9.3,
+     "wall_p95_ms": 12.3,
+     "bytes": 217,
+     "gzip_bytes": 147,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 4,
+     "sql_ms": 2.7,
+     "wall_p50_ms": 9.1,
+     "wall_p95_ms": 10.5,
+     "bytes": 217,
+     "gzip_bytes": 147,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "auth.tokens",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/auth/tokens/",
+   "first_ms": 11.4,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 4,
+     "sql_ms": 2.65,
+     "wall_p50_ms": 9.1,
+     "wall_p95_ms": 10.2,
+     "bytes": 216,
+     "gzip_bytes": 150,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 2,
+     "templates": 7,
+     "duplicates": 4,
+     "sql_ms": 2.79,
+     "wall_p50_ms": 9.3,
+     "wall_p95_ms": 10.6,
+     "bytes": 216,
+     "gzip_bytes": 150,
+     "top_duplicates": [
+      {
+       "count": 4,
+       "sql": "SELECT \"accounts_tokenconfig\".\"id\", \"accounts_tokenconfig\".\"free_daily_tokens\", \"accounts_tokenconfig\".\"free_weekly_tokens\", \"accounts_tokenconfig\".\"ai_tutor_daily_cap\", \"accounts_tokenconfig\".\"token_price\", \"accounts_to"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_tokenbalance\".\"id\", \"accounts_tokenbalance\".\"user_id\", \"accounts_tokenbalance\".\"purchased_tokens\", \"accounts_tokenbalance\".\"daily_tokens_used\", \"accounts_tokenbalance\".\"weekly_tokens_used\", \"accounts_tok"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "analytics.announcements",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/analytics/announcements/",
+   "first_ms": 13.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 1.73,
+     "wall_p50_ms": 6.9,
+     "wall_p95_ms": 7.3,
+     "bytes": 2,
+     "gzip_bytes": 22,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 1.71,
+     "wall_p50_ms": 7.0,
+     "wall_p95_ms": 7.6,
+     "bytes": 2,
+     "gzip_bytes": 22,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "dashboard.bundle",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/analytics/dashboard/bundle/",
+   "first_ms": 47.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 16,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 15,
+     "duplicates": 1,
+     "sql_ms": 14.36,
+     "wall_p50_ms": 26.6,
+     "wall_p95_ms": 31.6,
+     "bytes": 826,
+     "gzip_bytes": 439,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT COUNT(\"questions_question\".\"id\") AS \"total\", COUNT(\"questions_question\".\"id\") FILTER (WHERE (\"questions_question\".\"explanation\" IS NOT NULL AND NOT (\"questions_question\".\"explanation\" = %s))) AS \"with_explanation\""
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 4,
+     "queries_min": 4,
+     "queries_max": 4,
+     "statements": 4,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 4,
+     "duplicates": 0,
+     "sql_ms": 1.02,
+     "wall_p50_ms": 4.5,
+     "wall_p95_ms": 5.1,
+     "bytes": 826,
+     "gzip_bytes": 439,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "dashboard.bundle",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/dashboard/bundle/",
+   "first_ms": 26.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 16,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 15,
+     "duplicates": 1,
+     "sql_ms": 15.28,
+     "wall_p50_ms": 27.5,
+     "wall_p95_ms": 32.4,
+     "bytes": 718,
+     "gzip_bytes": 402,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT COUNT(\"questions_question\".\"id\") AS \"total\", COUNT(\"questions_question\".\"id\") FILTER (WHERE (\"questions_question\".\"explanation\" IS NOT NULL AND NOT (\"questions_question\".\"explanation\" = %s))) AS \"with_explanation\""
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 4,
+     "queries_min": 4,
+     "queries_max": 4,
+     "statements": 4,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 4,
+     "duplicates": 0,
+     "sql_ms": 1.1,
+     "wall_p50_ms": 4.7,
+     "wall_p95_ms": 5.6,
+     "bytes": 718,
+     "gzip_bytes": 402,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.stats",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/stats/?exam_source=UPSC%20CMS",
+   "first_ms": 37.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 16.56,
+     "wall_p50_ms": 27.1,
+     "wall_p95_ms": 31.6,
+     "bytes": 1365,
+     "gzip_bytes": 462,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 13.2,
+     "wall_p50_ms": 23.6,
+     "wall_p95_ms": 25.7,
+     "bytes": 1365,
+     "gzip_bytes": 462,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.list",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/?page=1&page_size=20&exam_type=cms",
+   "first_ms": 118.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 38.95,
+     "wall_p50_ms": 66.8,
+     "wall_p95_ms": 75.3,
+     "bytes": 28285,
+     "gzip_bytes": 5088,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.36,
+     "wall_p50_ms": 6.1,
+     "wall_p95_ms": 6.5,
+     "bytes": 28285,
+     "gzip_bytes": 5088,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.list",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/?page=1&page_size=20&exam_type=cms",
+   "first_ms": 46.0,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 11.27,
+     "wall_p50_ms": 41.1,
+     "wall_p95_ms": 47.4,
+     "bytes": 30465,
+     "gzip_bytes": 4645,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.34,
+     "wall_p50_ms": 6.1,
+     "wall_p95_ms": 7.0,
+     "bytes": 30465,
+     "gzip_bytes": 4645,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.list",
+   "user": "admin",
+   "method": "GET",
+   "path": "/api/questions/?page=1&page_size=20&exam_type=cms",
+   "first_ms": 62.0,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 10,
+     "queries_min": 10,
+     "queries_max": 10,
+     "statements": 10,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 10,
+     "duplicates": 0,
+     "sql_ms": 26.37,
+     "wall_p50_ms": 60.8,
+     "wall_p95_ms": 80.8,
+     "bytes": 75017,
+     "gzip_bytes": 12388,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 10,
+     "queries_min": 10,
+     "queries_max": 10,
+     "statements": 10,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 10,
+     "duplicates": 0,
+     "sql_ms": 24.3,
+     "wall_p50_ms": 61.6,
+     "wall_p95_ms": 96.0,
+     "bytes": 75017,
+     "gzip_bytes": 12388,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.list_search",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/?page=1&page_size=20&exam_type=cms&search=anaemia",
+   "first_ms": 1180.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 16,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 16,
+     "duplicates": 0,
+     "sql_ms": 40.54,
+     "wall_p50_ms": 1231.6,
+     "wall_p95_ms": 1309.8,
+     "bytes": 54575,
+     "gzip_bytes": 15632,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.34,
+     "wall_p50_ms": 6.0,
+     "wall_p95_ms": 7.2,
+     "bytes": 54575,
+     "gzip_bytes": 15632,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.subjects",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/subjects/",
+   "first_ms": 45.4,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 11.16,
+     "wall_p50_ms": 16.9,
+     "wall_p95_ms": 20.5,
+     "bytes": 4731,
+     "gzip_bytes": 758,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 12.02,
+     "wall_p50_ms": 18.8,
+     "wall_p95_ms": 24.7,
+     "bytes": 4731,
+     "gzip_bytes": 758,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.topics",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/topics/",
+   "first_ms": 81.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 10.93,
+     "wall_p50_ms": 82.0,
+     "wall_p95_ms": 141.6,
+     "bytes": 432029,
+     "gzip_bytes": 39274,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 10.86,
+     "wall_p50_ms": 80.8,
+     "wall_p95_ms": 152.3,
+     "bytes": 432029,
+     "gzip_bytes": 39274,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.years",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/years/?exam_type=cms",
+   "first_ms": 12.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 2.77,
+     "wall_p50_ms": 6.8,
+     "wall_p95_ms": 8.5,
+     "bytes": 46,
+     "gzip_bytes": 51,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 2.91,
+     "wall_p50_ms": 6.8,
+     "wall_p95_ms": 8.9,
+     "bytes": 46,
+     "gzip_bytes": 51,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.detail",
+   "user": "anon",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/",
+   "first_ms": 27.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 10,
+     "queries_min": 10,
+     "queries_max": 10,
+     "statements": 10,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 10,
+     "duplicates": 0,
+     "sql_ms": 8.79,
+     "wall_p50_ms": 24.5,
+     "wall_p95_ms": 28.4,
+     "bytes": 2591,
+     "gzip_bytes": 1081,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 10,
+     "queries_min": 10,
+     "queries_max": 10,
+     "statements": 10,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 10,
+     "duplicates": 0,
+     "sql_ms": 8.42,
+     "wall_p50_ms": 24.2,
+     "wall_p95_ms": 25.7,
+     "bytes": 2591,
+     "gzip_bytes": 1081,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.detail",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/{q_show}/",
+   "first_ms": 39.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 18,
+     "queries_min": 18,
+     "queries_max": 18,
+     "statements": 18,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 17,
+     "duplicates": 1,
+     "sql_ms": 10.45,
+     "wall_p50_ms": 29.8,
+     "wall_p95_ms": 34.0,
+     "bytes": 9996,
+     "gzip_bytes": 2974,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 18,
+     "queries_min": 18,
+     "queries_max": 18,
+     "statements": 18,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 17,
+     "duplicates": 1,
+     "sql_ms": 10.71,
+     "wall_p50_ms": 31.4,
+     "wall_p95_ms": 33.2,
+     "bytes": 9996,
+     "gzip_bytes": 2974,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.detail",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/",
+   "first_ms": 36.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 17,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 16,
+     "duplicates": 1,
+     "sql_ms": 9.53,
+     "wall_p50_ms": 29.6,
+     "wall_p95_ms": 31.8,
+     "bytes": 2749,
+     "gzip_bytes": 1193,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 17,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 16,
+     "duplicates": 1,
+     "sql_ms": 9.87,
+     "wall_p50_ms": 29.7,
+     "wall_p95_ms": 34.2,
+     "bytes": 2749,
+     "gzip_bytes": 1193,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.detail",
+   "user": "admin",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/",
+   "first_ms": 30.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 14,
+     "queries_min": 14,
+     "queries_max": 14,
+     "statements": 14,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 1,
+     "sql_ms": 8.61,
+     "wall_p50_ms": 25.0,
+     "wall_p95_ms": 31.1,
+     "bytes": 2749,
+     "gzip_bytes": 1193,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 14,
+     "queries_min": 14,
+     "queries_max": 14,
+     "statements": 14,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 1,
+     "sql_ms": 8.79,
+     "wall_p50_ms": 25.6,
+     "wall_p95_ms": 28.0,
+     "bytes": 2749,
+     "gzip_bytes": 1193,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.detail_neet",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_neet}/",
+   "first_ms": 43.7,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 17,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 16,
+     "duplicates": 1,
+     "sql_ms": 11.42,
+     "wall_p50_ms": 39.2,
+     "wall_p95_ms": 192.3,
+     "bytes": 72023,
+     "gzip_bytes": 8589,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 17,
+     "queries_min": 17,
+     "queries_max": 17,
+     "statements": 17,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 16,
+     "duplicates": 1,
+     "sql_ms": 12.34,
+     "wall_p50_ms": 43.1,
+     "wall_p95_ms": 50.2,
+     "bytes": 72023,
+     "gzip_bytes": 8589,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionattempt\".\"id\", \"questions_questionattempt\".\"user_id\", \"questions_questionattempt\".\"question_id\", \"questions_questionattempt\".\"selected_answer\", \"questions_questionattempt\".\"is_correct\", \"questio"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.similar",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/{q_show}/similar/",
+   "first_ms": 48.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 21,
+     "queries_min": 21,
+     "queries_max": 21,
+     "statements": 21,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 19,
+     "duplicates": 2,
+     "sql_ms": 14.33,
+     "wall_p50_ms": 41.8,
+     "wall_p95_ms": 47.8,
+     "bytes": 10907,
+     "gzip_bytes": 2432,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionimage\".\"id\", \"questions_questionimage\".\"question_id\", \"questions_questionimage\".\"recall_source_id\", \"questions_questionimage\".\"page_number\", \"questions_questionimage\".\"image_index_in_page\", \"que"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_duplicatemember\".\"id\", \"questions_duplicatemember\".\"cluster_id\", \"questions_duplicatemember\".\"question_id\", \"questions_duplicatemember\".\"similarity_score\", \"questions_duplicatemember\".\"created_at\", COUN"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 21,
+     "queries_min": 21,
+     "queries_max": 21,
+     "statements": 21,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 19,
+     "duplicates": 2,
+     "sql_ms": 13.73,
+     "wall_p50_ms": 40.6,
+     "wall_p95_ms": 69.0,
+     "bytes": 10907,
+     "gzip_bytes": 2432,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionimage\".\"id\", \"questions_questionimage\".\"question_id\", \"questions_questionimage\".\"recall_source_id\", \"questions_questionimage\".\"page_number\", \"questions_questionimage\".\"image_index_in_page\", \"que"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_duplicatemember\".\"id\", \"questions_duplicatemember\".\"cluster_id\", \"questions_duplicatemember\".\"question_id\", \"questions_duplicatemember\".\"similarity_score\", \"questions_duplicatemember\".\"created_at\", COUN"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.similar",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/similar/",
+   "first_ms": 47.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 19,
+     "queries_min": 19,
+     "queries_max": 19,
+     "statements": 19,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 17,
+     "duplicates": 2,
+     "sql_ms": 13.23,
+     "wall_p50_ms": 38.9,
+     "wall_p95_ms": 42.0,
+     "bytes": 11586,
+     "gzip_bytes": 2688,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionimage\".\"id\", \"questions_questionimage\".\"question_id\", \"questions_questionimage\".\"recall_source_id\", \"questions_questionimage\".\"page_number\", \"questions_questionimage\".\"image_index_in_page\", \"que"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_duplicatemember\".\"id\", \"questions_duplicatemember\".\"cluster_id\", \"questions_duplicatemember\".\"question_id\", \"questions_duplicatemember\".\"similarity_score\", \"questions_duplicatemember\".\"created_at\", COUN"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 19,
+     "queries_min": 19,
+     "queries_max": 19,
+     "statements": 19,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 17,
+     "duplicates": 2,
+     "sql_ms": 12.67,
+     "wall_p50_ms": 37.6,
+     "wall_p95_ms": 41.8,
+     "bytes": 11586,
+     "gzip_bytes": 2688,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionimage\".\"id\", \"questions_questionimage\".\"question_id\", \"questions_questionimage\".\"recall_source_id\", \"questions_questionimage\".\"page_number\", \"questions_questionimage\".\"image_index_in_page\", \"que"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_duplicatemember\".\"id\", \"questions_duplicatemember\".\"cluster_id\", \"questions_duplicatemember\".\"question_id\", \"questions_duplicatemember\".\"similarity_score\", \"questions_duplicatemember\".\"created_at\", COUN"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.discussions",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/discussions/?question={q_img}",
+   "first_ms": 39.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 1.62,
+     "wall_p50_ms": 8.8,
+     "wall_p95_ms": 10.0,
+     "bytes": 52,
+     "gzip_bytes": 65,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 1.71,
+     "wall_p50_ms": 9.0,
+     "wall_p95_ms": 10.6,
+     "bytes": 52,
+     "gzip_bytes": 65,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.why_correct",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/why_correct/",
+   "first_ms": 24.0,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.15,
+     "wall_p50_ms": 18.3,
+     "wall_p95_ms": 21.4,
+     "bytes": 20,
+     "gzip_bytes": 40,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.07,
+     "wall_p50_ms": 18.3,
+     "wall_p95_ms": 19.4,
+     "bytes": 20,
+     "gzip_bytes": 40,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.clinical",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/clinical/",
+   "first_ms": 22.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.26,
+     "wall_p50_ms": 19.0,
+     "wall_p95_ms": 21.9,
+     "bytes": 30,
+     "gzip_bytes": 50,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.92,
+     "wall_p50_ms": 19.8,
+     "wall_p95_ms": 23.6,
+     "bytes": 30,
+     "gzip_bytes": 50,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.mnemonic",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/mnemonic/",
+   "first_ms": 22.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 7.64,
+     "wall_p50_ms": 21.8,
+     "wall_p95_ms": 39.5,
+     "bytes": 21,
+     "gzip_bytes": 41,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.09,
+     "wall_p50_ms": 18.3,
+     "wall_p95_ms": 19.5,
+     "bytes": 21,
+     "gzip_bytes": 41,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.exam_importance",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/exam_importance/",
+   "first_ms": 23.3,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 11,
+     "queries_min": 11,
+     "queries_max": 11,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 11,
+     "duplicates": 0,
+     "sql_ms": 5.87,
+     "wall_p50_ms": 16.6,
+     "wall_p95_ms": 18.8,
+     "bytes": 24,
+     "gzip_bytes": 44,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 11,
+     "queries_min": 11,
+     "queries_max": 11,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 11,
+     "duplicates": 0,
+     "sql_ms": 5.76,
+     "wall_p50_ms": 17.4,
+     "wall_p95_ms": 19.2,
+     "bytes": 24,
+     "gzip_bytes": 44,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.concept",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/concept/",
+   "first_ms": 22.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 7.1,
+     "wall_p50_ms": 19.8,
+     "wall_p95_ms": 24.9,
+     "bytes": 16,
+     "gzip_bytes": 36,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 6.38,
+     "wall_p50_ms": 19.3,
+     "wall_p95_ms": 23.4,
+     "bytes": 16,
+     "gzip_bytes": 36,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.why_incorrect",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/why_incorrect/",
+   "first_ms": 23.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 5.87,
+     "wall_p50_ms": 17.9,
+     "wall_p95_ms": 19.8,
+     "bytes": 22,
+     "gzip_bytes": 42,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 5.82,
+     "wall_p50_ms": 17.3,
+     "wall_p95_ms": 21.0,
+     "bytes": 22,
+     "gzip_bytes": 42,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.related_pyqs",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/related_pyqs/",
+   "first_ms": 46.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 31.45,
+     "wall_p50_ms": 44.5,
+     "wall_p95_ms": 52.6,
+     "bytes": 15426,
+     "gzip_bytes": 5636,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 13,
+     "queries_min": 13,
+     "queries_max": 13,
+     "statements": 13,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 13,
+     "duplicates": 0,
+     "sql_ms": 7.22,
+     "wall_p50_ms": 20.4,
+     "wall_p95_ms": 27.1,
+     "bytes": 15426,
+     "gzip_bytes": 5636,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.related_topics",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/{q_img}/ai/related_topics/",
+   "first_ms": 24.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 12,
+     "queries_min": 12,
+     "queries_max": 12,
+     "statements": 12,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 12,
+     "duplicates": 0,
+     "sql_ms": 11.28,
+     "wall_p50_ms": 25.4,
+     "wall_p95_ms": 28.1,
+     "bytes": 463,
+     "gzip_bytes": 211,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 11,
+     "queries_min": 11,
+     "queries_max": 11,
+     "statements": 11,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 11,
+     "duplicates": 0,
+     "sql_ms": 6.11,
+     "wall_p50_ms": 18.4,
+     "wall_p95_ms": 21.0,
+     "bytes": 463,
+     "gzip_bytes": 211,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.attempt",
+   "user": "premium",
+   "method": "POST",
+   "path": "/api/questions/{q_img}/attempt/",
+   "first_ms": 62.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 40,
+     "queries_min": 40,
+     "queries_max": 40,
+     "statements": 28,
+     "writes": 9,
+     "savepoints": 12,
+     "templates": 28,
+     "duplicates": 0,
+     "sql_ms": 11.05,
+     "wall_p50_ms": 29.8,
+     "wall_p95_ms": 205.2,
+     "bytes": 249,
+     "gzip_bytes": 161,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 40,
+     "queries_min": 40,
+     "queries_max": 40,
+     "statements": 28,
+     "writes": 9,
+     "savepoints": 12,
+     "templates": 28,
+     "duplicates": 0,
+     "sql_ms": 13.87,
+     "wall_p50_ms": 37.7,
+     "wall_p95_ms": 51.1,
+     "bytes": 249,
+     "gzip_bytes": 161,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.attempt",
+   "user": "student",
+   "method": "POST",
+   "path": "/api/questions/{q_show}/attempt/",
+   "first_ms": 40.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 37,
+     "queries_min": 37,
+     "queries_max": 37,
+     "statements": 29,
+     "writes": 8,
+     "savepoints": 8,
+     "templates": 28,
+     "duplicates": 1,
+     "sql_ms": 15.56,
+     "wall_p50_ms": 41.5,
+     "wall_p95_ms": 48.5,
+     "bytes": 1130,
+     "gzip_bytes": 441,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"last_attempted\" = %s, \"total_time_seconds\" = (\"analytics_usertopicperformance\".\"total_time_seconds"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 37,
+     "queries_min": 37,
+     "queries_max": 37,
+     "statements": 29,
+     "writes": 8,
+     "savepoints": 8,
+     "templates": 28,
+     "duplicates": 1,
+     "sql_ms": 14.82,
+     "wall_p50_ms": 39.0,
+     "wall_p95_ms": 43.8,
+     "bytes": 1130,
+     "gzip_bytes": 441,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"last_attempted\" = %s, \"total_time_seconds\" = (\"analytics_usertopicperformance\".\"total_time_seconds"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.practice_attempt",
+   "user": "premium",
+   "method": "POST",
+   "path": "/api/questions/{q_img}/practice/attempt/",
+   "first_ms": 51.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 48,
+     "queries_min": 48,
+     "queries_max": 48,
+     "statements": 34,
+     "writes": 12,
+     "savepoints": 14,
+     "templates": 33,
+     "duplicates": 1,
+     "sql_ms": 15.88,
+     "wall_p50_ms": 41.9,
+     "wall_p95_ms": 67.6,
+     "bytes": 295,
+     "gzip_bytes": 184,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionpracticestate\".\"id\", \"questions_questionpracticestate\".\"user_id\", \"questions_questionpracticestate\".\"question_id\", \"questions_questionpracticestate\".\"flagged\", \"questions_questionpracticestate\"."
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 48,
+     "queries_min": 48,
+     "queries_max": 48,
+     "statements": 34,
+     "writes": 12,
+     "savepoints": 14,
+     "templates": 33,
+     "duplicates": 1,
+     "sql_ms": 14.3,
+     "wall_p50_ms": 37.6,
+     "wall_p95_ms": 41.7,
+     "bytes": 295,
+     "gzip_bytes": 184,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"questions_questionpracticestate\".\"id\", \"questions_questionpracticestate\".\"user_id\", \"questions_questionpracticestate\".\"question_id\", \"questions_questionpracticestate\".\"flagged\", \"questions_questionpracticestate\"."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "questions.practice_queue",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/practice_queue/?mode=random",
+   "first_ms": 30.0,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 8,
+     "queries_min": 8,
+     "queries_max": 9,
+     "statements": 8,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 8,
+     "duplicates": 0,
+     "sql_ms": 15.73,
+     "wall_p50_ms": 30.0,
+     "wall_p95_ms": 77.6,
+     "bytes": 88,
+     "gzip_bytes": 99,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 9,
+     "queries_min": 8,
+     "queries_max": 9,
+     "statements": 9,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 9,
+     "duplicates": 0,
+     "sql_ms": 15.93,
+     "wall_p50_ms": 31.2,
+     "wall_p95_ms": 42.2,
+     "bytes": 98,
+     "gzip_bytes": 106,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.recall_search",
+   "user": "anon",
+   "method": "GET",
+   "path": "/api/questions/recall_search/?q=hypertension",
+   "first_ms": 1377.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 16,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 15,
+     "duplicates": 1,
+     "sql_ms": 262.19,
+     "wall_p50_ms": 1702.2,
+     "wall_p95_ms": 1807.8,
+     "bytes": 31842,
+     "gzip_bytes": 5154,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_freeshowcasequestion\".\"question_id\" AS \"question_id\" FROM \"accounts_freeshowcasequestion\" INNER JOIN \"questions_question\" ON (\"accounts_freeshowcasequestion\".\"question_id\" = \"questions_question\".\"id\") WH"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 0,
+     "queries_min": 0,
+     "queries_max": 0,
+     "statements": 0,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 0,
+     "duplicates": 0,
+     "sql_ms": 0.0,
+     "wall_p50_ms": 2.8,
+     "wall_p95_ms": 3.7,
+     "bytes": 31842,
+     "gzip_bytes": 5154,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.recall_search",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/questions/recall_search/?q=hypertension",
+   "first_ms": 1432.7,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 22,
+     "queries_min": 22,
+     "queries_max": 22,
+     "statements": 22,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 20,
+     "duplicates": 2,
+     "sql_ms": 251.8,
+     "wall_p50_ms": 1451.1,
+     "wall_p95_ms": 1731.2,
+     "bytes": 2901,
+     "gzip_bytes": 1011,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      },
+      {
+       "count": 2,
+       "sql": "SELECT \"accounts_freeshowcasequestion\".\"question_id\" AS \"question_id\" FROM \"accounts_freeshowcasequestion\" INNER JOIN \"questions_question\" ON (\"accounts_freeshowcasequestion\".\"question_id\" = \"questions_question\".\"id\") WH"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.35,
+     "wall_p50_ms": 5.5,
+     "wall_p95_ms": 6.2,
+     "bytes": 2901,
+     "gzip_bytes": 1011,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "questions.recall_search",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/questions/recall_search/?q=hypertension",
+   "first_ms": 274.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 18,
+     "queries_min": 18,
+     "queries_max": 18,
+     "statements": 18,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 17,
+     "duplicates": 1,
+     "sql_ms": 224.51,
+     "wall_p50_ms": 250.5,
+     "wall_p95_ms": 280.2,
+     "bytes": 34235,
+     "gzip_bytes": 5761,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.31,
+     "wall_p50_ms": 6.2,
+     "wall_p95_ms": 7.0,
+     "bytes": 34235,
+     "gzip_bytes": 5761,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "tests.library",
+   "user": "student",
+   "method": "GET",
+   "path": "/api/tests/?scope=library",
+   "first_ms": 87.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 7,
+     "queries_min": 7,
+     "queries_max": 7,
+     "statements": 7,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 7,
+     "duplicates": 0,
+     "sql_ms": 60.73,
+     "wall_p50_ms": 73.1,
+     "wall_p95_ms": 89.5,
+     "bytes": 13308,
+     "gzip_bytes": 1844,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 7,
+     "queries_min": 7,
+     "queries_max": 7,
+     "statements": 7,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 7,
+     "duplicates": 0,
+     "sql_ms": 61.92,
+     "wall_p50_ms": 73.9,
+     "wall_p95_ms": 97.5,
+     "bytes": 13308,
+     "gzip_bytes": 1844,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "tests.start",
+   "user": "premium",
+   "method": "POST",
+   "path": "/api/tests/{paper}/start/",
+   "first_ms": 88.5,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 14,
+     "writes": 1,
+     "savepoints": 2,
+     "templates": 12,
+     "duplicates": 2,
+     "sql_ms": 16.51,
+     "wall_p50_ms": 77.4,
+     "wall_p95_ms": 182.4,
+     "bytes": 138411,
+     "gzip_bytes": 21625,
+     "top_duplicates": [
+      {
+       "count": 3,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 16,
+     "queries_min": 16,
+     "queries_max": 16,
+     "statements": 14,
+     "writes": 1,
+     "savepoints": 2,
+     "templates": 12,
+     "duplicates": 2,
+     "sql_ms": 16.7,
+     "wall_p50_ms": 85.6,
+     "wall_p95_ms": 114.0,
+     "bytes": 138411,
+     "gzip_bytes": 21564,
+     "top_duplicates": [
+      {
+       "count": 3,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "tests.submit",
+   "user": "premium",
+   "method": "POST",
+   "path": "/api/tests/{paper}/submit/",
+   "first_ms": 566.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 906,
+     "queries_min": 906,
+     "queries_max": 906,
+     "statements": 574,
+     "writes": 283,
+     "savepoints": 332,
+     "templates": 31,
+     "duplicates": 543,
+     "sql_ms": 175.97,
+     "wall_p50_ms": 450.8,
+     "wall_p95_ms": 496.1,
+     "bytes": 339,
+     "gzip_bytes": 234,
+     "top_duplicates": [
+      {
+       "count": 113,
+       "sql": "INSERT INTO \"analytics_usertopicperformance\" (\"user_id\", \"topic_id\", \"subject_id\", \"total_attempts\", \"correct_answers\", \"incorrect_answers\", \"total_time_seconds\", \"avg_confidence\", \"last_attempted\") VALUES (...) RETURNIN"
+      },
+      {
+       "count": 113,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"correct_answers\" = (\"analytics_usertopicperformance\".\"correct_answers\" + %s), \"incorrect_answers\" "
+      },
+      {
+       "count": 111,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\" AS \"pk\" FROM \"analytics_usertopicperformance\" WHERE (\"analytics_usertopicperformance\".\"subject_id\" = %s AND \"analytics_usertopicperformance\".\"topic_id\" = %s AND \"analytics_use"
+      },
+      {
+       "count": 111,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\", \"analytics_usertopicperformance\".\"user_id\", \"analytics_usertopicperformance\".\"topic_id\", \"analytics_usertopicperformance\".\"subject_id\", \"analytics_usertopicperformance\".\"tota"
+      },
+      {
+       "count": 48,
+       "sql": "SELECT \"questions_mistakenotebook\".\"id\", \"questions_mistakenotebook\".\"user_id\", \"questions_mistakenotebook\".\"question_id\", \"questions_mistakenotebook\".\"selected_answer\", \"questions_mistakenotebook\".\"correct_answer\", \"que"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 906,
+     "queries_min": 906,
+     "queries_max": 906,
+     "statements": 574,
+     "writes": 283,
+     "savepoints": 332,
+     "templates": 31,
+     "duplicates": 543,
+     "sql_ms": 169.91,
+     "wall_p50_ms": 445.5,
+     "wall_p95_ms": 639.9,
+     "bytes": 339,
+     "gzip_bytes": 234,
+     "top_duplicates": [
+      {
+       "count": 113,
+       "sql": "INSERT INTO \"analytics_usertopicperformance\" (\"user_id\", \"topic_id\", \"subject_id\", \"total_attempts\", \"correct_answers\", \"incorrect_answers\", \"total_time_seconds\", \"avg_confidence\", \"last_attempted\") VALUES (...) RETURNIN"
+      },
+      {
+       "count": 113,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"correct_answers\" = (\"analytics_usertopicperformance\".\"correct_answers\" + %s), \"incorrect_answers\" "
+      },
+      {
+       "count": 111,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\" AS \"pk\" FROM \"analytics_usertopicperformance\" WHERE (\"analytics_usertopicperformance\".\"subject_id\" = %s AND \"analytics_usertopicperformance\".\"topic_id\" = %s AND \"analytics_use"
+      },
+      {
+       "count": 111,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\", \"analytics_usertopicperformance\".\"user_id\", \"analytics_usertopicperformance\".\"topic_id\", \"analytics_usertopicperformance\".\"subject_id\", \"analytics_usertopicperformance\".\"tota"
+      },
+      {
+       "count": 48,
+       "sql": "SELECT \"questions_mistakenotebook\".\"id\", \"questions_mistakenotebook\".\"user_id\", \"questions_mistakenotebook\".\"question_id\", \"questions_mistakenotebook\".\"selected_answer\", \"questions_mistakenotebook\".\"correct_answer\", \"que"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "tests.review",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/tests/{paper}/review/?attempt_id={attempt}",
+   "first_ms": 570.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 7,
+     "queries_min": 7,
+     "queries_max": 7,
+     "statements": 7,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 7,
+     "duplicates": 0,
+     "sql_ms": 5.78,
+     "wall_p50_ms": 24.5,
+     "wall_p95_ms": 40.8,
+     "bytes": 191337,
+     "gzip_bytes": 51786,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 7,
+     "queries_min": 7,
+     "queries_max": 7,
+     "statements": 7,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 7,
+     "duplicates": 0,
+     "sql_ms": 5.18,
+     "wall_p50_ms": 21.7,
+     "wall_p95_ms": 28.4,
+     "bytes": 191337,
+     "gzip_bytes": 51786,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "tests.start",
+   "user": "student",
+   "method": "POST",
+   "path": "/api/tests/{test20}/start/",
+   "first_ms": 42.6,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 15,
+     "queries_min": 15,
+     "queries_max": 15,
+     "statements": 13,
+     "writes": 1,
+     "savepoints": 2,
+     "templates": 12,
+     "duplicates": 1,
+     "sql_ms": 9.46,
+     "wall_p50_ms": 36.0,
+     "wall_p95_ms": 39.9,
+     "bytes": 25585,
+     "gzip_bytes": 5052,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 15,
+     "queries_min": 15,
+     "queries_max": 15,
+     "statements": 13,
+     "writes": 1,
+     "savepoints": 2,
+     "templates": 12,
+     "duplicates": 1,
+     "sql_ms": 10.07,
+     "wall_p50_ms": 37.7,
+     "wall_p95_ms": 41.0,
+     "bytes": 25585,
+     "gzip_bytes": 5061,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT %s AS \"a\" FROM \"accounts_subscription\" WHERE (\"accounts_subscription\".\"status\" = %s AND \"accounts_subscription\".\"user_id\" = %s AND (\"accounts_subscription\".\"expires_at\" IS NULL OR \"accounts_subscription\".\"expires_"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "tests.submit",
+   "user": "student",
+   "method": "POST",
+   "path": "/api/tests/{test20}/submit/",
+   "first_ms": 153.4,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 182,
+     "queries_min": 182,
+     "queries_max": 182,
+     "statements": 122,
+     "writes": 56,
+     "savepoints": 60,
+     "templates": 32,
+     "duplicates": 90,
+     "sql_ms": 41.5,
+     "wall_p50_ms": 103.3,
+     "wall_p95_ms": 264.4,
+     "bytes": 334,
+     "gzip_bytes": 229,
+     "top_duplicates": [
+      {
+       "count": 22,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"correct_answers\" = (\"analytics_usertopicperformance\".\"correct_answers\" + %s), \"incorrect_answers\" "
+      },
+      {
+       "count": 20,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\" AS \"pk\" FROM \"analytics_usertopicperformance\" WHERE (\"analytics_usertopicperformance\".\"subject_id\" = %s AND \"analytics_usertopicperformance\".\"topic_id\" = %s AND \"analytics_use"
+      },
+      {
+       "count": 18,
+       "sql": "INSERT INTO \"analytics_usertopicperformance\" (\"user_id\", \"topic_id\", \"subject_id\", \"total_attempts\", \"correct_answers\", \"incorrect_answers\", \"total_time_seconds\", \"avg_confidence\", \"last_attempted\") VALUES (...) RETURNIN"
+      },
+      {
+       "count": 17,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\", \"analytics_usertopicperformance\".\"user_id\", \"analytics_usertopicperformance\".\"topic_id\", \"analytics_usertopicperformance\".\"subject_id\", \"analytics_usertopicperformance\".\"tota"
+      },
+      {
+       "count": 8,
+       "sql": "SELECT \"questions_mistakenotebook\".\"id\", \"questions_mistakenotebook\".\"user_id\", \"questions_mistakenotebook\".\"question_id\", \"questions_mistakenotebook\".\"selected_answer\", \"questions_mistakenotebook\".\"correct_answer\", \"que"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 182,
+     "queries_min": 182,
+     "queries_max": 182,
+     "statements": 122,
+     "writes": 56,
+     "savepoints": 60,
+     "templates": 32,
+     "duplicates": 90,
+     "sql_ms": 42.12,
+     "wall_p50_ms": 105.6,
+     "wall_p95_ms": 108.9,
+     "bytes": 334,
+     "gzip_bytes": 228,
+     "top_duplicates": [
+      {
+       "count": 22,
+       "sql": "UPDATE \"analytics_usertopicperformance\" SET \"total_attempts\" = (\"analytics_usertopicperformance\".\"total_attempts\" + %s), \"correct_answers\" = (\"analytics_usertopicperformance\".\"correct_answers\" + %s), \"incorrect_answers\" "
+      },
+      {
+       "count": 20,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\" AS \"pk\" FROM \"analytics_usertopicperformance\" WHERE (\"analytics_usertopicperformance\".\"subject_id\" = %s AND \"analytics_usertopicperformance\".\"topic_id\" = %s AND \"analytics_use"
+      },
+      {
+       "count": 18,
+       "sql": "INSERT INTO \"analytics_usertopicperformance\" (\"user_id\", \"topic_id\", \"subject_id\", \"total_attempts\", \"correct_answers\", \"incorrect_answers\", \"total_time_seconds\", \"avg_confidence\", \"last_attempted\") VALUES (...) RETURNIN"
+      },
+      {
+       "count": 17,
+       "sql": "SELECT \"analytics_usertopicperformance\".\"id\", \"analytics_usertopicperformance\".\"user_id\", \"analytics_usertopicperformance\".\"topic_id\", \"analytics_usertopicperformance\".\"subject_id\", \"analytics_usertopicperformance\".\"tota"
+      },
+      {
+       "count": 8,
+       "sql": "SELECT \"questions_mistakenotebook\".\"id\", \"questions_mistakenotebook\".\"user_id\", \"questions_mistakenotebook\".\"question_id\", \"questions_mistakenotebook\".\"selected_answer\", \"questions_mistakenotebook\".\"correct_answer\", \"que"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "analytics.weak-topics",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/weak-topics/",
+   "first_ms": 13.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 2.3,
+     "wall_p50_ms": 8.6,
+     "wall_p95_ms": 15.2,
+     "bytes": 54,
+     "gzip_bytes": 59,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 2.37,
+     "wall_p50_ms": 8.8,
+     "wall_p95_ms": 10.1,
+     "bytes": 54,
+     "gzip_bytes": 59,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.topic-performance",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/topic-performance/",
+   "first_ms": 9.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.75,
+     "wall_p50_ms": 6.6,
+     "wall_p95_ms": 8.7,
+     "bytes": 2,
+     "gzip_bytes": 22,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.78,
+     "wall_p50_ms": 6.6,
+     "wall_p95_ms": 10.7,
+     "bytes": 2,
+     "gzip_bytes": 22,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.performance-trend",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/performance-trend/",
+   "first_ms": 10.8,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.63,
+     "wall_p50_ms": 6.8,
+     "wall_p95_ms": 9.1,
+     "bytes": 641,
+     "gzip_bytes": 181,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.74,
+     "wall_p50_ms": 7.0,
+     "wall_p95_ms": 11.5,
+     "bytes": 641,
+     "gzip_bytes": 181,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.score-prediction",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/score-prediction/",
+   "first_ms": 14.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 8,
+     "queries_min": 8,
+     "queries_max": 8,
+     "statements": 8,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 8,
+     "duplicates": 0,
+     "sql_ms": 2.66,
+     "wall_p50_ms": 9.4,
+     "wall_p95_ms": 10.8,
+     "bytes": 376,
+     "gzip_bytes": 249,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 8,
+     "queries_min": 8,
+     "queries_max": 8,
+     "statements": 8,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 8,
+     "duplicates": 0,
+     "sql_ms": 2.67,
+     "wall_p50_ms": 9.2,
+     "wall_p95_ms": 12.8,
+     "bytes": 376,
+     "gzip_bytes": 249,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.heatmap",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/heatmap/",
+   "first_ms": 10.1,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.29,
+     "wall_p50_ms": 5.8,
+     "wall_p95_ms": 11.3,
+     "bytes": 111,
+     "gzip_bytes": 115,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 5,
+     "queries_min": 5,
+     "queries_max": 5,
+     "statements": 5,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 5,
+     "duplicates": 0,
+     "sql_ms": 1.31,
+     "wall_p50_ms": 5.5,
+     "wall_p95_ms": 15.0,
+     "bytes": 111,
+     "gzip_bytes": 115,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.leaderboard",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/leaderboard/",
+   "first_ms": 79.2,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 20,
+     "queries_min": 20,
+     "queries_max": 20,
+     "statements": 20,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 19,
+     "duplicates": 1,
+     "sql_ms": 6.38,
+     "wall_p50_ms": 21.0,
+     "wall_p95_ms": 24.9,
+     "bytes": 559,
+     "gzip_bytes": 320,
+     "top_duplicates": [
+      {
+       "count": 2,
+       "sql": "SELECT \"analytics_studystreak\".\"user_id\" AS \"user_id\", \"analytics_studystreak\".\"xp_points\" AS \"xp_points\" FROM \"analytics_studystreak\" WHERE \"analytics_studystreak\".\"user_id\" IN (...)"
+      }
+     ]
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 4,
+     "queries_min": 4,
+     "queries_max": 4,
+     "statements": 4,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 4,
+     "duplicates": 0,
+     "sql_ms": 1.08,
+     "wall_p50_ms": 4.6,
+     "wall_p95_ms": 6.2,
+     "bytes": 559,
+     "gzip_bytes": 320,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.dashboard_v3",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/dashboard_v3/",
+   "first_ms": 36.0,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 8,
+     "queries_min": 8,
+     "queries_max": 8,
+     "statements": 8,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 8,
+     "duplicates": 0,
+     "sql_ms": 16.27,
+     "wall_p50_ms": 25.0,
+     "wall_p95_ms": 32.1,
+     "bytes": 1119,
+     "gzip_bytes": 437,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 4,
+     "queries_min": 4,
+     "queries_max": 4,
+     "statements": 4,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 4,
+     "duplicates": 0,
+     "sql_ms": 1.17,
+     "wall_p50_ms": 5.2,
+     "wall_p95_ms": 6.6,
+     "bytes": 1118,
+     "gzip_bytes": 437,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "analytics.dashboard",
+   "user": "premium",
+   "method": "GET",
+   "path": "/api/analytics/dashboard/",
+   "first_ms": 12.1,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 9,
+     "queries_min": 9,
+     "queries_max": 9,
+     "statements": 9,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 9,
+     "duplicates": 0,
+     "sql_ms": 2.8,
+     "wall_p50_ms": 10.2,
+     "wall_p95_ms": 14.9,
+     "bytes": 304,
+     "gzip_bytes": 205,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 4,
+     "queries_min": 4,
+     "queries_max": 4,
+     "statements": 4,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 4,
+     "duplicates": 0,
+     "sql_ms": 1.02,
+     "wall_p50_ms": 4.4,
+     "wall_p95_ms": 44.5,
+     "bytes": 304,
+     "gzip_bytes": 205,
+     "top_duplicates": []
+    }
+   }
+  },
+  {
+   "key": "ai.tutor",
+   "user": "premium",
+   "method": "POST",
+   "path": "/api/ai/tutor/",
+   "first_ms": 4379.9,
+   "phases": {
+    "cold": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 33.39,
+     "wall_p50_ms": 86.8,
+     "wall_p95_ms": 91.2,
+     "bytes": 1216,
+     "gzip_bytes": 663,
+     "top_duplicates": []
+    },
+    "warm": {
+     "runs": 10,
+     "status": 200,
+     "statuses": {
+      "200": 10
+     },
+     "queries": 6,
+     "queries_min": 6,
+     "queries_max": 6,
+     "statements": 6,
+     "writes": 0,
+     "savepoints": 0,
+     "templates": 6,
+     "duplicates": 0,
+     "sql_ms": 33.07,
+     "wall_p50_ms": 85.5,
+     "wall_p95_ms": 92.1,
+     "bytes": 1216,
+     "gzip_bytes": 663,
+     "top_duplicates": []
+    }
+   }
+  }
+ ],
+ "flows": [
+  {
+   "flow": "dashboard (student)",
+   "phase": "warm",
+   "requests": 5,
+   "total_queries": 53,
+   "critical_path_queries": 30,
+   "critical_path_ms": 36.8,
+   "missing": []
+  },
+  {
+   "flow": "bank question open (premium)",
+   "phase": "warm",
+   "requests": 3,
+   "total_queries": 42,
+   "critical_path_queries": 19,
+   "critical_path_ms": 37.6,
+   "missing": []
+  },
+  {
+   "flow": "practice answer + reveal (premium)",
+   "phase": "warm",
+   "requests": 9,
+   "total_queries": 135,
+   "critical_path_queries": 53,
+   "critical_path_ms": 58.1,
+   "missing": []
+  },
+  {
+   "flow": "test submit + review, 120 questions (premium)",
+   "phase": "warm",
+   "requests": 2,
+   "total_queries": 913,
+   "critical_path_queries": 913,
+   "critical_path_ms": 467.2,
+   "missing": []
+  },
+  {
+   "flow": "dashboard (student)",
+   "phase": "cold",
+   "requests": 5,
+   "total_queries": 65,
+   "critical_path_queries": 33,
+   "critical_path_ms": 40.5,
+   "missing": []
+  },
+  {
+   "flow": "bank question open (premium)",
+   "phase": "cold",
+   "requests": 3,
+   "total_queries": 42,
+   "critical_path_queries": 19,
+   "critical_path_ms": 38.9,
+   "missing": []
+  },
+  {
+   "flow": "practice answer + reveal (premium)",
+   "phase": "cold",
+   "requests": 9,
+   "total_queries": 136,
+   "critical_path_queries": 53,
+   "critical_path_ms": 74.3,
+   "missing": []
+  },
+  {
+   "flow": "test submit + review, 120 questions (premium)",
+   "phase": "cold",
+   "requests": 2,
+   "total_queries": 913,
+   "critical_path_queries": 913,
+   "critical_path_ms": 475.3,
+   "missing": []
+  }
+ ],
+ "boot": {
+  "relink_fixture_images_dry_run_ms": 1259.9,
+  "relink_fixture_images_statements": 2
+ }
+}

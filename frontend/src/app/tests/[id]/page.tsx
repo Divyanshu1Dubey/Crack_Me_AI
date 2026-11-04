@@ -28,6 +28,9 @@ interface QuestionImage {
     file_url?: string | null;
     url?: string | null;
     caption?: string | null;
+    // Neutral description shown before the answer (review rows, questions/image_context.py).
+    alt_text?: string | null;
+    role?: string | null;
     modality?: string | null;
     modality_subtype?: string | null;
     page_number?: number;
@@ -159,6 +162,81 @@ function premiumGateFrom(err: any): PremiumGate | null {
 }
 
 const AI_UNAVAILABLE_NOTICE = 'AI is unavailable right now. Please try again in a little while.';
+
+// ─── Review media ────────────────────────────────────────────────────
+// The exam payload (/start/) carries no answer media for anyone: no
+// explanation figures, no explanation video. After submit, /review/ rows
+// carry them (tests_engine/views.py _review_media): `stem_images` for every
+// row, `explanation_images` (signed URLs) and `video_url` / `video_status` /
+// `video_thumbnail` / `video_subtitles_url` only on rows whose answer the
+// student may see (`answer_locked` rows get [] and null).
+
+const IMAGE_TOKEN_RE = /\[\[img:(\d+)\]\]/g;
+
+/** Ids of the [[img:N]] tokens in `text` (figures FormattedText shows inline). */
+function inlineImageIds(text: string | null | undefined): Set<number> {
+    const ids = new Set<number>();
+    for (const match of (text || '').matchAll(IMAGE_TOKEN_RE)) ids.add(Number(match[1]));
+    return ids;
+}
+
+/** The figures of one review question: the review row's lists, the exam
+ *  payload's stem figures for an older review payload, and explanation
+ *  figures only from the review row of an unlocked question. */
+function reviewFigures(rq: Question | undefined, rd: any): { stem: QuestionImage[]; explanation: QuestionImage[] } {
+    const stem: QuestionImage[] = Array.isArray(rd?.stem_images)
+        ? rd.stem_images
+        : Array.isArray(rq?.stem_images) && rq.stem_images.length > 0
+            ? rq.stem_images
+            : (rq?.images || []).filter((img) => img.role !== 'explanation');
+    const explanation: QuestionImage[] = rd?.answer_locked === true || !Array.isArray(rd?.explanation_images)
+        ? []
+        : rd.explanation_images;
+    return { stem, explanation };
+}
+
+function figureAlt(img: QuestionImage, fallback: string): string {
+    return (img.alt_text || img.caption || '').trim() || fallback;
+}
+
+/** Thumbnails that open the zoom viewer. */
+function FigureGrid({ figures, fallbackAlt, onZoom, showCaptions = false }: {
+    figures: QuestionImage[];
+    fallbackAlt: string;
+    onZoom: (img: QuestionImage) => void;
+    showCaptions?: boolean;
+}) {
+    if (figures.length === 0) return null;
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {figures.map((img) => (
+                <figure key={img.id} className="min-w-0">
+                    <button
+                        type="button"
+                        onClick={() => onZoom(img)}
+                        aria-label={`Zoom: ${figureAlt(img, fallbackAlt)}`}
+                        className="relative group block w-full rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <img
+                            src={img.url || img.file_url || ''}
+                            alt={figureAlt(img, fallbackAlt)}
+                            loading="lazy"
+                            className="w-full h-auto object-contain bg-white max-h-105"
+                        />
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-linear-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
+                            <span className="text-white text-xs flex items-center gap-1">
+                                <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
+                            </span>
+                        </div>
+                    </button>
+                    {showCaptions && img.caption && (
+                        <figcaption className="mt-1 text-xs text-muted-foreground break-words">{img.caption}</figcaption>
+                    )}
+                </figure>
+            ))}
+        </div>
+    );
+}
 
 // Result-card fields derived from a /review/ payload (used when the submit
 // response was lost and the server reports the attempt as already submitted).
@@ -626,6 +704,16 @@ export default function TakeTestPage() {
         const answerLocked = rd?.answer_locked === true;
         const correctAns = rd?.correct_answer || rq?.correct_answer;
         const explanation = answerLocked ? '' : (rd?.explanation || rq?.explanation);
+        // Figures and the explanation video come from the review row (the
+        // exam payload has none of the answer media).
+        const figures = reviewFigures(rq, rd);
+        const explanationText = explanation ? extractAnalysisFromJson(String(explanation)) : '';
+        const stemInlineIds = inlineImageIds(rq?.question_text);
+        const explanationInlineIds = inlineImageIds(explanationText);
+        const stemGallery = figures.stem.filter((img) => !stemInlineIds.has(img.id));
+        const explanationGallery = figures.explanation.filter((img) => !explanationInlineIds.has(img.id));
+        const zoomFigures = [...stemGallery, ...explanationGallery];
+        const reviewVideoUrl = !answerLocked && rd?.video_status === 'completed' && rd?.video_url ? String(rd.video_url) : '';
         const aiExp = reviewAiExplanations[reviewIdx];
         // The AI analysis explains the answer, so it is locked with it; the
         // server can also refuse it (402) for this question.
@@ -754,32 +842,13 @@ export default function TakeTestPage() {
                         {/* Question Text — rendered with markdown for proper bold/list formatting */}
                         <div className="p-5 md:p-6">
                             <div className="text-base md:text-lg font-medium leading-relaxed mb-6" style={{ color: 'var(--text-primary)' }}>
-                                <FormattedText text={rq?.question_text || ''} />
+                                <FormattedText text={rq?.question_text || ''} images={figures.stem} />
                             </div>
 
-                            {/* Images */}
-                            {rq?.images && rq.images.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                                    {rq.images.map(img => (
-                                        <button
-                                            key={img.id}
-                                            type="button"
-                                            onClick={() => setZoomImg(img)}
-                                            className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none"
-                                        >
-                                            <img
-                                                src={img.url || img.file_url || ''}
-                                                alt={img.caption || `Question image`}
-                                                loading="lazy"
-                                                className="w-full h-auto object-contain bg-white max-h-105"
-                                            />
-                                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-linear-to-t from-black/60 to-transparent transition-opacity flex items-end p-3">
-                                                <span className="text-white text-xs flex items-center gap-1">
-                                                    <ZoomIn className="w-3.5 h-3.5" /> Tap to zoom
-                                                </span>
-                                            </div>
-                                        </button>
-                                    ))}
+                            {/* Question figures (those not already shown inline in the stem) */}
+                            {stemGallery.length > 0 && (
+                                <div className="mb-6">
+                                    <FigureGrid figures={stemGallery} fallbackAlt="Question figure" onZoom={setZoomImg} />
                                 </div>
                             )}
 
@@ -875,28 +944,53 @@ export default function TakeTestPage() {
                         </div>
                     </div>
 
-                    {/* VIDEO PLAYER */}
-                    {rq?.video_url && rq?.video_status === 'completed' && (
+                    {/* VIDEO PLAYER — from the review row (entitled viewers only) */}
+                    {reviewVideoUrl && (
                         <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
                             <div className="p-1">
                                 <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
-                                <PremiumVideoPlayer 
-                                    src={rq.video_url} 
-                                    subtitlesSrc={rq.video_subtitles_url}
-                                    poster={rq.video_thumbnail}
+                                <PremiumVideoPlayer
+                                    src={reviewVideoUrl}
+                                    subtitlesSrc={rd?.video_subtitles_url || undefined}
+                                    poster={rd?.video_thumbnail || undefined}
                                     className="w-full max-h-125"
                                 />
+                                <p className="px-4 py-2 text-xs">
+                                    <a href={reviewVideoUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                        Open the video in a new tab
+                                    </a>
+                                </p>
                             </div>
                         </div>
                     )}
 
                     {/* ═══ DB EXPLANATION (always show first if available) ═══ */}
-                    {explanation && (
+                    {explanationText && (
                         <div className="explanation-card explanation-card-green animate-fadeInUp">
                             <div className="explanation-card-accent green"></div>
                             <div className="p-5 pl-6">
                                 <h4 className="explanation-card-title green"><CheckCircle className="w-4 h-4" /> Answer Explanation</h4>
-                                <div className="text-sm leading-relaxed mt-2 prose prose-sm max-w-none" style={{ color: 'var(--text-secondary)' }}><FormattedText text={extractAnalysisFromJson(String(explanation))} /></div>
+                                <div className="text-sm leading-relaxed mt-2 prose prose-sm max-w-none" style={{ color: 'var(--text-secondary)' }}>
+                                    <FormattedText text={explanationText} images={[...figures.stem, ...figures.explanation]} />
+                                </div>
+                                {explanationGallery.length > 0 && (
+                                    <div className="mt-4">
+                                        <h5 className="mb-2 text-xs font-semibold text-foreground flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5" aria-hidden="true" /> Explanation figures</h5>
+                                        <FigureGrid figures={explanationGallery} fallbackAlt="Explanation figure" onZoom={setZoomImg} showCaptions />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    {/* Explanation figures of a question without a written explanation */}
+                    {!explanationText && explanationGallery.length > 0 && (
+                        <div className="explanation-card explanation-card-green animate-fadeInUp">
+                            <div className="explanation-card-accent green"></div>
+                            <div className="p-5 pl-6">
+                                <h4 className="explanation-card-title green"><ImageIcon className="w-4 h-4" aria-hidden="true" /> Explanation figures</h4>
+                                <div className="mt-3">
+                                    <FigureGrid figures={explanationGallery} fallbackAlt="Explanation figure" onZoom={setZoomImg} showCaptions />
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1180,7 +1274,8 @@ export default function TakeTestPage() {
             </div>
             {zoomImg && (
                 <ImageViewer
-                    images={(questions[reviewIdx]?.images || []).map(img => ({
+                    // The figures this review question shows (question side, then explanation).
+                    images={zoomFigures.map(img => ({
                         id: img.id,
                         file_url: img.url || img.file_url || '',
                         caption: img.caption,
@@ -1193,7 +1288,7 @@ export default function TakeTestPage() {
                         width: img.width,
                         height: img.height,
                     }))}
-                    startIndex={questions[reviewIdx]?.images?.findIndex(i => i.id === zoomImg.id) || 0}
+                    startIndex={Math.max(0, zoomFigures.findIndex(i => i.id === zoomImg.id))}
                     open={!!zoomImg}
                     onClose={() => setZoomImg(null)}
                 />

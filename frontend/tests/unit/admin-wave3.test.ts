@@ -500,7 +500,8 @@ test('wiring: scope=all announcements, 100 import jobs, dry-run AI Generate, typ
   // A refused (expired) publish shows the helper's sentence and reloads the stale list.
   assert.match(admin, /const expiredNotice = campaignPublishErrorNotice\(err\?\.response\?\.data, id\);\s*if \(expiredNotice\) \{\s*setCampaignMessage\(expiredNotice\);[\s\S]{0,160}?fetchCampaigns\(\);\s*return;/);
   assert.match(admin, /adminTestsRequests\.isCurrent\(ticket\)/);
-  assert.match(admin, /Posts here are not shown on the public blog yet/);
+  assert.match(admin, /router\.push\('\/admin\/blog'\)/);
+  assert.doesNotMatch(admin, /Posts here are not shown on the public blog yet/);
   assert.match(admin, /Regenerate AI and AI Explain/);
   assert.doesNotMatch(admin, /AI Explain does not use it yet/);
 });

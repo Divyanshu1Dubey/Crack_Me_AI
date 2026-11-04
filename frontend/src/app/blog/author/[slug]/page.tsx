@@ -5,7 +5,7 @@ import { ChevronLeft, GraduationCap, User } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, personSchema, jsonLdString } from '@/lib/metadata';
-import { getAllPosts } from '@/lib/blog';
+import { authorSlugsOf, loadBlogCatalog } from '@/lib/blog';
 import { getAuthor, RETIRED_AUTHOR_SLUGS } from '@/content/authors';
 import { siteUrl } from '@/lib/seo';
 
@@ -13,14 +13,14 @@ interface PageProps {
     params: Promise<{ slug: string }>;
 }
 
+// Posts by the profile from the published posts in the database
+// (/admin/blog), regenerated at most every 5 minutes.
+export const revalidate = 300;
+export const dynamicParams = true;
+
 /** Pre-render every author profile that has at least one post. */
 export async function generateStaticParams() {
-    const slugs = new Set<string>();
-    for (const p of getAllPosts()) {
-        if (p.authorId) slugs.add(p.authorId);
-        if (p.reviewedBy) slugs.add(p.reviewedBy);
-    }
-    return Array.from(slugs).map((slug) => ({ slug }));
+    return authorSlugsOf(await loadBlogCatalog()).map((slug) => ({ slug }));
 }
 
 /**
@@ -53,7 +53,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
     // fallback `getAuthor` returns the editorial team for unknown slugs).
     if (!author || author.slug !== slug) notFound();
 
-    const all = getAllPosts();
+    const all = await loadBlogCatalog();
     const posts = all.filter((p) => p.authorId === author.slug);
     const reviewed = all.filter((p) => p.reviewedBy === author.slug && p.authorId !== author.slug);
 

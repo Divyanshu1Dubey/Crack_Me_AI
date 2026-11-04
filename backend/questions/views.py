@@ -307,22 +307,30 @@ def _question_explanation_payload(question) -> dict:
     """
     from .ai_per_question import usable_ai_text
 
+    from .serializers import STALE_EXPLANATION_NOTICE, explanation_for_another_key
+
     override = (question.admin_explanation_override or '').strip()
-    explanation = _clean_text(override or question.explanation or '')
+    other_key = explanation_for_another_key(question)
+    # Text written for another key than the current one (a corrected key) is not shown: the student
+    # gets the key with its option text and a notice instead.
+    explanation = '' if other_key else _clean_text(override or question.explanation or '')
     effective = _clean_text(usable_ai_text(effective_explanation_for(question)) or '')
     mnemonic = (
         usable_ai_text(question.admin_mnemonic_override)
         or usable_ai_text(question.ai_mnemonic)
         or usable_ai_text(question.mnemonic)
     )
-    return {
+    payload = {
         'explanation': explanation,
         'effective_explanation': (
             effective.strip() or explanation.strip() or _answer_fallback_explanation(question)
         ),
-        'explanation_overridden': bool(question.lock_explanation or override),
+        'explanation_overridden': bool(question.lock_explanation or override) and not other_key,
         'mnemonic': _clean_text(mnemonic or ''),
     }
+    if other_key:
+        payload['explanation_notice'] = STALE_EXPLANATION_NOTICE
+    return payload
 
 
 class ExamTrackViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1791,13 +1799,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     content_changed = content_changed or _stored_value_differs(getattr(question, field, None), value)
                     setattr(question, field, value)
                     changed.append(field)
-                # Optionally store the admin's answer: a human decision, so it
-                # is locked against AI regeneration, verifiers and re-imports
-                # (as a PATCH of correct_answer is).
+                # Optionally store the admin's answer: a human decision, made through the one key
+                # writer below (AnswerKeyChange, audit) and locked against AI regeneration,
+                # verifiers and re-imports.
+                key_to_set = ''
                 if update_answer and correct_answer != (question.correct_answer or '').strip().upper():
-                    question.correct_answer = correct_answer
-                    question.lock_answer = True
-                    changed += ['correct_answer', 'lock_answer']
+                    key_to_set = correct_answer
                     content_changed = True
                 # QE-03: unreviewed AI text must not sit under an earlier
                 # "Verified by Admin" badge. Saving new content clears the
@@ -1812,6 +1819,18 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     verification_cleared = True
                 # Partial save: never write back stale copies of other fields.
                 question.save(update_fields=changed + ['updated_at'])
+                if key_to_set:
+                    from .content_hashes import stem_hash as _stem_hash
+                    from .editorial import change_answer_key
+                    previous = (question.correct_answer or '').strip().upper()[:1] or '-'
+                    change_answer_key(
+                        question, key_to_set, actor=request.user, source='generate_explanation', evidence=[],
+                        reason=f'Key set by an admin in the explanation generator ({previous} -> {key_to_set}).')
+                    # The text just generated was written for the new key: AI text for that key, not stale.
+                    Question.objects.filter(pk=question.pk).update(
+                        lock_answer=True, explanation_for_key=key_to_set, explanation_status='ai_generated',
+                        explanation_status_reason='', explanation_origin='ai',
+                        explanation_stem_hash=_stem_hash(question))
                 log_operation('aiservice:generate-explanation')
             question.refresh_from_db()
 
@@ -1893,7 +1912,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
             snapshot=self._serialize_revision_state(question),
         )
 
-    def _apply_revision_state(self, question, snapshot):
+    def _apply_revision_state(self, question, snapshot, *, actor=None, revision_id=None) -> str:
+        """Restore ``snapshot`` onto ``question``. The key goes through ``change_answer_key`` (the
+        one key writer: AnswerKeyChange, audit); a revision without a valid key keeps the current
+        one. Content hooks fire when the stem or an option changed. Returns 'kept' when the key
+        could not be restored, else ''."""
+        from .content_hashes import stem_hash, valid_key
+        from .content_hooks import on_question_changed
+        from .editorial import change_answer_key
+
+        snapshot = dict(snapshot)
+        recorded = 'correct_answer' in snapshot
+        snap_key = valid_key(snapshot.pop('correct_answer', '') or '')
+        old_key, old_hash = question.correct_answer or '', stem_hash(question)
         for field, value in snapshot.items():
             if field == 'subject_id':
                 question.subject_id = value
@@ -1902,6 +1933,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
             else:
                 setattr(question, field, value)
         question.save()
+        key_note = ''
+        current = valid_key(question.correct_answer)
+        if snap_key and snap_key != current:
+            change_answer_key(question, snap_key, actor=actor, source='undo_revision', evidence=[],
+                              reason=f'Undo to revision #{revision_id}: the key it recorded.')
+        elif recorded and not snap_key and current:
+            key_note = 'kept'   # the revision had no valid key: the current key stays
+        if stem_hash(question) != old_hash:
+            transaction.on_commit(lambda: on_question_changed(
+                question, old_key=old_key, old_stem_hash=old_hash, reason=f'undo to revision #{revision_id}'))
+        return key_note
 
     def update(self, request, *args, **kwargs):
         with transaction.atomic():
@@ -3224,9 +3266,15 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No revision snapshot found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Save current state before undo for future revert.
-        self._capture_revision_snapshot(question, request.user, reason=f'Before undo to revision #{target.id}')
-        self._apply_revision_state(question, target.snapshot or {})
-        return Response({'message': 'Question reverted to selected revision snapshot', 'question_id': question.id, 'revision_id': target.id})
+        with transaction.atomic():
+            self._capture_revision_snapshot(question, request.user, reason=f'Before undo to revision #{target.id}')
+            key_note = self._apply_revision_state(question, target.snapshot or {}, actor=request.user,
+                                                  revision_id=target.id)
+        body = {'message': 'Question reverted to selected revision snapshot', 'question_id': question.id,
+                'revision_id': target.id}
+        if key_note == 'kept':
+            body['key_kept'] = True   # the revision had no valid key; the current key stays
+        return Response(body)
 
     @action(detail=True, methods=['post'], url_path='resolve-dispute')
     def resolve_dispute(self, request, pk=None):
@@ -3244,18 +3292,33 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if corrected_answer not in ('A', 'B', 'C', 'D'):
             return Response({'error': 'corrected_answer must be one of A, B, C, D.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        justification_text = str(justification).strip()
+        if len(justification_text) < 10:
+            return Response({'error': 'justification must be at least 10 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .content_hashes import valid_key
+        from .editorial import _record_decision, change_answer_key
+
         old_answer = question.correct_answer
+        key_changes = corrected_answer != valid_key(old_answer)
         with transaction.atomic():
             self._capture_revision_snapshot(
                 question, request.user, reason=f'Before resolve-dispute ({old_answer} -> {corrected_answer})',
             )
-            question.correct_answer = corrected_answer
+            if key_changes:
+                # The one key writer: AnswerKeyChange with the justification, audit, content hooks.
+                change_answer_key(question, corrected_answer, actor=request.user, reason=justification_text,
+                                  evidence=[{'kind': 'note', 'text': justification_text[:600]}],
+                                  source='resolve_dispute')
+                question.refresh_from_db()
             question.is_disputed = False
             # A human decision: protect it from AI regeneration, verifiers
             # (verify_answers --fix) and fixture re-imports.
             question.lock_answer = True
             question.admin_edited = True
-            question.save(update_fields=['correct_answer', 'is_disputed', 'lock_answer', 'admin_edited', 'updated_at'])
+            question.save(update_fields=['is_disputed', 'lock_answer', 'admin_edited', 'updated_at'])
+            if not key_changes:
+                # The dispute is closed by confirming the key: a decision for the answer-key audit.
+                _record_decision(question, actor=request.user, resolution='key_confirmed', reason=justification_text)
 
         try:
             from accounts.views import create_admin_audit_log
@@ -3313,11 +3376,30 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # we can return a 409 Response directly. (Returning a Response from
         # perform_update is silently discarded by DRF and the save is lost.)
         self._normalize_question_payload(serializer.validated_data)
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
+        from .content_hashes import stem_hash, valid_key
+        from .content_hooks import on_question_changed
+
+        instance = serializer.instance
         if 'correct_answer' in serializer.validated_data:
-            serializer.validated_data['lock_answer'] = True
+            # The key changes only through change-key (questions.editorial.change_answer_key: old key,
+            # who, why, evidence, audit). An unchanged key in the form is simply not written again.
+            new_key = (serializer.validated_data.get('correct_answer') or '').strip().upper()[:1]
+            if new_key != valid_key(instance.correct_answer):
+                raise DRFValidationError({'correct_answer': [
+                    'Change the answer key with POST /api/questions/<id>/change-key/ '
+                    '(it records the old key, the reason and the evidence).']})
+            serializer.validated_data.pop('correct_answer')
         if 'explanation' in serializer.validated_data:
             serializer.validated_data['lock_explanation'] = True
+        old_key, old_hash = instance.correct_answer or '', stem_hash(instance)
         serializer.save()
+        if stem_hash(serializer.instance) != old_hash:
+            # Evidence, the answer-key audit and topic notes react to a changed stem / option.
+            saved = serializer.instance
+            transaction.on_commit(lambda: on_question_changed(
+                saved, old_key=old_key, old_stem_hash=old_hash, reason='question edited'))
 
     @staticmethod
     def _if_match_timestamp(raw):
@@ -4081,9 +4163,16 @@ def _image_serve_allowed(request, img) -> bool:
     """Stem figures: always. Explanation figures (runtime role): with a
     valid signed token for this image id, or when the caller's own
     credentials (an API client's Authorization header, a staff session)
-    make it entitled to the question's answer. See QuestionImageServeView."""
+    make it entitled to the question's answer. See QuestionImageServeView.
+
+    The runtime role is ``questions.image_context.runtime_role``: a token in
+    the stem or an option makes the image a stem-side figure, whatever its
+    stored role (an option figure also cited by the explanation used to need
+    a token, so the option showed "missing image" before the answer)."""
+    from .image_context import runtime_role
+
     question = img.question
-    if resolve_runtime_image_role(question, img) != "explanation":
+    if runtime_role(question, img) != "explanation":
         return True
     if image_token_is_valid(img.id, request.query_params.get(IMAGE_TOKEN_PARAM)):
         return True
@@ -4147,8 +4236,9 @@ class QuestionImageServeView(APIView):
             .select_related("question")
             .only(
                 "id", "question", "file", "url", "mime", "width", "height", "role",
-                # resolve_runtime_image_role + user_can_view_answer
-                "question__question_text", "question__explanation",
+                # image_context.runtime_role + user_can_view_answer
+                "question__question_text", "question__option_a", "question__option_b",
+                "question__option_c", "question__option_d", "question__explanation",
                 "question__concept_explanation", "question__mnemonic",
                 "question__is_scholarship_eligible",
             )
@@ -4247,7 +4337,10 @@ class QuestionImageServeView(APIView):
                 if raster_mime == "image/jpeg" or raster_mime == "image/png" and target_w:
                     buf = BytesIO()
                     save_kwargs = {"format": "JPEG", "quality": quality, "optimize": True}
-                    pil_img = pil_img.convert("RGB")
+                    # Transparency onto white: a plain convert("RGB") made the
+                    # background of line diagrams / ECG PNGs black.
+                    from .image_context import flatten_to_rgb
+                    pil_img = flatten_to_rgb(pil_img)
                     pil_img.save(buf, **save_kwargs)
                     out_mime = "image/jpeg"
                 else:
@@ -4325,15 +4418,14 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
     """Admin-only CRUD for `QuestionImage`. Supports direct upload via
     `POST /questions/images/` with multipart `question_id` + `file`.
 
-    **Auth**: `IsAdminUser`. Non-admins get 403.
-    **Optimistic lock**: PATCH / DELETE accept `If-Match: <updated_at>`
-    on the parent Question to prevent concurrent overwrites — but since
-    images live on their own resource, image PATCH uses image
-    `updated_at` via the same `If-Match` header.
+    **Auth**: the question editor's admins (`IsControlTowerAdmin`: role
+    'admin' or superuser) and staff accounts (`IsAdminUser`, the old rule).
+    A role-admin account without `is_staff` could edit a question but got
+    403 on its images. Others get 403. (No If-Match lock on images.)
     """
     queryset = QuestionImage.objects.all().order_by("-id")
     serializer_class = QuestionImageSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsControlTowerAdmin | permissions.IsAdminUser]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def create(self, request, *args, **kwargs):
@@ -4418,34 +4510,58 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
 from rest_framework.permissions import IsAdminUser
 
 class TopicNoteViewSet(viewsets.ModelViewSet):
-    """Admin CRUD for topic-wise notes compiled from PYQ explanations.
+    """Admin CRUD for topic notes (``topic-notes/library/``): manual notes and
+    the drafts the PYQ builder writes (questions/notes_builder.py).
 
-    The notes-generation pipeline groups questions by (subject, topic, exam_type)
-    and synthesizes their reviewed explanations into concise revision notes.
-    This viewset exposes the resulting notes for admin editing and publishing.
+    Rows carry the build state (questions.serializers_notes.AdminTopicNoteSerializer).
+    A hand edit of a built note's content turns it into a manual note: its
+    stored markdown is then what students read (built notes are re-rendered
+    from their structure, which would silently drop the edit), the free plan
+    sees it only when every source PYQ is free, and a rebuild replaces it.
+    ``generate/`` rebuilds from PYQs when TOPIC_NOTES_BUILDER is on and keeps
+    the LLM generator otherwise.
     """
     queryset = TopicNote.objects.select_related('subject', 'topic', 'created_by').order_by('-updated_at')
     permission_classes = [IsControlTowerAdmin]
     serializer_class = TopicNoteSerializer
-    filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated']
+    filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated', 'is_combined', 'is_stale',
+                        'generation_method']
     search_fields = ['title', 'content']
+
+    def get_serializer_class(self):
+        from questions.serializers_notes import AdminTopicNoteSerializer
+        return AdminTopicNoteSerializer
 
     def perform_create(self, serializer):
         note = serializer.save(created_by=self.request.user)
         _refresh_topic_note_derived_fields(note)
 
     def perform_update(self, serializer):
-        note = serializer.save()
+        from questions import notes_builder as nb
+
+        note = serializer.instance
+        content = serializer.validated_data.get('content')
+        extra = {}
+        if content is not None and content != (note.content or '') and nb.is_built(note):
+            extra = {'builder_version': '', 'generation_method': 'manual'}
+        note = serializer.save(**extra)
         _refresh_topic_note_derived_fields(note)
 
     @action(detail=True, methods=["post"], url_path="generate")
     def generate_from_topic(self, request, pk=None):
         """Generate a note from all questions in the same topic.
 
-        Uses the AI to synthesize explanations from questions sharing
-        this note's subject + topic + exam_type into a concise note.
+        With TOPIC_NOTES_BUILDER on: the PYQ builder (no AI provider needed;
+        body ``mode``, ``include_provisional``, ``verified_only``, ``force``,
+        ``dry_run``; questions.views_notes.generate_response). Otherwise the
+        AI synthesizes explanations from questions sharing this note's
+        subject + topic + exam_type into a concise note.
         """
         note = self.get_object()
+        from questions import notes_builder as nb
+        if nb.builder_enabled():
+            from questions.views_notes import generate_response
+            return generate_response(request, note, shape='library')
         from ai_engine.services import AIService
         from questions.models import Question
 
@@ -4735,29 +4851,32 @@ class TopicNoteCreateView(APIView):
 
 class PublishedTopicNoteListView(generics.ListAPIView):
     """Read-only list of published topic notes for students
-    (``GET /api/questions/topic-notes/published/?subject=&topic=&exam_type=``).
+    (``GET /api/questions/topic-notes/published/?subject=&topic=&exam_type=&q=&id=``).
 
     The admin CRUD is admin-only, so the student "Topic Notes" page had no
     way to read notes even when they were marked ``is_published``.
+
+    A note restates answers, so every row is filtered for the viewer
+    (questions.views_notes.published_list_response): free accounts read the
+    points of built notes whose PYQs are all free showcase questions, and a
+    manual note citing premium PYQs without its content. This list used to
+    return every note's full content to every signed-in account. The exam
+    filter also returns the cross-exam ('all') notes.
     """
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = TopicNoteSerializer
+    ordering_fields = ['updated_at', 'built_at', 'title']
+
+    def get_serializer_class(self):
+        from questions.serializers_notes import PublishedTopicNoteSerializer
+        return PublishedTopicNoteSerializer
 
     def get_queryset(self):
-        qs = TopicNote.objects.filter(is_published=True, is_active=True).select_related(
-            'subject', 'topic', 'created_by',
-        ).order_by('-updated_at')
-        params = self.request.query_params
-        for param, lookup in (('subject', 'subject_id'), ('topic', 'topic_id')):
-            value = params.get(param)
-            if value not in (None, ''):
-                try:
-                    qs = qs.filter(**{lookup: int(value)})
-                except (TypeError, ValueError):
-                    return qs.none()
-        if params.get('exam_type'):
-            qs = qs.filter(exam_type=params['exam_type'])
-        return qs
+        from questions.views_notes import published_queryset
+        return published_queryset(self.request.query_params)
+
+    def list(self, request, *args, **kwargs):
+        from questions.views_notes import published_list_response
+        return published_list_response(self, request)
 
 
 class AITopicNoteGenerationView(APIView):
@@ -4765,11 +4884,22 @@ class AITopicNoteGenerationView(APIView):
 
     Routed as ``topic-notes/<pk>/generate/``; ``topic_note_id`` in the body
     is still accepted for older clients.
+
+    With TOPIC_NOTES_BUILDER on, the note is built from its PYQs instead
+    (questions.views_notes.generate_response: no AI provider needed, never
+    503, the ``ai_heavy`` throttle only for ``mode`` llm / auto); a note the
+    body lookup would create is saved only when the build succeeds.
     """
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'ai_heavy'
 
+    def get_throttles(self):
+        from questions.views_notes import generation_throttles
+        return generation_throttles(self.request, super().get_throttles())
+
     def post(self, request, pk=None):
+        from questions import notes_builder as nb
+        builder = nb.builder_enabled()
         topic_note_id = pk or request.data.get('topic_note_id')
         if topic_note_id:
             try:
@@ -4777,10 +4907,12 @@ class AITopicNoteGenerationView(APIView):
             except (TopicNote.DoesNotExist, TypeError, ValueError):
                 return Response({'error': 'TopicNote not found'}, status=404)
         else:
-            exam_type = request.data.get('exam_type', 'cms')
+            exam_type = request.data.get('exam_type') or 'cms'
             subject_id = request.data.get('subject')
             topic_id = request.data.get('topic')
             title = request.data.get('title', '')
+            if not isinstance(exam_type, str) or exam_type not in dict(TopicNote.EXAM_TYPE_CHOICES) or exam_type == 'all':
+                return Response({'error': 'exam_type is not a single exam'}, status=400)
             if not all([subject_id, topic_id]):
                 return Response({'error': 'subject and topic are required'}, status=400)
             try:
@@ -4796,7 +4928,7 @@ class AITopicNoteGenerationView(APIView):
                 topic_id=topic_id, exam_type=exam_type, is_combined=False,
             ).select_related('subject', 'topic').first()
             if note is None:
-                note = TopicNote.objects.create(
+                note = TopicNote(
                     exam_type=exam_type,
                     subject_id=subject_id,
                     topic_id=topic_id,
@@ -4805,6 +4937,12 @@ class AITopicNoteGenerationView(APIView):
                     content_preview='',
                     created_by=request.user,
                 )
+                if not builder:
+                    note.save()
+
+        if builder:
+            from questions.views_notes import generate_response
+            return generate_response(request, note, shape='note')
 
         if not note.subject or not note.topic:
             return Response({'error': 'This note has no subject/topic to generate from.'}, status=400)

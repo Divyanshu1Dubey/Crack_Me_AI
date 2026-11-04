@@ -37,6 +37,7 @@ import {
     Lock,
 } from 'lucide-react';
 import DiscussionThread from '@/components/DiscussionThread';
+import StudentCitations from '@/components/evidence/StudentCitations';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
 import ImageViewer, { type ViewerImage } from '@/components/image/ImageViewer';
 import { useDock } from '@/context/DockContext';
@@ -1837,8 +1838,15 @@ function ExamQuestionBankInner({
                                                         <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
                                                     </div>
                                                 )}
+                                                {/* The key was corrected and the old explanation is withheld until rewritten. */}
+                                                {typeof detail?.explanation_notice === 'string' && detail.explanation_notice && (
+                                                    <p className="text-xs text-muted-foreground">{detail.explanation_notice}</p>
+                                                )}
                                             </CardContent>
                                         </Card>
+
+                                        {/* Accepted textbook citations (snippets only; nothing when there are none). */}
+                                        <StudentCitations questionId={detail.id} revealed={showAnswer} />
 
                                         {detail?.video_url && detail?.video_status === 'completed' && (
                                             <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">

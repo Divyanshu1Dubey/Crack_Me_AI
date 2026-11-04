@@ -5,20 +5,21 @@ import { BookOpen, ChevronLeft } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import {
-    getAllCategories,
-    getPostsByCategory,
-    categoryToSlug,
-} from '@/lib/blog';
+import { categoriesOf, loadBlogCatalog, postsInCategory } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
 }
 
+// Categories of the published posts in the database (/admin/blog),
+// regenerated at most every 5 minutes; a new category renders on request.
+export const revalidate = 300;
+export const dynamicParams = true;
+
 /** Statically generate a page for every category that has at least one post. */
 export async function generateStaticParams() {
-    return getAllCategories().map((c) => ({ slug: c.slug }));
+    return categoriesOf(await loadBlogCatalog()).map((c) => ({ slug: c.slug }));
 }
 
 /**
@@ -30,7 +31,7 @@ export async function generateStaticParams() {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
-    const cats = getAllCategories();
+    const cats = categoriesOf(await loadBlogCatalog());
     const cat = cats.find((c) => c.slug === slug);
     if (!cat) {
         return buildPageMetadata({
@@ -52,11 +53,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogCategoryPage({ params }: PageProps) {
     const { slug } = await params;
-    const cats = getAllCategories();
+    const all = await loadBlogCatalog();
+    const cats = categoriesOf(all);
     const cat = cats.find((c) => c.slug === slug);
     if (!cat) notFound();
 
-    const posts = getPostsByCategory(cat.slug);
+    const posts = postsInCategory(all, cat.slug);
     const canonicalPath = `/blog/category/${cat.slug}`;
 
     const jsonLd = {

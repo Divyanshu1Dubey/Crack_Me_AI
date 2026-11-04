@@ -1,4 +1,21 @@
+/**
+ * blog.ts — blog post type, the static posts, and the database-backed posts
+ * the public /blog pages render.
+ *
+ * Source of truth: the blog_engine database, edited at /admin/blog. Public
+ * routes call loadBlogCatalog() / loadBlogPost() (server-side fetch with ISR,
+ * BLOG_REVALIDATE_SECONDS). The static modules in src/content/blog are the
+ * seed `manage.py seed_blogs` imports and the fallback `next build` renders
+ * when the API is unreachable; the synchronous get*() helpers read them.
+ */
 import type { ReactNode } from 'react';
+import {
+    DEFAULT_LOCAL_API_URL,
+    DEFAULT_PRODUCTION_API_URL,
+    isKnownUnhealthyApiHost,
+    isLocalhostApiUrl,
+    normalizeApiBaseUrl,
+} from '@/lib/apiBase';
 
 import cmsLast5Days from '@/content/blog/upsc-cms-last-5-days-strategy';
 import cmsNeetPgLastWeek from '@/content/blog/cms-and-neet-pg-last-week-shared-revision';
@@ -240,8 +257,12 @@ export interface BlogPost {
     trending?: boolean;
 }
 
-/** The single source of truth for blog posts. */
-const posts: BlogPost[] = [
+/**
+ * The static posts, in registration order: the seed of the blog database and
+ * the build-time fallback (see "Static posts" below). The public pages read
+ * the database.
+ */
+const registeredPosts: BlogPost[] = [
     // Original 4 posts.
     cms2026Notification,
     cmsLast5Days,
@@ -377,15 +398,34 @@ const posts: BlogPost[] = [
     psmCommunityMedicine,
 ];
 
-// Newest first.
-posts.sort((a, b) => (a.datePublished < b.datePublished ? 1 : -1));
+// Newest first. Posts published on the same day keep the order the site has
+// always shown them in (the most recently registered first); the old in-place
+// sort got that from a comparator that never returned 0.
+const posts: BlogPost[] = registeredPosts
+    .map((post, index) => ({ post, index }))
+    .sort((a, b) => compareDesc(a.post.datePublished, b.post.datePublished) || b.index - a.index)
+    .map(({ post }) => post);
 
-/** All posts, newest first. */
+function compareDesc(a: string, b: string): number {
+    if (a === b) return 0;
+    return a < b ? 1 : -1;
+}
+
+// ── Static posts ────────────────────────────────────────────────────────────
+//
+// The public blog renders the posts in the database (blog_engine, edited at
+// /admin/blog) through loadBlogCatalog / loadBlogPost below. The static
+// modules registered above are what `manage.py seed_blogs` imports
+// (backend/blog_engine/seed_data/static_posts.json, kept in step by
+// tests/unit/blog-seed-snapshot.test.ts) and what `next build` renders when the
+// API cannot be reached. The synchronous helpers below read the static posts.
+
+/** The static posts, newest first. */
 export function getAllPosts(): BlogPost[] {
     return posts;
 }
 
-/** Look up by slug, or undefined. */
+/** A static post by slug, or undefined. */
 export function getPostBySlug(slug: string): BlogPost | undefined {
     return posts.find((p) => p.slug === slug);
 }
@@ -401,51 +441,47 @@ export function postSocialImagePath(post: Pick<BlogPost, 'slug'>): string {
     return `/blog/${post.slug}/opengraph-image`;
 }
 
-/** All post slugs — used by `generateStaticParams`. */
+/** All static post slugs. */
 export function getAllPostSlugs(): string[] {
     return posts.map((p) => p.slug);
 }
 
+/** Catalog a post page attached with linkRelatedPosts (see getRelatedPosts). */
+const relatedCatalogs = new WeakMap<BlogPost, BlogPost[]>();
+
+/**
+ * Let getRelatedPosts(post) pick related posts from `catalog` (the published
+ * posts in the database) instead of the static posts. BlogPostLayout calls
+ * getRelatedPosts(post, 2) itself; the post page links the live catalog to the
+ * post object it renders.
+ */
+export function linkRelatedPosts(post: BlogPost, catalog: BlogPost[]): BlogPost {
+    relatedCatalogs.set(post, catalog);
+    return post;
+}
+
 /** Up to N related posts that share ≥ 1 tag with the source post. */
 export function getRelatedPosts(source: BlogPost, n = 2): BlogPost[] {
-    const sourceTags = new Set(source.tags.map((t) => t.toLowerCase()));
-    const scored = posts
-        .filter((p) => p.slug !== source.slug)
-        .map((p) => {
-            const shared = p.tags.reduce((acc, t) => acc + (sourceTags.has(t.toLowerCase()) ? 1 : 0), 0);
-            return { post: p, shared };
-        })
-        .filter((s) => s.shared > 0)
-        .sort((a, b) => b.shared - a.shared);
-    return scored.slice(0, n).map((s) => s.post);
+    return relatedPostsFrom(relatedCatalogs.get(source) ?? posts, source, n);
 }
 
-/** All unique categories with at least one post. */
+/** All unique static categories with at least one post. */
 export function getAllCategories(): { name: string; slug: string; count: number }[] {
-    const map = new Map<string, number>();
-    posts.forEach((p) => map.set(p.category, (map.get(p.category) ?? 0) + 1));
-    return Array.from(map.entries())
-        .map(([name, count]) => ({
-            name,
-            slug: categoryToSlug(name),
-            count,
-        }))
-        .sort((a, b) => b.count - a.count);
+    return categoriesOf(posts);
 }
 
-/** Posts in a category, newest first. */
+/** Static posts in a category, newest first. */
 export function getPostsByCategory(categorySlug: string): BlogPost[] {
-    return posts.filter((p) => categoryToSlug(p.category) === categorySlug);
+    return postsInCategory(posts, categorySlug);
 }
 
 /**
- * Posts with a given tag, newest first. Matches on the same slug transform
- * the tag pages and tag chips use (tagToSlug), so tags with hyphens or
- * symbols ("INI-CET", "High-Yield", "X-ray", "ACC/AHA") resolve too.
+ * Static posts with a given tag, newest first. Matches on the same slug
+ * transform the tag pages and tag chips use (tagToSlug), so tags with hyphens
+ * or symbols ("INI-CET", "High-Yield", "X-ray", "ACC/AHA") resolve too.
  */
 export function getPostsByTag(tagSlug: string): BlogPost[] {
-    const wanted = tagToSlug(tagSlug);
-    return posts.filter((p) => p.tags.some((t) => tagToSlug(t) === wanted));
+    return postsWithTag(posts, tagSlug);
 }
 
 /**
@@ -455,34 +491,14 @@ export function getPostsByTag(tagSlug: string): BlogPost[] {
  */
 export const MIN_INDEXABLE_TAG_POSTS = 3;
 
-/**
- * All unique tags with their post counts. Tags that differ only in case,
- * spacing or punctuation ("High-Yield Topics" / "high yield topics") share
- * one slug and are merged into a single entry; the first spelling seen is
- * used as the display name. A post is counted once per tag slug.
- */
+/** All unique static tags with their post counts (see tagsOf). */
 export function getAllTags(): { name: string; slug: string; count: number }[] {
-    const map = new Map<string, { name: string; count: number }>();
-    posts.forEach((p) => {
-        const seen = new Set<string>();
-        p.tags.forEach((t) => {
-            const slug = tagToSlug(t);
-            if (!slug || seen.has(slug)) return;
-            seen.add(slug);
-            const entry = map.get(slug);
-            if (entry) entry.count += 1;
-            else map.set(slug, { name: t, count: 1 });
-        });
-    });
-    return Array.from(map.entries())
-        .map(([slug, { name, count }]) => ({ name, slug, count }))
-        .sort((a, b) => b.count - a.count);
+    return tagsOf(posts);
 }
 
-/** Look up a tag (merged across spellings) by its slug. */
+/** Look up a static tag (merged across spellings) by its slug. */
 export function getTagBySlug(tagSlug: string): { name: string; slug: string; count: number } | undefined {
-    const wanted = tagToSlug(tagSlug);
-    return getAllTags().find((t) => t.slug === wanted);
+    return tagOf(posts, tagSlug);
 }
 
 /** Turn a category or tag display name into a URL-safe slug. */
@@ -548,4 +564,466 @@ export function buildAutoToc(markdown: string): { id: string; label: string; lev
         out.push({ id: slugifyHeading(label), label, level });
     }
     return out;
+}
+
+// ── Helpers over any list of posts (static or from the database) ────────────
+
+/** Unique categories of `list` with their post counts, largest first. */
+export function categoriesOf(list: BlogPost[]): { name: string; slug: string; count: number }[] {
+    const map = new Map<string, number>();
+    list.forEach((p) => {
+        if (p.category) map.set(p.category, (map.get(p.category) ?? 0) + 1);
+    });
+    return Array.from(map.entries())
+        .map(([name, count]) => ({ name, slug: categoryToSlug(name), count }))
+        .filter((c) => c.slug)
+        .sort((a, b) => b.count - a.count);
+}
+
+/** Posts of `list` in a category (by category slug), in list order. */
+export function postsInCategory(list: BlogPost[], categorySlug: string): BlogPost[] {
+    return list.filter((p) => categoryToSlug(p.category) === categorySlug);
+}
+
+/** Posts of `list` carrying a tag (any spelling with the same tag slug), in list order. */
+export function postsWithTag(list: BlogPost[], tagSlug: string): BlogPost[] {
+    const wanted = tagToSlug(tagSlug);
+    return list.filter((p) => p.tags.some((t) => tagToSlug(t) === wanted));
+}
+
+/**
+ * Unique tags of `list` with their post counts. Tags that differ only in case,
+ * spacing or punctuation ("High-Yield Topics" / "high yield topics") share one
+ * slug and are merged into a single entry; the first spelling seen is used as
+ * the display name. A post is counted once per tag slug.
+ */
+export function tagsOf(list: BlogPost[]): { name: string; slug: string; count: number }[] {
+    const map = new Map<string, { name: string; count: number }>();
+    list.forEach((p) => {
+        const seen = new Set<string>();
+        p.tags.forEach((t) => {
+            const slug = tagToSlug(t);
+            if (!slug || seen.has(slug)) return;
+            seen.add(slug);
+            const entry = map.get(slug);
+            if (entry) entry.count += 1;
+            else map.set(slug, { name: t, count: 1 });
+        });
+    });
+    return Array.from(map.entries())
+        .map(([slug, { name, count }]) => ({ name, slug, count }))
+        .sort((a, b) => b.count - a.count);
+}
+
+/** A tag of `list` (merged across spellings) by its slug. */
+export function tagOf(list: BlogPost[], tagSlug: string): { name: string; slug: string; count: number } | undefined {
+    const wanted = tagToSlug(tagSlug);
+    return tagsOf(list).find((t) => t.slug === wanted);
+}
+
+/** Up to N posts of `list` sharing ≥ 1 tag with `source`, most shared tags first. */
+export function relatedPostsFrom(list: BlogPost[], source: BlogPost, n = 2): BlogPost[] {
+    const sourceTags = new Set(source.tags.map((t) => t.toLowerCase()));
+    return list
+        .filter((p) => p.slug !== source.slug)
+        .map((p) => ({ post: p, shared: p.tags.reduce((acc, t) => acc + (sourceTags.has(t.toLowerCase()) ? 1 : 0), 0) }))
+        .filter((s) => s.shared > 0)
+        .sort((a, b) => b.shared - a.shared)
+        .slice(0, n)
+        .map((s) => s.post);
+}
+
+/** Author and reviewer profile slugs credited in `list` (first seen first). */
+export function authorSlugsOf(list: BlogPost[]): string[] {
+    const slugs = new Set<string>();
+    for (const p of list) {
+        if (p.authorId) slugs.add(p.authorId);
+        if (p.reviewedBy) slugs.add(p.reviewedBy);
+    }
+    return Array.from(slugs);
+}
+
+/** dateModified (else datePublished) as a Date; `fallback` when neither parses. */
+export function postLastModified(post: Pick<BlogPost, 'dateModified' | 'datePublished'>, fallback: Date): Date {
+    for (const value of [post.dateModified, post.datePublished]) {
+        const d = new Date(value || '');
+        if (!isNaN(d.getTime())) return d;
+    }
+    return fallback;
+}
+
+// ── Database records ────────────────────────────────────────────────────────
+
+/** primary_cta as blog_engine stores it (the seed and older rows use snake_case keys). */
+export interface BlogCtaRecord {
+    label?: string;
+    href?: string;
+    event_name?: string;
+    event_params?: Record<string, unknown>;
+}
+
+/**
+ * A post as blog_engine stores it (BlogPostSerializer fields) and as
+ * backend/blog_engine/seed_data/static_posts.json lists the static posts.
+ */
+export interface BlogPostRecord {
+    slug: string;
+    title: string;
+    description: string;
+    excerpt: string;
+    cover_image: string;
+    category: string;
+    subcategory: string;
+    tags: string[];
+    difficulty: BlogPost['difficulty'];
+    author_id: string;
+    reviewed_by: string;
+    author: string;
+    author_role: string;
+    date_published: string;
+    date_modified: string;
+    updated_at: string;
+    reading_time: string;
+    word_count: number | null;
+    primary_cta: BlogCtaRecord;
+    related_exam_paths: string[];
+    faqs: { q: string; a: string }[];
+    toc: { id: string; label: string }[];
+    references: { label: string; url?: string; published?: string }[];
+    revision_log: { date: string; note: string }[];
+    body: string;
+    prelude: string;
+    outro: string;
+    pinned: boolean;
+    trending: boolean;
+}
+
+/** CTA shown when a post has none (or an unusable one). */
+export const DEFAULT_PRIMARY_CTA: BlogPost['primaryCta'] = {
+    label: 'Practise UPSC CMS PYQs',
+    href: '/questions?exam=cms',
+};
+
+/** prelude / outro are stored as markdown text; a React element cannot be. */
+function snippetText(value: unknown, field: string, slug: string): string {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    throw new Error(`${slug}: ${field} is not text, so it cannot be stored in the database; write it as markdown`);
+}
+
+/** The record seed_blogs imports for a static post. Throws for a non-text prelude/outro. */
+export function postToRecord(post: BlogPost): BlogPostRecord {
+    const cta = post.primaryCta;
+    return {
+        slug: post.slug,
+        title: post.title,
+        description: post.description,
+        excerpt: post.excerpt,
+        cover_image: post.coverImage ?? '',
+        category: post.category,
+        subcategory: post.subcategory ?? '',
+        tags: [...post.tags],
+        difficulty: post.difficulty,
+        author_id: post.authorId,
+        reviewed_by: post.reviewedBy ?? '',
+        author: post.author,
+        author_role: post.authorRole,
+        date_published: post.datePublished,
+        date_modified: post.dateModified ?? '',
+        updated_at: post.updatedAt ?? '',
+        reading_time: post.readingTime,
+        word_count: post.wordCount ?? null,
+        primary_cta: {
+            label: cta.label,
+            href: cta.href,
+            ...(cta.eventName ? { event_name: cta.eventName } : {}),
+            ...(cta.eventParams ? { event_params: { ...cta.eventParams } } : {}),
+        },
+        related_exam_paths: [...(post.relatedExamPaths ?? [])],
+        faqs: post.faqs.map(({ q, a }) => ({ q, a })),
+        toc: post.toc.map(({ id, label }) => ({ id, label })),
+        references: post.references.map(({ label, url, published }) => ({
+            label,
+            ...(url ? { url } : {}),
+            ...(published ? { published } : {}),
+        })),
+        revision_log: (post.revisionLog ?? []).map(({ date, note }) => ({ date, note })),
+        body: post.body,
+        prelude: snippetText(post.prelude, 'prelude', post.slug),
+        outro: snippetText(post.outro, 'outro', post.slug),
+        pinned: post.pinned === true,
+        trending: post.trending === true,
+    };
+}
+
+const DIFFICULTIES: ReadonlySet<string> = new Set(['beginner', 'intermediate', 'advanced']);
+
+function text(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+}
+
+function textList(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '') : [];
+}
+
+function objectList(value: unknown): Record<string, unknown>[] {
+    return Array.isArray(value)
+        ? value.filter((v): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v))
+        : [];
+}
+
+function plainObject(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+/** An internal path (not protocol-relative) or an http(s) URL; '' for anything else (javascript:, data:, ...). */
+export function safeLinkTarget(href: string): string {
+    const value = href.trim();
+    if (value.startsWith('/') && !value.startsWith('//')) return value;
+    return /^https?:\/\/[^\s]+$/i.test(value) ? value : '';
+}
+
+function ctaFromRecord(value: unknown): BlogPost['primaryCta'] {
+    const cta = plainObject(value) ?? {};
+    const label = text(cta.label).trim();
+    const href = safeLinkTarget(text(cta.href));
+    if (!label || !href) return { ...DEFAULT_PRIMARY_CTA };
+    const eventName = text(cta.event_name ?? cta.eventName).trim();
+    const eventParams = plainObject(cta.event_params ?? cta.eventParams);
+    return {
+        label,
+        href,
+        ...(eventName ? { eventName } : {}),
+        ...(eventParams ? { eventParams } : {}),
+    };
+}
+
+/**
+ * A post from an API record, or null when the record is not a usable public
+ * post: no slug / title, or a draft (`is_published: false` — drafts are never
+ * rendered, whatever the API returned). Partial records (the catalog has no
+ * body), both CTA key spellings and malformed list items are tolerated; link
+ * targets other than internal paths and http(s) URLs are dropped.
+ */
+export function postFromRecord(input: unknown): BlogPost | null {
+    const r = plainObject(input);
+    if (!r) return null;
+    const slug = text(r.slug).trim();
+    const title = text(r.title).trim();
+    if (!slug || !title || r.is_published === false) return null;
+    const difficulty = text(r.difficulty);
+    const datePublished = text(r.date_published);
+    const dateModified = text(r.date_modified) || datePublished;
+    const relatedExamPaths = textList(r.related_exam_paths).filter((p) => safeLinkTarget(p).startsWith('/'));
+    const revisionLog = objectList(r.revision_log)
+        .map((e) => ({ date: text(e.date), note: text(e.note) }))
+        .filter((e) => e.note);
+    return {
+        slug,
+        title,
+        description: text(r.description),
+        excerpt: text(r.excerpt),
+        coverImage: safeLinkTarget(text(r.cover_image)) || undefined,
+        category: text(r.category),
+        subcategory: text(r.subcategory) || undefined,
+        tags: textList(r.tags),
+        difficulty: DIFFICULTIES.has(difficulty) ? (difficulty as BlogPost['difficulty']) : 'intermediate',
+        authorId: text(r.author_id) || 'crackcms-editorial',
+        reviewedBy: text(r.reviewed_by) || undefined,
+        author: text(r.author),
+        authorRole: text(r.author_role),
+        datePublished,
+        dateModified,
+        updatedAt: text(r.updated_at) || dateModified,
+        readingTime: text(r.reading_time),
+        wordCount: typeof r.word_count === 'number' && Number.isFinite(r.word_count) ? r.word_count : undefined,
+        primaryCta: ctaFromRecord(r.primary_cta),
+        relatedExamPaths: relatedExamPaths.length ? relatedExamPaths : undefined,
+        faqs: objectList(r.faqs)
+            .map((f) => ({ q: text(f.q), a: text(f.a) }))
+            .filter((f) => f.q && f.a),
+        toc: objectList(r.toc)
+            .map((t) => ({ id: text(t.id), label: text(t.label) }))
+            .filter((t) => t.id && t.label),
+        references: objectList(r.references)
+            .map((ref) => {
+                const url = safeLinkTarget(text(ref.url));
+                const published = text(ref.published);
+                return { label: text(ref.label), ...(url ? { url } : {}), ...(published ? { published } : {}) };
+            })
+            .filter((ref) => ref.label),
+        revisionLog: revisionLog.length ? revisionLog : undefined,
+        body: text(r.body),
+        prelude: text(r.prelude) || undefined,
+        outro: text(r.outro) || undefined,
+        pinned: r.pinned === true,
+        trending: r.trending === true,
+    };
+}
+
+// ── Live posts (the database) ───────────────────────────────────────────────
+
+/**
+ * ISR window, in seconds, of every public blog route and of its API reads. A
+ * post created, edited, unpublished or deleted at /admin/blog shows on the
+ * site within about twice this time: a regenerated page may still use the
+ * previous API response while Next.js refreshes it in the background (a new
+ * slug renders on its first request). Route files repeat the literal
+ * (`export const revalidate = 300`): Next.js only reads a statically
+ * analysable number there.
+ */
+export const BLOG_REVALIDATE_SECONDS = 300;
+
+/** Per-request timeout of a blog API read. */
+const BLOG_API_TIMEOUT_MS = 10_000;
+
+export interface BlogApiEnv {
+    BLOG_API_URL?: string;
+    NEXT_PUBLIC_API_URL?: string;
+    NODE_ENV?: string;
+    VERCEL?: string;
+}
+
+function currentBlogApiEnv(): BlogApiEnv {
+    return {
+        BLOG_API_URL: process.env.BLOG_API_URL,
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: process.env.VERCEL,
+    };
+}
+
+/**
+ * Absolute API base the server reads the blog from: BLOG_API_URL (server-only
+ * override), else NEXT_PUBLIC_API_URL, else the production API in a production
+ * build and the local backend otherwise. Relative values (the local
+ * /api/proxy), retired hosts (lib/apiBase.ts) and a localhost URL on Vercel
+ * are skipped.
+ */
+export function blogApiBaseUrl(env: BlogApiEnv = currentBlogApiEnv()): string {
+    for (const raw of [env.BLOG_API_URL, env.NEXT_PUBLIC_API_URL]) {
+        const configured = (raw || '').trim();
+        if (!/^https?:\/\//i.test(configured)) continue;
+        const normalized = normalizeApiBaseUrl(configured);
+        if (isKnownUnhealthyApiHost(normalized)) continue;
+        if (env.VERCEL && isLocalhostApiUrl(normalized)) continue;
+        return normalized;
+    }
+    return env.NODE_ENV === 'production' ? DEFAULT_PRODUCTION_API_URL : DEFAULT_LOCAL_API_URL;
+}
+
+export type BlogFailurePolicy = 'fallback' | 'throw';
+
+/**
+ * What a failed blog API read does. During `next build`, in development and in
+ * tests the static posts are used, so a build never fails on the API. A
+ * production server throws instead: ISR then keeps serving the page it last
+ * generated from the database, rather than swapping in static copies (which
+ * would bring back posts unpublished or deleted in the admin).
+ */
+export function blogFailurePolicy(
+    env: { NODE_ENV?: string; NEXT_PHASE?: string } = { NODE_ENV: process.env.NODE_ENV, NEXT_PHASE: process.env.NEXT_PHASE },
+): BlogFailurePolicy {
+    if (env.NEXT_PHASE === 'phase-production-build') return 'fallback';
+    return env.NODE_ENV === 'production' ? 'throw' : 'fallback';
+}
+
+/** BLOG_SOURCE=static: never call the API (hermetic tests and builds). */
+function staticSourceForced(): boolean {
+    return (process.env.BLOG_SOURCE || '').trim().toLowerCase() === 'static';
+}
+
+function isBuildPhase(): boolean {
+    return process.env.NEXT_PHASE === 'phase-production-build';
+}
+
+// Set during `next build` once the API failed: this build worker renders the
+// remaining pages from the static posts straight away instead of waiting for
+// a timeout on every page.
+let apiFailedDuringBuild = false;
+let fallbackWarned = false;
+
+async function blogApiGet(path: string): Promise<{ status: number; data: unknown }> {
+    const init = {
+        headers: { Accept: 'application/json', 'User-Agent': 'cracklabs-web-blog (Next.js server)' },
+        signal: AbortSignal.timeout(BLOG_API_TIMEOUT_MS),
+        next: { revalidate: BLOG_REVALIDATE_SECONDS, tags: ['blog'] },
+    };
+    const res = await fetch(`${blogApiBaseUrl()}${path}`, init as RequestInit);
+    if (res.status === 404) return { status: 404, data: null };
+    if (!res.ok) throw new Error(`the blog API answered ${res.status} for ${path}`);
+    return { status: res.status, data: await res.json() };
+}
+
+/** `value` read from the API (`live`), or the static fallback. */
+async function readLive<T>(what: string, load: () => Promise<T>, fallback: () => T): Promise<{ value: T; live: boolean }> {
+    if (staticSourceForced()) return { value: fallback(), live: false };
+    const building = isBuildPhase();
+    if (building && apiFailedDuringBuild) return { value: fallback(), live: false };
+    try {
+        try {
+            return { value: await load(), live: true };
+        } catch (first) {
+            if (!building) throw first;
+            return { value: await load(), live: true }; // one retry during a build
+        }
+    } catch (err) {
+        if (blogFailurePolicy() === 'throw') throw err;
+        if (building) apiFailedDuringBuild = true;
+        if (!fallbackWarned) {
+            fallbackWarned = true;
+            const reason = err instanceof Error ? err.message : String(err);
+            console.warn(`[blog] Could not read ${what} from ${blogApiBaseUrl()} (${reason}); using the static posts.`);
+        }
+        return { value: fallback(), live: false };
+    }
+}
+
+function readCatalog() {
+    return readLive(
+        'the post list',
+        async () => {
+            const { data } = await blogApiGet('/blog/posts/catalog/');
+            const rows = Array.isArray(data) ? data : plainObject(data)?.results;
+            if (!Array.isArray(rows)) throw new Error('the blog catalog is missing');
+            return rows.map(postFromRecord).filter((p): p is BlogPost => p !== null);
+        },
+        getAllPosts,
+    );
+}
+
+/**
+ * Every published post, newest first, without bodies: what cards, hubs,
+ * related posts, the feed and the sitemap need (GET /api/blog/posts/catalog/).
+ */
+export async function loadBlogCatalog(): Promise<BlogPost[]> {
+    return (await readCatalog()).value;
+}
+
+const LOOKUP_SLUG = /^[A-Za-z0-9_-]{1,200}$/;
+
+/**
+ * One published post with its body (GET /api/blog/posts/by-slug/<slug>/), or
+ * null when there is none: never published, a draft, or deleted.
+ *
+ * Where failures fall back (a build, development) a post comes from the same
+ * source as the post list: when the list is the static one (API unreachable,
+ * or an older backend without the catalog), so is the post, and no database
+ * row (an old seed's placeholder or summary) is mixed into the static pages.
+ * The catalog read is a cached fetch the page makes anyway.
+ */
+export async function loadBlogPost(slug: string): Promise<BlogPost | null> {
+    if (!LOOKUP_SLUG.test(slug)) return null;
+    const staticPost = () => getPostBySlug(slug) ?? null;
+    if (!staticSourceForced() && blogFailurePolicy() === 'fallback' && !(await readCatalog()).live) {
+        return staticPost();
+    }
+    return (await readLive(
+        `the post ${slug}`,
+        async () => {
+            const { status, data } = await blogApiGet(`/blog/posts/by-slug/${encodeURIComponent(slug)}/`);
+            return status === 404 ? null : postFromRecord(data);
+        },
+        staticPost,
+    )).value;
 }

@@ -12,7 +12,12 @@ CrackCMS exposes **three parallel admin surfaces**:
 |---|---|---|---|
 | **Django Admin** | Superusers | `/admin/` | `is_staff=True` |
 | **In-app admin page** | Admins & superusers | `/admin` (Next.js) | `role='admin' or is_superuser`, read from the backend profile (`/api/auth/profile/`) |
-| **REST admin APIs** | Scripts + admin SPA | `/api/auth/admin/*`, `/api/auth/tokens/admin/*`, `/api/analytics/admin/*`, `/api/imports/*`, `/api/ingestion/*` | `IsControlTowerAdmin`: `role='admin'` or `is_superuser` |
+| **REST admin APIs** | Scripts + admin SPA | `/api/auth/admin/*`, `/api/auth/tokens/admin/*`, `/api/analytics/admin/*`, `/api/imports/*`, `/api/ingestion/*`, `/api/key-audit/*` | `IsControlTowerAdmin`: `role='admin'` or `is_superuser` |
+
+The answer-key review queue (`/admin/review-queue`, API `/api/key-audit/`) lists questions whose key may be
+wrong, by priority, with the printed source keys and AI review signals behind each; decisions go through
+`change_answer_key` and are recorded as `AuditResolution` + `AdminAuditLog` (`audit_resolution`). See
+[`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT.md).
 
 The Next.js `/admin` page consumes the REST admin APIs and renders user/token/payment tables. The Next.js middleware only requires a signed-in user for `/admin`; each admin page sends non-admins to `/dashboard` based on the backend profile's `role` / `is_admin` (Supabase `user_metadata` is never trusted), and every admin API checks the role again. Django Admin is the canonical place for content moderation (questions, subjects, topics, flashcards).
 

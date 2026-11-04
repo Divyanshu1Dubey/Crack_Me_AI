@@ -4,7 +4,7 @@ import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import { TrackedLink } from '@/components/TrackedLink';
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import { getAllCategories, getAllPosts } from '@/lib/blog';
+import { categoriesOf, loadBlogCatalog } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 import Breadcrumbs from '@/components/Breadcrumbs';
@@ -36,11 +36,15 @@ const JSON_LD_POSTS = 20;
 /** Posts shown beside the featured one; the rest go in the grid below. */
 const ASIDE_POSTS = 3;
 
-export default function BlogIndexPage() {
-    const posts = getAllPosts();
+// The published posts in the database (edited at /admin/blog), regenerated at
+// most every 5 minutes (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 300;
+
+export default async function BlogIndexPage() {
+    const posts = await loadBlogCatalog();
     const [featured, ...others] = posts;
     const rest = others.slice(0, LATEST_POSTS - 1);
-    const categories = getAllCategories();
+    const categories = categoriesOf(posts);
 
     const jsonLd = {
         '@context': 'https://schema.org',

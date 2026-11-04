@@ -58,6 +58,7 @@ Foundation for all personalized features.
 | POST | `/api/auth/login/` | Login (JWT) |
 | GET | `/api/auth/profile/` | Get profile |
 | PUT/PATCH | `/api/auth/profile/` | Update profile |
+| GET/PATCH | `/api/auth/preferences/` | Layout preferences (Settings > Customise: sidebar, dashboard, opening page) |
 | POST | `/api/auth/verify-scholarship/` | Scholarship quiz |
 
 ### Flow

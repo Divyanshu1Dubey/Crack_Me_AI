@@ -5,16 +5,21 @@ import { ChevronLeft, Hash } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import { MIN_INDEXABLE_TAG_POSTS, getAllTags, getPostsByTag, getTagBySlug } from '@/lib/blog';
+import { MIN_INDEXABLE_TAG_POSTS, loadBlogCatalog, postsWithTag, tagOf, tagsOf } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
     params: Promise<{ slug: string }>;
 }
 
+// Tags of the published posts in the database (/admin/blog), regenerated at
+// most every 5 minutes; a new tag renders on request.
+export const revalidate = 300;
+export const dynamicParams = true;
+
 /** Pre-render every tag page that has at least one post. */
 export async function generateStaticParams() {
-    return getAllTags().map((t) => ({ slug: t.slug }));
+    return tagsOf(await loadBlogCatalog()).map((t) => ({ slug: t.slug }));
 }
 
 /**
@@ -22,7 +27,7 @@ export async function generateStaticParams() {
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
-    const tag = getTagBySlug(slug);
+    const tag = tagOf(await loadBlogCatalog(), slug);
     if (!tag) {
         return buildPageMetadata({
             title: 'Tag not found — CrackCMS Blog',
@@ -43,10 +48,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogTagPage({ params }: PageProps) {
     const { slug } = await params;
-    const tag = getTagBySlug(slug);
+    const all = await loadBlogCatalog();
+    const tags = tagsOf(all);
+    const tag = tagOf(all, slug);
     if (!tag) notFound();
 
-    const posts = getPostsByTag(tag.slug);
+    const posts = postsWithTag(all, tag.slug);
     const canonicalPath = `/blog/tag/${tag.slug}`;
 
     const jsonLd = {
@@ -112,7 +119,7 @@ export default async function BlogTagPage({ params }: PageProps) {
                             Browse other tags
                         </h2>
                         <div className="flex flex-wrap gap-2">
-                            {getAllTags()
+                            {tags
                                 .filter((t) => t.slug !== tag.slug && t.count >= MIN_INDEXABLE_TAG_POSTS)
                                 .slice(0, 40)
                                 .map((t) => (

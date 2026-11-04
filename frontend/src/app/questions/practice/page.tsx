@@ -20,6 +20,7 @@ import { questionsAPI, aiAPI } from '@/lib/api';
 import { analytics } from '@/lib/analytics';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
+import StudentCitations from '@/components/evidence/StudentCitations';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
@@ -764,6 +765,11 @@ function PracticeContent() {
                                                 <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(revealData.explanation ?? '')), explanationImages)} />
                                             </div>
                                         )}
+                                        {/* The key was corrected and the old explanation is withheld until rewritten. */}
+                                        {typeof (revealData as { explanation_notice?: unknown }).explanation_notice === 'string'
+                                            && (revealData as { explanation_notice?: string }).explanation_notice && (
+                                            <p className="text-xs text-muted-foreground">{(revealData as { explanation_notice?: string }).explanation_notice}</p>
+                                        )}
                                         {currentReveal?.status === 'ready' && currentReveal.explanationLocked && (
                                             <p className="text-xs text-muted-foreground">
                                                 <button type="button" onClick={() => showPaywall('PYQ answers')} className="font-semibold text-primary hover:underline">
@@ -779,6 +785,9 @@ function PracticeContent() {
                                         )}
                                     </CardContent>
                                 </Card>
+
+                                {/* Accepted textbook citations (snippets only; nothing when there are none). */}
+                                {currentQ && <StudentCitations questionId={currentQ.id} revealed={answerShown} />}
 
                                 {/* Mnemonic */}
                                 {revealData.mnemonic && !aiExplanation?.mnemonic && (

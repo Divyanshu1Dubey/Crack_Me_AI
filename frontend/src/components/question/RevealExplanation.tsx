@@ -30,6 +30,7 @@ import { Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import { FormattedText } from "@/components/FormattedText";
 import { aiRateLimited, readAiField } from "@/components/question/practiceData";
+import StudentCitations from "@/components/evidence/StudentCitations";
 
 interface Props {
   questionId: number;
@@ -237,6 +238,7 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
           <p className="mt-1 text-xs text-muted-foreground">{importance}/100</p>
         </div>
       ) : null}
+      <StudentCitations questionId={questionId} revealed={open} className="" headingClassName="mb-1 font-semibold text-emerald-700 dark:text-emerald-300" />
       {stalled ? (
         <p role="status" className="rounded border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           Some AI sections are taking longer than usual. Check back on this question later to see them.

@@ -116,30 +116,31 @@ test('/topic-notes redirects logged-out visitors and renders no own shell', () =
   assert.match(read('src/app/topic-notes/layout.tsx'), /<AppShell>/);
 });
 
-test('/topic-notes pages through the admin library too', () => {
+test('/topic-notes pages through the published notes; admins manage them at /admin/notes', () => {
   const page = read('src/app/topic-notes/page.tsx');
-  assert.match(page, /topicNotesAPI\.adminList\(\{ page \}\)/);
-  // The load-more control is rendered in both the student and admin lists.
-  assert.equal(page.match(/\{loadMoreControl\}/g)?.length, 2);
+  assert.match(page, /notesAPI\.published\(\{ \.\.\.noteListParams\(\{ exam, subject, topic, q: search, page: next \}\), page_size: PAGE_SIZE \}\)/);
+  assert.match(page, /href="\/admin\/notes"/);
+  assert.doesNotMatch(page, /topicNotesAPI\.adminList/);
 });
 
 test('/topic-notes: page padding collapses inside the AppShell (no double gutter)', () => {
-  const page = read('src/app/topic-notes/page.tsx');
-  // Loading skeleton, student list and admin library wrappers.
-  const wrappers = page.match(/className="max-w-4xl mx-auto p-4 md:p-6 \[\.page-container_&\]:p-0 space-y-\d"/g) || [];
-  assert.equal(wrappers.length, 3);
-  assert.doesNotMatch(page, /className="max-w-4xl mx-auto p-4 md:p-6 space-y-/);
+  for (const rel of ['src/app/topic-notes/page.tsx', 'src/app/topic-notes/[id]/page.tsx']) {
+    const page = read(rel);
+    assert.match(page, /className="mx-auto max-w-(?:4xl|3xl) space-y-\d p-4 text-foreground md:p-6 \[\.page-container_&\]:p-0"/, rel);
+    assert.doesNotMatch(page, /<main[\s>]/, rel);
+  }
 });
 
 test('/topic-notes, /feedback and /tokens call the typed api.ts helpers', () => {
   const api = read('src/lib/api.ts');
   // The helpers request exactly what the pages requested before.
   assert.match(api, /api\.get\('\/questions\/topic-notes\/published\/', \{ params \}\)/);
+  assert.match(read('src/lib/notesAPI.ts'), /api\.get\('\/questions\/topic-notes\/published\/', \{ params \}\)/);
   assert.match(api, /api\.get\('\/analytics\/feedback\/', \{ params \}\)/);
   assert.match(api, /api\.get\('\/auth\/tokens\/admin\/users\/', \{ params \}\)/);
 
   const pages: Record<string, [string, RegExp]> = {
-    'topic-notes': [read('src/app/topic-notes/page.tsx'), /topicNotesAPI\.published\(\{ page \}\)/],
+    'topic-notes': [read('src/app/topic-notes/page.tsx'), /notesAPI\.published\(\{ \.\.\.noteListParams\(/],
     feedback: [read('src/app/feedback/page.tsx'), /analyticsAPI\.getFeedback\(\{ page, page_size: FEEDBACK_PAGE_SIZE \}\)/],
     tokens: [read('src/app/tokens/page.tsx'), /authAPI\.adminGetAllUsers\(offset > 0 \? \{ offset \} : undefined\)/],
   };

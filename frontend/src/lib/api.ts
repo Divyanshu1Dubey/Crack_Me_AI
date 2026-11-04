@@ -1039,4 +1039,17 @@ export const importCenterAPI = {
     api.post('/admin/import/questions/bulk-decision/', { ids, decision, note }),
 };
 
+// Answer-key review queue (admin only, backend/key_audit). Types and rules: src/lib/keyAudit.ts.
+export const keyAuditAPI = {
+  list: (params?: Record<string, string | number>) => api.get('/key-audit/queue/', { params }),
+  summary: (params?: Record<string, string | number>) => api.get('/key-audit/queue/summary/', { params }),
+  detail: (questionId: number) => api.get(`/key-audit/queue/${questionId}/`),
+  claim: (questionId: number) => api.post(`/key-audit/queue/${questionId}/claim/`),
+  release: (questionId: number) => api.delete(`/key-audit/queue/${questionId}/claim/`),
+  resolve: (questionId: number, body: Record<string, unknown>) =>
+    api.post(`/key-audit/queue/${questionId}/resolve/`, body),
+  acceptSourceKeys: (reason: string, items: { question_id: number; expected_key: string; source_key_id: number }[]) =>
+    api.post('/key-audit/queue/accept-source-keys/', { reason, items }),
+};
+
 export default api;

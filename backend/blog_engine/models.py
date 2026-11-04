@@ -2,6 +2,16 @@ from django.db import models
 
 
 class BlogPost(models.Model):
+    """A blog post: the source of truth of the public /blog pages.
+
+    The Next.js site renders the published rows (``is_published`` and a real
+    body) server-side with ISR, through ``GET /api/blog/posts/catalog/`` and
+    ``/by-slug/<slug>/``; admins edit them at /admin/blog. Every field the
+    static post type of frontend/src/lib/blog.ts has is stored here
+    (structured parts as JSON); ``manage.py seed_blogs`` imports the static
+    posts (frontend/src/content/blog).
+    """
+
     DIFFICULTY_CHOICES = [
         ("beginner", "Beginner"),
         ("intermediate", "Intermediate"),
@@ -44,9 +54,39 @@ class BlogPost(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-date_published", "-created_at"]
+        # Newest first; posts of the same day: the most recently created first
+        # (``-id`` settles rows created in the same instant).
+        ordering = ["-date_published", "-created_at", "-id"]
         verbose_name = "Blog Post"
         verbose_name_plural = "Blog Posts"
 
     def __str__(self):
         return self.title
+
+
+class BlogSeedImport(models.Model):
+    """One row per slug ``seed_blogs`` has handled: a static post it imported,
+    or a row of the previous seed it unpublished.
+
+    A static post is imported once: a post deleted or renamed in the admin
+    is not re-created on the next deploy (``seed_blogs --restore`` does that
+    on purpose), and an unpublished old-seed row is left to the admin.
+    ``content_hash`` is the hash of the content seed_blogs last wrote for the
+    slug (blog_engine.seeding.content_hash); while the row still hashes to it
+    nobody has edited the post, so a changed static file may update it. Empty
+    when the content was not written by seed_blogs (an admin's edit, a row an
+    older seed wrote and an admin changed, an unpublished old-seed row).
+    """
+
+    slug = models.SlugField(max_length=200, unique=True)
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    imported_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["slug"]
+        verbose_name = "Blog seed import"
+        verbose_name_plural = "Blog seed imports"
+
+    def __str__(self):
+        return self.slug

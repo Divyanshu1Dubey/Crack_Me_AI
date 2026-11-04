@@ -43,6 +43,8 @@ export const PAGE_TITLES: Readonly<Record<string, string>> = {
   '/admin': 'Admin Panel',
   '/admin/analytics-dashboard': 'Analytics Dashboard',
   '/admin/questions-editor': 'Questions Editor',
+  '/admin/review-queue': 'Answer-Key Review',
+  '/admin/blog': 'Blog',
   '/admin/announcements': 'Announcements',
   '/admin/jobs': 'Manage Jobs',
   '/admin/notes': 'Topic Notes',

@@ -185,6 +185,10 @@ INSTALLED_APPS = [
     'material_importer',
     # Blog management backend — model, admin, DRF API.
     'blog_engine',
+    # Medical-accuracy mission (2026-11): reference evidence, curated question evidence, answer-key audit.
+    'reference_corpus',
+    'evidence',
+    'key_audit',
     # Security
     'axes',
 ]
@@ -520,6 +524,8 @@ REST_FRAMEWORK = {
         'admin_control_tower': os.getenv('DRF_THROTTLE_ADMIN_CONTROL_TOWER', '180/min'),
         # Scoped rates for expensive / sensitive endpoints.
         'ai_tutor': os.getenv('DRF_THROTTLE_AI_TUTOR', '30/min'),
+        # Related PYQ figures next to a tutor answer (ai_engine/related_figures.py; no AI call, cached index).
+        'ai_figures': os.getenv('DRF_THROTTLE_AI_FIGURES', '60/min'),
         'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
         'token_purchase': os.getenv('DRF_THROTTLE_TOKEN_PURCHASE', '10/min'),
         'subscription_order': os.getenv('DRF_THROTTLE_SUBSCRIPTION_ORDER', '15/min'),
@@ -538,6 +544,12 @@ REST_FRAMEWORK = {
         # (same defaults as their built-in fallbacks; listed to be tunable).
         'feedback_submit': os.getenv('DRF_THROTTLE_FEEDBACK_SUBMIT', '10/hour'),
         'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
+        # Medical-accuracy mission (2026-11).
+        'admin_explain': os.getenv('DRF_THROTTLE_ADMIN_EXPLAIN', '30/min'),
+        'evidence_student': os.getenv('DRF_THROTTLE_EVIDENCE_STUDENT', '300/hour'),   # one per revealed question
+        'evidence_admin': os.getenv('DRF_THROTTLE_EVIDENCE_ADMIN', '240/min'),
+        'answer_insights': os.getenv('DRF_THROTTLE_ANSWER_INSIGHTS', '120/min'),
+        'review_queue': os.getenv('DRF_THROTTLE_REVIEW_QUEUE', '240/min'),
         # Django-native sign-in (accounts/native_auth.py, accounts/throttles.py).
         # '*_email' scopes are keyed on a SHA-256 of the lower-cased email,
         # native_verify_link on the emailed link, the others on the client IP
@@ -914,6 +926,33 @@ KB_USE_KG_BOOST = os.getenv('KB_USE_KG_BOOST', 'true').lower() == 'true'
 # Embedding
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'bge-small-en-v1.5')
 NCBI_API_KEY = os.getenv('NCBI_API_KEY', '')
+
+# ── Reference corpus, evidence-first answering, answer-key audit (2026-11) ──
+# docs/audit/MEDICAL_ACCURACY_DESIGN.md. Every flag defaults to today's behaviour.
+# The reference store holds copyrighted text: a git-ignored SQLite file, never committed.
+REFERENCE_STORE_PATH = os.getenv('REFERENCE_STORE_PATH', '').strip()          # '' = feature off
+REFERENCE_REGISTRY_PATH = os.getenv('REFERENCE_REGISTRY_PATH', '').strip()    # registry.json (source metadata)
+REFERENCE_PAGE_CACHE_PATH = os.getenv('REFERENCE_PAGE_CACHE_PATH', '').strip()  # ai_eval.build_reference_corpus output (OCR cache)
+RAG_STORE = os.getenv('RAG_STORE', 'legacy').strip().lower()                  # legacy | reference
+REFERENCE_DENSE = os.getenv('REFERENCE_DENSE', 'auto').strip().lower()        # auto | off
+REFERENCE_EMBED_MODEL = os.getenv('REFERENCE_EMBED_MODEL', 'BAAI/bge-small-en-v1.5')
+REFERENCE_EMBED_CACHE_DIR = os.getenv('REFERENCE_EMBED_CACHE_DIR', '').strip()
+REFERENCE_EMBED_THREADS = int(os.getenv('REFERENCE_EMBED_THREADS', '1'))
+REFERENCE_RERANK = os.getenv('REFERENCE_RERANK', 'off').strip().lower()       # off | on
+REFERENCE_RERANK_MODEL = os.getenv('REFERENCE_RERANK_MODEL', 'Xenova/ms-marco-MiniLM-L-6-v2')
+REFERENCE_RRF_K = int(os.getenv('REFERENCE_RRF_K', '60'))
+REFERENCE_CANDIDATES = int(os.getenv('REFERENCE_CANDIDATES', '50'))
+REFERENCE_EVIDENCE_TIERS = tuple(int(t) for t in os.getenv('REFERENCE_EVIDENCE_TIERS', '1,2,3').split(',') if t.strip())
+REFERENCE_STUDENT_TIERS = tuple(int(t) for t in os.getenv('REFERENCE_STUDENT_TIERS', '1,2,3,4').split(',') if t.strip())
+EVIDENCE_FIRST = os.getenv('EVIDENCE_FIRST', '0').strip() == '1'
+EVIDENCE_CALIBRATION_PATH = os.getenv('EVIDENCE_CALIBRATION_PATH', '').strip()
+EVIDENCE_PROMPT_VERSION = os.getenv('EVIDENCE_PROMPT_VERSION', 'evidence-v1')
+EVIDENCE_SNIPPET_MAX_CHARS = int(os.getenv('EVIDENCE_SNIPPET_MAX_CHARS', '240'))
+EVIDENCE_MAX_STUDENT_ROWS = int(os.getenv('EVIDENCE_MAX_STUDENT_ROWS', '3'))
+EVIDENCE_FIGURE_TOKEN_TTL = int(os.getenv('EVIDENCE_FIGURE_TOKEN_TTL', '900'))
+EXPLAIN_EVIDENCE_MIN_SCORE = float(os.getenv('EXPLAIN_EVIDENCE_MIN_SCORE', '0.35'))
+EXPLAIN_CONFLICT_MARGIN = float(os.getenv('EXPLAIN_CONFLICT_MARGIN', '0.15'))
+KEY_AUDIT_METHOD_VERSION = 'key-audit/1'
 
 # ── Security Hardening ──────────────────────────────────────────────
 # Browser-level protections against common web vulnerabilities (OWASP).
