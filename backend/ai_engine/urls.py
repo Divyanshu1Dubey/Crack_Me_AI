@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .related_figures import RelatedFiguresView
 
 urlpatterns = [
     # Core AI endpoints
@@ -13,6 +14,7 @@ urlpatterns = [
     path('explain-question/<int:question_id>/', views.ExplainQuestionView.as_view(), name='ai-explain-question'),
 
     # RAG-powered endpoints
+    path('related-figures/', RelatedFiguresView.as_view(), name='ai-related-figures'),
     path('rag-search/', views.RAGSearchView.as_view(), name='ai-rag-search'),
     path('rag-answer/', views.RAGAnswerView.as_view(), name='ai-rag-answer'),
     path('textbook-reference/', views.TextbookReferenceView.as_view(), name='ai-textbook-ref'),

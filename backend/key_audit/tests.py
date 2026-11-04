@@ -455,6 +455,24 @@ class ReviewQueueApiTests(_Fixture):
         ReviewClaim.objects.update(expires_at=timezone.now() - timedelta(minutes=1))
         self.assertEqual(other_client.post(self.url('queue-claim', self.q.pk)).status_code, 200)
 
+    def test_claim_insert_race_returns_the_existing_claim(self):
+        from unittest import mock
+        now = timezone.now()
+        ReviewClaim.objects.create(question=self.q, claimed_by=self.admin, claimed_at=now,
+                                   expires_at=now + timedelta(minutes=10))
+        real = ReviewClaim.objects.select_for_update
+        calls = {'n': 0}
+
+        def first_lookup_misses(*args, **kwargs):
+            calls['n'] += 1
+            qs = real(*args, **kwargs)
+            return qs.none() if calls['n'] == 1 else qs   # a concurrent request inserted the row meanwhile
+
+        with mock.patch.object(ReviewClaim.objects, 'select_for_update', side_effect=first_lookup_misses):
+            res = self.client.post(self.url('queue-claim', self.q.pk))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(ReviewClaim.objects.filter(question=self.q).count(), 1)
+
     def test_resolve_key_change_without_strong_evidence_is_likely_correct(self):
         res = self.client.post(self.url('queue-resolve', self.q.pk), {
             'resolution': 'key_changed', 'new_key': 'A', 'expected_key': 'D',

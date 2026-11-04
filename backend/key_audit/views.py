@@ -23,7 +23,7 @@ from collections import Counter
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -162,15 +162,24 @@ class ReviewClaimView(_AdminView):
     def post(self, request, question_id: int):
         question = get_object_or_404(Question, pk=question_id)
         now = timezone.now()
+        expires = now + timedelta(minutes=CLAIM_MINUTES)
         with transaction.atomic():
             claim = ReviewClaim.objects.select_for_update().filter(question=question).first()
-            if claim and claim.expires_at > now and claim.claimed_by_id != request.user.pk:
+            if claim is None:
+                # Two requests can find no claim at once (a double click, React's development double
+                # effect): the loser of the insert race reads the winner's row instead of failing.
+                try:
+                    with transaction.atomic():
+                        claim = ReviewClaim.objects.create(question=question, claimed_by=request.user,
+                                                           claimed_at=now, expires_at=expires)
+                except IntegrityError:
+                    claim = ReviewClaim.objects.select_for_update().get(question=question)
+            if claim.expires_at > now and claim.claimed_by_id != request.user.pk:
                 return Response({'code': 'claimed', 'claimed_by': claim.claimed_by.username,
                                  'expires_at': claim.expires_at}, status=status.HTTP_409_CONFLICT)
-            claim, _ = ReviewClaim.objects.update_or_create(
-                question=question,
-                defaults={'claimed_by': request.user, 'claimed_at': now,
-                          'expires_at': now + timedelta(minutes=CLAIM_MINUTES)})
+            if claim.claimed_by_id != request.user.pk or claim.expires_at != expires:
+                claim.claimed_by, claim.claimed_at, claim.expires_at = request.user, now, expires
+                claim.save(update_fields=['claimed_by', 'claimed_at', 'expires_at'])
         return Response({'question_id': question.pk, 'claimed_by': request.user.username, 'mine': True,
                          'expires_at': claim.expires_at})
 

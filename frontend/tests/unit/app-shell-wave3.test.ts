@@ -131,7 +131,10 @@ test('FloatingDock: notices are not replies; flashcard button only from lg', () 
   // react-markdown stays out of the global bundle: the renderer is lazy.
   assert.doesNotMatch(dock, /from 'react-markdown'/);
   assert.match(dock, /dynamic\(\(\) => import\('@\/components\/FloatingDockReply'\), \{\s*ssr: false/);
-  assert.match(read('src/components/FloatingDockReply.tsx'), /<ReactMarkdown skipHtml>/);
+  // Model HTML is reduced to formatting tags by the shared allow-list (tutorMarkdown.ts; behaviour
+  // tested in tutor-markdown.test.ts) instead of being dropped, so <br> in table cells renders.
+  assert.match(read('src/components/FloatingDockReply.tsx'), /rehypePlugins=\{tutorRehypePlugins\}/);
+  assert.match(read('src/lib/tutorMarkdown.ts'), /tutorRehypePlugins[^=]*= \[rehypeRaw, rehypeAllowlist, rehypeTutorTags\]/);
 });
 
 // ── Header / ExamSwitcher / titles ─────────────────────────────────────────

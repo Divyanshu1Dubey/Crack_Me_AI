@@ -14,7 +14,9 @@ import Header from '@/components/Header';
 import { aiAPI, extractApiErrorMessage } from '@/lib/api';
 import { Brain, Send, Sparkles, BookOpen, Lightbulb, Bot, User, Loader2, Search, FileText, ChevronDown, History, Plus, Trash2, X, MessageSquare, Clock, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { decodeMojiB, coerceToText } from '@/lib/textCleanup';
+import { decodeMojiB } from '@/lib/textCleanup';
+import { normalizeTutorMarkdown, tutorRehypePlugins, tutorRemarkPlugins } from '@/lib/tutorMarkdown';
+import RelatedFigures from '@/components/ai/RelatedFigures';
 
 interface Message {
     role: 'user' | 'ai';
@@ -89,59 +91,26 @@ class SafeMessageBoundary extends React.Component<
 
 function SafeMarkdown({ content }: { content: unknown }) {
     const safeText = decodeMojiB(content);
+    // GFM tables (with <br> inside cells), tags as badges, unsafe HTML removed: src/lib/tutorMarkdown.ts.
+    const markdown = normalizeTutorMarkdown(safeText);
     return (
         <SafeMessageBoundary fallback={safeText || '[message unavailable]'}>
             <ReactMarkdown
+                remarkPlugins={tutorRemarkPlugins}
+                rehypePlugins={tutorRehypePlugins}
                 components={{
                     h1: ({ children }) => <h1 className="ai-h1">{children}</h1>,
                     h2: ({ children }) => <h2 className="ai-h2">{children}</h2>,
                     h3: ({ children }) => <h3 className="ai-h3">{children}</h3>,
                     h4: ({ children }) => <h4 className="ai-h4">{children}</h4>,
-                    p: ({ children }) => {
-                        // Defensive: chat history may contain non-string nodes
-                        // (e.g. citation objects) saved as message content.
-                        // Coerce to text so .includes/.split never throw.
-                        const text = coerceToText(children);
-                        if (
-                            text.includes('[PYQ') ||
-                            text.includes('[High Yield]') ||
-                            text.includes('Textbook Reference')
-                        ) {
-                            const parts = text.split(
-                                /(\[PYQ \d{4}\]|\[High Yield\]|\*\*Textbook Reference.*?\*\*)/g
-                            );
-                            return (
-                                <p className="ai-p">
-                                    {parts.map((part, index) => {
-                                        if (part.startsWith('[PYQ')) {
-                                            return (
-                                                <span key={index} className="ai-tag ai-tag-pink">
-                                                    📋 {part.replace('[', '').replace(']', '')}
-                                                </span>
-                                            );
-                                        } else if (part === '[High Yield]') {
-                                            return (
-                                                <span key={index} className="ai-tag ai-tag-amber">
-                                                    🔥 HIGH YIELD
-                                                </span>
-                                            );
-                                        } else if (part.startsWith('**Textbook Reference')) {
-                                            return (
-                                                <span key={index} className="ai-tag ai-tag-green">
-                                                    📚 {part.replace(/\*\*/g, '')}
-                                                </span>
-                                            );
-                                        }
-                                        return <span key={index}>{part}</span>;
-                                    })}
-                                </p>
-                            );
-                        }
-                        return <p className="ai-p">{children}</p>;
-                    },
-                    strong: ({ children }) => (
-                        <strong className="ai-strong">{children}</strong>
+                    p: ({ children }) => <p className="ai-p">{children}</p>,
+                    // A "Textbook Reference" line arrives as a badge class from rehypeTutorTags.
+                    strong: ({ children, className }) => (
+                        <strong className={className || 'ai-strong'}>{children}</strong>
                     ),
+                    // Model-written image links are often invented and would load other sites:
+                    // show the description only. Figures come from the bank (RelatedFigures).
+                    img: ({ alt }) => (alt ? <span className="ai-em">[{alt}]</span> : null),
                     em: ({ children }) => <em className="ai-em">{children}</em>,
                     ul: ({ children }) => <ul className="ai-ul">{children}</ul>,
                     ol: ({ children }) => <ol className="ai-ol">{children}</ol>,
@@ -775,6 +744,11 @@ export default function AITutorPage() {
                                                 );
                                             })}
                                         </div>
+                                    )}
+                                    {/* Figures from past questions on the same topic (newest answer loads them itself). */}
+                                    {msg.role === 'ai' && i > 0 && messages[i - 1]?.role === 'user'
+                                        && typeof messages[i - 1].content === 'string' && (
+                                        <RelatedFigures query={messages[i - 1].content} auto={isLastAiMessage} />
                                     )}
                                 </div>
                                 {msg.role === 'user' && (

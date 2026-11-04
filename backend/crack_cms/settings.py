@@ -524,6 +524,8 @@ REST_FRAMEWORK = {
         'admin_control_tower': os.getenv('DRF_THROTTLE_ADMIN_CONTROL_TOWER', '180/min'),
         # Scoped rates for expensive / sensitive endpoints.
         'ai_tutor': os.getenv('DRF_THROTTLE_AI_TUTOR', '30/min'),
+        # Related PYQ figures next to a tutor answer (ai_engine/related_figures.py; no AI call, cached index).
+        'ai_figures': os.getenv('DRF_THROTTLE_AI_FIGURES', '60/min'),
         'password_reset': os.getenv('DRF_THROTTLE_PASSWORD_RESET', '5/min'),
         'token_purchase': os.getenv('DRF_THROTTLE_TOKEN_PURCHASE', '10/min'),
         'subscription_order': os.getenv('DRF_THROTTLE_SUBSCRIPTION_ORDER', '15/min'),
