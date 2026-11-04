@@ -6,3 +6,5 @@
 # Shell scripts run with bash on Linux hosts (Railway release.sh / start_web.sh):
 # keep LF even in Windows checkouts (core.autocrlf would add CR and break bash).
 *.sh text eol=lf
+# The Procfile web / release commands run in a Linux shell too.
+Procfile text eol=lf

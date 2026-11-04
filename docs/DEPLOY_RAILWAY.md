@@ -57,9 +57,31 @@ Use the existing Railway service behind `api.cracklabs.app` (or create one from 
 | Setting | Value |
 |---|---|
 | Root directory | `backend` |
-| Config file | `backend/railway.json` (build: collectstatic; pre-deploy: `bash release.sh` = migrate + idempotent seeds, database only, because Railway mounts no volume in the pre-deploy container; start: `bash start_web.sh` = the media steps in the background (media restore, fixture image relinking) + the django-q worker + gunicorn; health check `/api/health/`) |
+| Config file | **`/backend/railway.json`**: Railway → service → Settings → Config-as-code → Railway Config File, the full path from the repository root (the setting does not follow the Root Directory). The file sets build: collectstatic; pre-deploy: `bash release.sh` = migrate + idempotent seeds, database only, because Railway mounts no volume in the pre-deploy container; start: `bash start_web.sh` = migrate again (a no-op after release.sh) + the media steps in the background (media restore, fixture image relinking) + the django-q worker + gunicorn; health check `/api/health/` |
 | Volume | mount at `/data` (5 GB is plenty) |
 | Custom domain | `api.cracklabs.app` (then in Cloudflare: CNAME `api` → the `*.up.railway.app` target Railway shows; SSL mode Full) |
+
+### Check that Railway uses the config file
+
+With the Config File setting empty, Railway reads no config file: none of its settings apply (pre-deploy
+`release.sh`, `start_web.sh`, the health check, the restart policy) unless the dashboard sets the same
+values, and Railpack's default start command is the `web` line of `backend/Procfile`; Railway never runs
+the Procfile `release` line. Until 2026-11-04 that `web` line was gunicorn alone: the 2026-11-03 deploys
+needed `accounts.0028` / `0029` applied by hand, and the 2026-11-04 deploy went live without its 7
+migrations, so every signed-in request and `/api/questions/` answered 500 (missing columns) while
+`/api/health/` answered 200, and the blog was empty (`seed_blogs` had not run). Both start commands now run
+`migrate --no-input` before gunicorn, so a deploy can no longer serve a database without its migrations,
+but the seeds and the media steps still need the config file. After a deploy check:
+
+* the top of the build log names `backend/railway.json`; the deploy log shows `release.sh complete` and
+  `start_web.sh: media steps complete`;
+* `python manage.py showmigrations --plan | grep "\[ \]"` (or `migrate --plan`) lists nothing.
+
+If a deploy went out without its migrations: from a checkout of the deployed commit, with an env file whose
+`DATABASE_URL` reaches the database through Railway's public TCP proxy,
+`DJANGO_ENV_FILE=<file> python manage.py migrate --plan`, then `migrate`, then `seed_blogs --dry-run` and
+`seed_blogs`; or set the Config File and redeploy. Every migration is its own transaction, so a failure
+rolls that migration back and a second run continues.
 
 ### Variables (Railway → service → Variables)
 

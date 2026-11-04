@@ -6,6 +6,15 @@
 # own access to the same storage.
 set -o errexit
 
+# Safety net: release.sh (Railway's pre-deploy step) has already migrated, so this
+# is a no-op that takes a few seconds. It matters when the pre-deploy step did not
+# run: the code must never serve a database without its migrations (2026-11-04,
+# every signed-in request answered 500). A failed migrate stops the start, so the
+# deploy fails its health check and the previous version keeps serving. One
+# process, before gunicorn forks its workers: migrating at worker import (the
+# unused crack_cms/startup.py) made the workers race for the lock (ee5ab79).
+python manage.py migrate --no-input
+
 # Media steps need the volume, which Railway mounts only here (not in the
 # pre-deploy container of release.sh). They run in the background so the
 # health check does not wait for the first restore (~300 MB); every step is

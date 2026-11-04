@@ -17,8 +17,9 @@ DigitalOcean App Platform (backup).
       KB / blog steps. It no longer runs `import_neet_pg` and never runs
       destructive data commands (full order: [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §7).
 - [x] `backend/Procfile` defines `release: python manage.py migrate --no-input`,
-      `web: gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 4 --timeout 120 --log-file -`
-      and `worker: python manage.py qcluster`.
+      `web: python manage.py migrate --no-input && gunicorn crack_cms.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 4 --timeout 120 --log-file -`
+      (migrates first: platforms such as Railway never run the `release` line) and
+      `worker: python manage.py qcluster`.
 - [ ] **Worker component** running `python manage.py qcluster` with the web
       component's environment. DigitalOcean App Platform does not start the
       Procfile `worker` (or run `release`) by itself. Without it, ingestion /

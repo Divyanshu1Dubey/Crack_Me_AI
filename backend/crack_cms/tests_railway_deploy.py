@@ -60,6 +60,22 @@ class RailwayDeployScriptTests(SimpleTestCase):
         for needle in ('--replace', 'flush', 'cleanup_seed_samples', 'remove_from_bank', 'delete', 'bootstrap_admin'):
             self.assertFalse([c for c in commands if needle in c], needle)
 
+    def test_every_start_path_migrates_before_gunicorn(self):
+        # Railway skips release.sh (its pre-deploy step) when the service is not using backend/railway.json,
+        # then starts the Procfile web command; it never runs the Procfile release line. 2026-11-04: the new
+        # code served a database without its migrations and every signed-in request answered 500. Both start
+        # paths migrate first, in one process (not at worker import), and start gunicorn only after success.
+        web = dict(line.split(':', 1) for line in _commands('Procfile'))['web'].strip()
+        migrate, separator, start = web.partition(' && ')
+        self.assertEqual((migrate, separator), ('python manage.py migrate --no-input', ' && '))
+        self.assertTrue(start.startswith('gunicorn crack_cms.wsgi:application'), web)
+
+        text = (BACKEND_DIR / 'start_web.sh').read_text(encoding='utf-8')
+        migrate_at = text.index('\npython manage.py migrate --no-input\n')
+        self.assertLess(text.index('\nset -o errexit\n'), migrate_at)   # a failed migrate stops the start
+        for later in ('RUN_MEDIA_STEPS:-1', 'RUN_QCLUSTER_IN_WEB:-1', 'exec gunicorn'):
+            self.assertLess(migrate_at, text.index(later), later)
+
     def test_start_web_restores_media_in_the_background_before_gunicorn(self):
         text = (BACKEND_DIR / 'start_web.sh').read_text(encoding='utf-8')
         restore = text.index('python manage.py restore_media_transfer')
