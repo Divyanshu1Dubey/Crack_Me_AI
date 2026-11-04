@@ -127,7 +127,7 @@ export const EXAM_CONFIGS: Record<ExamConfig['slug'], ExamConfig> = {
       { topic: 'Biostatistics numericals', reason: 'Predictable marks — Sensitivity, PPV, NNT.', code: 'PSM' },
       { topic: 'Labour management & PPH', reason: 'OBG favourite, asked in 2018, 2019, 2021, 2023.', code: 'OBG' },
     ],
-    pyqYears: [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018],
+    pyqYears: [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018],
     stats: [
       { value: CMS_PYQ_COUNT, label: 'Verified PYQs' },
       { value: `${CMS_PYQ_YEAR_COUNT} yrs`, label: `Coverage ${CMS_PYQ_YEARS}` },

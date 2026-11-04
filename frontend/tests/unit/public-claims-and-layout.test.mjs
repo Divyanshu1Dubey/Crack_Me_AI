@@ -64,9 +64,9 @@ const INFLATED = [
 ];
 
 test('bank figures: one shared constant, rounded down from the production bank', () => {
-    assert.equal(bank.CMS_PYQ_COUNT, '1,800+');
-    assert.equal(bank.CMS_PYQ_YEARS, '2018–2025');
-    assert.equal(bank.CMS_PYQ_YEAR_COUNT, 8);
+    assert.equal(bank.CMS_PYQ_COUNT, '2,100+');   // 2,106 active once the 2026 papers are imported
+    assert.equal(bank.CMS_PYQ_YEARS, '2018–2026');
+    assert.equal(bank.CMS_PYQ_YEAR_COUNT, 9);
     assert.equal(bank.NEET_PG_QUESTION_COUNT, '4,000+');
     assert.equal(bank.INI_CET_QUESTION_COUNT, 'about 100');
     assert.equal(bank.INI_CET_BANK_HREF, '/questions/inicet/practice');

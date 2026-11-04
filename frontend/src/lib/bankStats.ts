@@ -3,9 +3,11 @@
  *
  * One source, so every page, meta description and JSON-LD block states the
  * same size for the same bank. Figures are rounded DOWN from the production
- * bank (Nov 2026 backup):
- *   - UPSC CMS: 1,880 active PYQs dated 2018–2025 (eight papers of 240
- *     questions cap that range at 1,920; undated rows are not counted).
+ * bank (Nov 2026):
+ *   - UPSC CMS: 2,106 active PYQs dated 2018–2026 — 1,880 for 2018–2025 plus
+ *     226 of the 240 questions of the 2026 papers (manage.py import_pyq_paper
+ *     fixtures/pyq/cms_2026.json; 14 stay hidden until their figure is added;
+ *     undated rows are not counted).
  *   - NEET PG:  about 4,200 active questions (mostly exam recalls).
  *   - INI-CET:  about 100 active recall questions.
  * FMGE and USMLE have no question bank of their own yet — do not quote a
@@ -15,16 +17,16 @@
  * Keep this file free of imports (it is unit-tested directly with Node).
  */
 
-/** UPSC CMS previous-year questions in the bank (1,880 active, 2018–2025). */
-export const CMS_PYQ_COUNT = '1,800+';
+/** UPSC CMS previous-year questions in the bank (2,106 active, 2018–2026). */
+export const CMS_PYQ_COUNT = '2,100+';
 
 /** Exam years the UPSC CMS bank covers. */
-export const CMS_PYQ_YEARS = '2018–2025';
+export const CMS_PYQ_YEARS = '2018–2026';
 
-/** Number of UPSC CMS exam years covered (2018–2025 inclusive). */
-export const CMS_PYQ_YEAR_COUNT = 8;
+/** Number of UPSC CMS exam years covered (2018–2026 inclusive). */
+export const CMS_PYQ_YEAR_COUNT = 9;
 
-/** "1,800+ UPSC CMS PYQs (2018–2025)" — the standard phrase for copy. */
+/** "2,100+ UPSC CMS PYQs (2018–2026)" — the standard phrase for copy. */
 export const CMS_PYQ_PHRASE = `${CMS_PYQ_COUNT} UPSC CMS PYQs (${CMS_PYQ_YEARS})`;
 
 /** NEET PG questions in the bank (about 4,200 active). */

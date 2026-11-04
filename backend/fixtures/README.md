@@ -118,3 +118,41 @@ If you eventually need a server-side image upload step (because PNGs are
 too large for git), see `docs/INGESTION_REPORT.md` for the
 `crack-cms-question-images` Supabase bucket — but for editorial changes
 this image-token workflow is intentionally low-friction.
+
+## A new year's paper: `pyq/<exam>_<year>.json` (2026-11)
+
+`fixtures/pyq/cms_2026.json` holds UPSC CMS 2026 Paper 1 and Paper 2
+(question booklet Series C, 240 questions): stem, options, the printed
+key, number, subject section and topic of every question, in the
+`pyq-paper/1` format. Its `note` and `sources` say where it came from: the
+Salaah Shots solution PDFs, an **unofficial** key (UPSC had not published
+its key). Their explanations were not copied (their own writing); the
+questions are imported without an explanation.
+
+```
+python manage.py import_pyq_paper fixtures/pyq/cms_2026.json            # dry run: the plan
+python manage.py import_pyq_paper fixtures/pyq/cms_2026.json --apply    # write
+```
+
+The command (dry run unless `--apply`) skips what is already imported
+(same exam, year, paper and `display_number`, so a second run changes
+nothing) and stems an admin removed; it lists questions the bank already
+has under another label but still creates them, so the paper stays whole
+for the year simulator. Each printed key is recorded as a
+`key_audit.SourceKey` (`inline_answer`: a secondary-source signal, never a
+verified key) and the key audit runs for the new questions
+(`insufficient_evidence` until other evidence or an admin review).
+
+Figures: the solution PDFs have none; where the paper had one they write a
+bracketed description that often names the answer, so it was removed. The
+14 questions whose stem says a figure is shown (`needs_figure`) are created
+**hidden** (`is_active=False`, `needs_review`, `is_image_based`): add the
+figure from the official UPSC question paper in the questions editor
+(`[[img:N]]`), then activate the question. They are 2026 Paper 1 Q17,
+Q109, Q110 and Paper 2 Q84, Q88, Q92, Q94, Q95, Q97, Q101, Q106, Q108,
+Q109, Q118 (Series C numbers).
+
+Run it against production the way the other data steps run (an env file
+with the production `DATABASE_URL`, `DJANGO_ENV_FILE=<file> python manage.py
+import_pyq_paper ...`), before deploying copy that quotes the bigger bank
+(`frontend/src/lib/bankStats.ts`).
