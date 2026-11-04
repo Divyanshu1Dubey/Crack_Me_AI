@@ -307,22 +307,30 @@ def _question_explanation_payload(question) -> dict:
     """
     from .ai_per_question import usable_ai_text
 
+    from .serializers import STALE_EXPLANATION_NOTICE, explanation_for_another_key
+
     override = (question.admin_explanation_override or '').strip()
-    explanation = _clean_text(override or question.explanation or '')
+    other_key = explanation_for_another_key(question)
+    # Text written for another key than the current one (a corrected key) is not shown: the student
+    # gets the key with its option text and a notice instead.
+    explanation = '' if other_key else _clean_text(override or question.explanation or '')
     effective = _clean_text(usable_ai_text(effective_explanation_for(question)) or '')
     mnemonic = (
         usable_ai_text(question.admin_mnemonic_override)
         or usable_ai_text(question.ai_mnemonic)
         or usable_ai_text(question.mnemonic)
     )
-    return {
+    payload = {
         'explanation': explanation,
         'effective_explanation': (
             effective.strip() or explanation.strip() or _answer_fallback_explanation(question)
         ),
-        'explanation_overridden': bool(question.lock_explanation or override),
+        'explanation_overridden': bool(question.lock_explanation or override) and not other_key,
         'mnemonic': _clean_text(mnemonic or ''),
     }
+    if other_key:
+        payload['explanation_notice'] = STALE_EXPLANATION_NOTICE
+    return payload
 
 
 class ExamTrackViewSet(viewsets.ReadOnlyModelViewSet):
@@ -1791,13 +1799,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     content_changed = content_changed or _stored_value_differs(getattr(question, field, None), value)
                     setattr(question, field, value)
                     changed.append(field)
-                # Optionally store the admin's answer: a human decision, so it
-                # is locked against AI regeneration, verifiers and re-imports
-                # (as a PATCH of correct_answer is).
+                # Optionally store the admin's answer: a human decision, made through the one key
+                # writer below (AnswerKeyChange, audit) and locked against AI regeneration,
+                # verifiers and re-imports.
+                key_to_set = ''
                 if update_answer and correct_answer != (question.correct_answer or '').strip().upper():
-                    question.correct_answer = correct_answer
-                    question.lock_answer = True
-                    changed += ['correct_answer', 'lock_answer']
+                    key_to_set = correct_answer
                     content_changed = True
                 # QE-03: unreviewed AI text must not sit under an earlier
                 # "Verified by Admin" badge. Saving new content clears the
@@ -1812,6 +1819,18 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     verification_cleared = True
                 # Partial save: never write back stale copies of other fields.
                 question.save(update_fields=changed + ['updated_at'])
+                if key_to_set:
+                    from .content_hashes import stem_hash as _stem_hash
+                    from .editorial import change_answer_key
+                    previous = (question.correct_answer or '').strip().upper()[:1] or '-'
+                    change_answer_key(
+                        question, key_to_set, actor=request.user, source='generate_explanation', evidence=[],
+                        reason=f'Key set by an admin in the explanation generator ({previous} -> {key_to_set}).')
+                    # The text just generated was written for the new key: AI text for that key, not stale.
+                    Question.objects.filter(pk=question.pk).update(
+                        lock_answer=True, explanation_for_key=key_to_set, explanation_status='ai_generated',
+                        explanation_status_reason='', explanation_origin='ai',
+                        explanation_stem_hash=_stem_hash(question))
                 log_operation('aiservice:generate-explanation')
             question.refresh_from_db()
 
@@ -1893,7 +1912,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
             snapshot=self._serialize_revision_state(question),
         )
 
-    def _apply_revision_state(self, question, snapshot):
+    def _apply_revision_state(self, question, snapshot, *, actor=None, revision_id=None) -> str:
+        """Restore ``snapshot`` onto ``question``. The key goes through ``change_answer_key`` (the
+        one key writer: AnswerKeyChange, audit); a revision without a valid key keeps the current
+        one. Content hooks fire when the stem or an option changed. Returns 'kept' when the key
+        could not be restored, else ''."""
+        from .content_hashes import stem_hash, valid_key
+        from .content_hooks import on_question_changed
+        from .editorial import change_answer_key
+
+        snapshot = dict(snapshot)
+        recorded = 'correct_answer' in snapshot
+        snap_key = valid_key(snapshot.pop('correct_answer', '') or '')
+        old_key, old_hash = question.correct_answer or '', stem_hash(question)
         for field, value in snapshot.items():
             if field == 'subject_id':
                 question.subject_id = value
@@ -1902,6 +1933,17 @@ class QuestionViewSet(viewsets.ModelViewSet):
             else:
                 setattr(question, field, value)
         question.save()
+        key_note = ''
+        current = valid_key(question.correct_answer)
+        if snap_key and snap_key != current:
+            change_answer_key(question, snap_key, actor=actor, source='undo_revision', evidence=[],
+                              reason=f'Undo to revision #{revision_id}: the key it recorded.')
+        elif recorded and not snap_key and current:
+            key_note = 'kept'   # the revision had no valid key: the current key stays
+        if stem_hash(question) != old_hash:
+            transaction.on_commit(lambda: on_question_changed(
+                question, old_key=old_key, old_stem_hash=old_hash, reason=f'undo to revision #{revision_id}'))
+        return key_note
 
     def update(self, request, *args, **kwargs):
         with transaction.atomic():
@@ -3224,9 +3266,15 @@ class QuestionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'No revision snapshot found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Save current state before undo for future revert.
-        self._capture_revision_snapshot(question, request.user, reason=f'Before undo to revision #{target.id}')
-        self._apply_revision_state(question, target.snapshot or {})
-        return Response({'message': 'Question reverted to selected revision snapshot', 'question_id': question.id, 'revision_id': target.id})
+        with transaction.atomic():
+            self._capture_revision_snapshot(question, request.user, reason=f'Before undo to revision #{target.id}')
+            key_note = self._apply_revision_state(question, target.snapshot or {}, actor=request.user,
+                                                  revision_id=target.id)
+        body = {'message': 'Question reverted to selected revision snapshot', 'question_id': question.id,
+                'revision_id': target.id}
+        if key_note == 'kept':
+            body['key_kept'] = True   # the revision had no valid key; the current key stays
+        return Response(body)
 
     @action(detail=True, methods=['post'], url_path='resolve-dispute')
     def resolve_dispute(self, request, pk=None):
@@ -3244,18 +3292,33 @@ class QuestionViewSet(viewsets.ModelViewSet):
         if corrected_answer not in ('A', 'B', 'C', 'D'):
             return Response({'error': 'corrected_answer must be one of A, B, C, D.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        justification_text = str(justification).strip()
+        if len(justification_text) < 10:
+            return Response({'error': 'justification must be at least 10 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .content_hashes import valid_key
+        from .editorial import _record_decision, change_answer_key
+
         old_answer = question.correct_answer
+        key_changes = corrected_answer != valid_key(old_answer)
         with transaction.atomic():
             self._capture_revision_snapshot(
                 question, request.user, reason=f'Before resolve-dispute ({old_answer} -> {corrected_answer})',
             )
-            question.correct_answer = corrected_answer
+            if key_changes:
+                # The one key writer: AnswerKeyChange with the justification, audit, content hooks.
+                change_answer_key(question, corrected_answer, actor=request.user, reason=justification_text,
+                                  evidence=[{'kind': 'note', 'text': justification_text[:600]}],
+                                  source='resolve_dispute')
+                question.refresh_from_db()
             question.is_disputed = False
             # A human decision: protect it from AI regeneration, verifiers
             # (verify_answers --fix) and fixture re-imports.
             question.lock_answer = True
             question.admin_edited = True
-            question.save(update_fields=['correct_answer', 'is_disputed', 'lock_answer', 'admin_edited', 'updated_at'])
+            question.save(update_fields=['is_disputed', 'lock_answer', 'admin_edited', 'updated_at'])
+            if not key_changes:
+                # The dispute is closed by confirming the key: a decision for the answer-key audit.
+                _record_decision(question, actor=request.user, resolution='key_confirmed', reason=justification_text)
 
         try:
             from accounts.views import create_admin_audit_log
@@ -3313,11 +3376,30 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # we can return a 409 Response directly. (Returning a Response from
         # perform_update is silently discarded by DRF and the save is lost.)
         self._normalize_question_payload(serializer.validated_data)
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
+        from .content_hashes import stem_hash, valid_key
+        from .content_hooks import on_question_changed
+
+        instance = serializer.instance
         if 'correct_answer' in serializer.validated_data:
-            serializer.validated_data['lock_answer'] = True
+            # The key changes only through change-key (questions.editorial.change_answer_key: old key,
+            # who, why, evidence, audit). An unchanged key in the form is simply not written again.
+            new_key = (serializer.validated_data.get('correct_answer') or '').strip().upper()[:1]
+            if new_key != valid_key(instance.correct_answer):
+                raise DRFValidationError({'correct_answer': [
+                    'Change the answer key with POST /api/questions/<id>/change-key/ '
+                    '(it records the old key, the reason and the evidence).']})
+            serializer.validated_data.pop('correct_answer')
         if 'explanation' in serializer.validated_data:
             serializer.validated_data['lock_explanation'] = True
+        old_key, old_hash = instance.correct_answer or '', stem_hash(instance)
         serializer.save()
+        if stem_hash(serializer.instance) != old_hash:
+            # Evidence, the answer-key audit and topic notes react to a changed stem / option.
+            saved = serializer.instance
+            transaction.on_commit(lambda: on_question_changed(
+                saved, old_key=old_key, old_stem_hash=old_hash, reason='question edited'))
 
     @staticmethod
     def _if_match_timestamp(raw):

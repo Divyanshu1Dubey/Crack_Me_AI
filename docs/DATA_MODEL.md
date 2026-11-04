@@ -850,3 +850,11 @@ Rules, commands and the review queue: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT
 | `SourceKey` | `question` (FK), `source_file`, `source_sha256`, `question_page`, `question_number`, `answer_page`, `chapter`, `source_exam`, `source_year`, `printed_letter`, `letter`, `option_order`, `method`, `located`, `stem_hash`, `recovery_version`, `recovered_at`, `imported_at` | unique (`question`, `source_file`, `question_page`, `question_number`); loaded by `import_source_keys`; `confident` = located and option order checked |
 | `AuditResolution` | `question`, `audit`, `resolution`, `reason`, `evidence`, `key_change` (FK `questions.AnswerKeyChange`), `status_before`, `stored_key`, `stem_hash`, `resolved_by`, `resolved_at` | immutable (save after create / delete raise) |
 | `ReviewClaim` | `question` (1:1), `claimed_by`, `claimed_at`, `expires_at` | 15-minute claim in the review queue |
+
+---
+
+## `blog_engine` seed log (2026-11)
+
+| Model | Key fields | Notes |
+|---|---|---|
+| `BlogSeedImport` | `slug` (unique), `content_hash`, `imported_at`, `updated_at` | One row per static post `seed_blogs` handled (migration `blog_engine.0003`): a post deleted or renamed in the admin is never re-created, and a post an admin edited (row hash differs from `content_hash`) is kept unless `seed_blogs --update`. `BlogPost` ordering is `-date_published, -created_at, -id`. The public blog reads published `BlogPost` rows (`/api/blog/posts/catalog/`); the static modules in `frontend/src/content/blog/` are the seed (`seed_data/static_posts.json`) and the build-time fallback only. |

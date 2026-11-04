@@ -765,6 +765,11 @@ function PracticeContent() {
                                                 <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(String(revealData.explanation ?? '')), explanationImages)} />
                                             </div>
                                         )}
+                                        {/* The key was corrected and the old explanation is withheld until rewritten. */}
+                                        {typeof (revealData as { explanation_notice?: unknown }).explanation_notice === 'string'
+                                            && (revealData as { explanation_notice?: string }).explanation_notice && (
+                                            <p className="text-xs text-muted-foreground">{(revealData as { explanation_notice?: string }).explanation_notice}</p>
+                                        )}
                                         {currentReveal?.status === 'ready' && currentReveal.explanationLocked && (
                                             <p className="text-xs text-muted-foreground">
                                                 <button type="button" onClick={() => showPaywall('PYQ answers')} className="font-semibold text-primary hover:underline">

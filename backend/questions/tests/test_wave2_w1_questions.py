@@ -359,6 +359,13 @@ class GenerateExplanationTests(_Base):
         self.assertEqual((q.explanation, q.why_correct, q.mnemonic), ('Generated explanation', 'Because gamma', ''))
         self.assertEqual((q.correct_answer, q.lock_answer), ('B', True))
         self.assertTrue(QuestionRevisionSnapshot.objects.filter(question=q).exists())
+        # The key went through the one key writer, and the new text is AI text for the new key.
+        from questions.models import AnswerKeyChange
+        change = AnswerKeyChange.objects.get(question=q)
+        self.assertEqual((change.new_key, change.source), ('B', 'generate_explanation'))
+        self.assertNotEqual(change.old_key, 'B')
+        self.assertEqual((q.explanation_for_key, q.explanation_status, q.explanation_origin),
+                         ('B', 'ai_generated', 'ai'))
 
     def test_dry_run_saves_nothing(self):
         q = _question(self.subject, 52, explanation='Existing explanation')

@@ -114,8 +114,10 @@ def change_answer_key(
             # As a PATCH of the explanation: students see this text, not an older AI explanation
             # (serializers.effective_explanation_for), and AI regeneration leaves it alone.
             question.lock_explanation = True
-        elif question.explanation:
-            # If key changed without updating explanation, mark it stale for the new key
+        elif (question.explanation or "").strip() or (question.ai_explanation or "").strip():
+            # If key changed without updating explanation, mark it stale for the new key (curated or AI
+            # text alike: both argue for the old key; students are not shown it, see
+            # serializers.explanation_for_another_key)
             question.explanation_status = "stale"
             question.explanation_status_reason = f"Key changed from {old_key} to {clean_key}"
 

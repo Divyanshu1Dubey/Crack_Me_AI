@@ -184,10 +184,11 @@ class DeleteIsSoftTests(_AdminBase):
 
 class ResolveDisputeTests(_AdminBase):
     def test_answer_is_validated_normalised_and_locked(self):
+        from questions.models import AnswerKeyChange
         q = _question(self.subject, 50, is_disputed=True)
         for raw, expected in (('b', 'B'), ('Option C', 'C')):
             res = self.api.post(f'/api/questions/{q.id}/resolve-dispute/',
-                                {'corrected_answer': raw, 'justification': 'key error'}, format='json')
+                                {'corrected_answer': raw, 'justification': 'key error in the source'}, format='json')
             self.assertEqual(res.status_code, 200, res.data)
             q.refresh_from_db()
             self.assertEqual(q.correct_answer, expected)
@@ -195,6 +196,12 @@ class ResolveDisputeTests(_AdminBase):
         self.assertTrue(q.admin_edited)
         self.assertFalse(q.is_disputed)
         self.assertEqual(QuestionRevisionSnapshot.objects.filter(question=q).count(), 2)
+        # The one key writer recorded each change with the justification (ground rule 1).
+        changes = list(AnswerKeyChange.objects.filter(question=q).order_by('changed_at', 'id'))
+        self.assertEqual([(c.new_key, c.source) for c in changes], [('B', 'resolve_dispute'), ('C', 'resolve_dispute')])
+        res = self.api.post(f'/api/questions/{q.id}/resolve-dispute/',
+                            {'corrected_answer': 'A', 'justification': 'too short'}, format='json')
+        self.assertEqual(res.status_code, 400)
         for bad in ('E', 'xyz', 'AB'):
             res = self.api.post(f'/api/questions/{q.id}/resolve-dispute/',
                                 {'corrected_answer': bad, 'justification': 'x'}, format='json')

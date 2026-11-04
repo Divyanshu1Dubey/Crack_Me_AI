@@ -23,7 +23,9 @@ from .serializers import (
     SubmitAnswerSerializer,
 )
 from questions.models import Question, Subject, Topic
-from questions.serializers import QuestionListSerializer, public_subject_name
+from questions.serializers import (
+    STALE_EXPLANATION_NOTICE, QuestionListSerializer, explanation_for_another_key, public_subject_name,
+)
 from accounts.permissions import IsControlTowerAdmin
 from accounts.utils import is_premium as _is_premium
 
@@ -1243,7 +1245,9 @@ class TestViewSet(viewsets.ModelViewSet):
                 'correct_answer': q.correct_answer,
                 'selected_answer': resp.selected_answer,
                 'is_correct': resp.is_correct,
-                'explanation': q.explanation or q.ai_explanation or '',
+                # Text written for another key than the current one (a corrected key) is not shown.
+                'explanation': '' if explanation_for_another_key(q) else (q.explanation or q.ai_explanation or ''),
+                'explanation_notice': STALE_EXPLANATION_NOTICE if explanation_for_another_key(q) else '',
                 'mnemonic': q.mnemonic or '',
                 'subject': subj,
                 'topic': q.topic.name if q.topic else '',

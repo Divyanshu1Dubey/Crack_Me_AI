@@ -779,6 +779,53 @@ Staff-only material importer (upload, batches, review queue, publish). See [`IMP
 
 ---
 
+## Content and medical-accuracy endpoints (2026-11)
+
+Answer keys change only through `POST /api/questions/<id>/change-key/` (`questions.editorial.change_answer_key`:
+immutable `AnswerKeyChange` with the old key, who, why and the evidence). The question `PATCH` / `PUT`
+refuses a different `correct_answer` (`400`, pointing to change-key); resolve-dispute, the explanation
+generator's `update_correct_answer` and undo-to-revision go through `change_answer_key` (sources
+`resolve_dispute`, `generate_explanation`, `undo_revision`). After a key change the explanation written for the
+old key is not shown to students: detail / reveal / review payloads carry `explanation: ''` and
+`explanation_notice` instead (admins still see the text).
+
+**Question editor** (admin role, `IsControlTowerAdmin`; `docs/ANSWER_KEY_AUDIT.md` for the statuses):
+
+| Method | Path | |
+|---|---|---|
+| POST | `/api/questions/<id>/change-key/` | `{new_key, reason (>= 10), evidence[], expected_key?, explanation_fields?}`; `409 key_changed` for a stale form |
+| POST | `/api/questions/<id>/explain-option/` | evidence-first suggestion for one option: `ok` / `conflict` / `insufficient_evidence` / `image_context_missing` / `failed` (throttle `admin_explain`) |
+| POST | `/api/questions/<id>/save-explanation/` | explanation / concept explanation / mnemonic for the current key (`409` for another key) |
+| POST | `/api/questions/<id>/verify-key/` | `{action: verify | unverify, reason?}`: a decision without evidence ("likely correct") |
+| POST | `/api/questions/<id>/review-explanation/` | mark the saved explanation reviewed |
+| GET | `/api/questions/<id>/key-history/`, `/api/questions/<id>/provenance/` | key changes; explanation status / origin, audit status and signals, verification |
+
+**Students**: `GET /api/evidence/questions/<id>/citations/` — accepted textbook citations (title, edition, page
+label, snippet <= 240 chars, never a page); `200 {citations: [], locked: true}` for a viewer who may not see the
+answer (it used to answer `402`); throttle `evidence_student` 300/hour.
+
+**Topic notes**: `GET /api/questions/topic-notes/published/` (filters `exam` (also returns cross-exam notes),
+`subject`, `topic`, `q` on title, `id`; filtered per viewer), `GET .../published/facets/`,
+`GET .../published/<id>/`, `GET /api/questions/topic-notes/build/` (builder status, admin),
+`POST /api/questions/topic-notes/build/` (build from PYQs, admin; `preview` supported),
+`GET .../library/<id>/sources/` (admin).
+
+**Tests**: during a test the exam payload has no answer media (explanation figures, explanation video, page
+screenshot, book / chapter / page); `GET /api/tests/<id>/review/` rows carry `stem_images`,
+`explanation_images` (signed URLs), `video_*` for viewers who may see the answer, and `explanation_notice`.
+
+**AI**: `GET /api/ai/related-figures/?q=<text>` (signed-in) — up to four stem figures from past questions on the
+topic (free users: questions they may open), no AI call, throttle `ai_figures`.
+
+**Blog** (`blog_engine`): public `GET /api/blog/posts/catalog/` (every published post with a body, unpaginated;
+what the public pages read), `GET /api/blog/posts/`, `GET /api/blog/posts/by-slug/<slug>/` (published only for
+non-admins; throttle `blog_read`). Admin role or staff: create / update / delete,
+`POST /api/blog/posts/<id>/toggle-publish/`, `GET /api/blog/posts/facets/`. Writes are validated (slug format and
+reserved slugs, ISO dates, links internal or http(s) only, structured FAQs / TOC / references); publishing an empty
+body answers `400`. Frontend env: `BLOG_API_URL` (server-side base, optional), `BLOG_SOURCE=static` (skip the API).
+
+---
+
 ## Health endpoints
 
 | Method | Path | Description |

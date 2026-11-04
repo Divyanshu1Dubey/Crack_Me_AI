@@ -127,14 +127,41 @@ def resolve_runtime_image_role(obj, img, memo=None) -> str:
     return runtime_role(obj, img, memo)
 
 
+STALE_EXPLANATION_NOTICE = ('The answer key of this question was corrected; its explanation is being '
+                            'rewritten for the correct answer.')
+
+
+def _viewer_is_admin(request) -> bool:
+    user = getattr(request, 'user', None)
+    return bool(user is not None and getattr(user, 'is_authenticated', False) and (
+        getattr(user, 'is_admin', False) or getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)))
+
+
+def explanation_for_another_key(obj) -> bool:
+    """True when the stored explanation texts argue for another answer than the current key: written
+    for another key (``explanation_for_key``), or left behind by a key change (``change_answer_key``
+    marks them 'stale' with a 'Key changed ...' reason). Students are then shown the key and
+    ``STALE_EXPLANATION_NOTICE`` instead of that text; admins keep seeing it, to rewrite it."""
+    from .content_hashes import valid_key
+    key = valid_key(getattr(obj, 'correct_answer', ''))
+    written_for = valid_key(getattr(obj, 'explanation_for_key', ''))
+    if key and written_for and written_for != key:
+        return True
+    reason = getattr(obj, 'explanation_status_reason', '') or ''
+    return (getattr(obj, 'explanation_status', '') or '') == 'stale' and reason.startswith('Key changed')
+
+
 def effective_explanation_for(obj):
     """The explanation a student should see (admin lock / override, parsed
     AI explanation, then the curated explanation).
 
     A stored provider-failure sentence ("All AI services are temporarily
     unavailable...", persisted by older regenerate / backfill runs) is
-    never served as the explanation.
+    never served as the explanation, nor is text written for another key
+    than the current one (``explanation_for_another_key``).
     """
+    if explanation_for_another_key(obj):
+        return ''
     if obj.lock_explanation:
         return obj.admin_explanation_override or obj.explanation
     if obj.admin_explanation_override:
@@ -799,6 +826,12 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         # who may not read this question's answer, like the answer fields.
         if row_has_answer_label(data) and not self._viewer_can_view_answer(instance):
             redact_public_text(data)
+        # Text written for another key than the current one (a corrected key): not shown to students.
+        if explanation_for_another_key(instance) and not _viewer_is_admin(self.context.get('request')):
+            for field in ('explanation', 'concept_explanation'):
+                if field in data:
+                    data[field] = ''
+            data['explanation_notice'] = STALE_EXPLANATION_NOTICE
         return data
 
     class Meta:

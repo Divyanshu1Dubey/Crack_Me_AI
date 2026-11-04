@@ -1838,6 +1838,10 @@ function ExamQuestionBankInner({
                                                         <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
                                                     </div>
                                                 )}
+                                                {/* The key was corrected and the old explanation is withheld until rewritten. */}
+                                                {typeof detail?.explanation_notice === 'string' && detail.explanation_notice && (
+                                                    <p className="text-xs text-muted-foreground">{detail.explanation_notice}</p>
+                                                )}
                                             </CardContent>
                                         </Card>
 

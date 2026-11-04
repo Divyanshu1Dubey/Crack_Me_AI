@@ -1,7 +1,25 @@
 # Medical accuracy mission — progress log
 
-_Last updated: 2026-11-03 (wave 2a added). Every number below was measured on that date unless marked otherwise. The earlier
-version of this file (2026-11-02) described wave 1 as complete and verified; it was not, see "Corrections"._
+_Last updated: 2026-11-04 (wave 2b added). Every number below was measured on the date of its section unless marked
+otherwise. The earlier version of this file (2026-11-02) described wave 1 as complete and verified; it was not, see
+"Corrections"._
+
+## Wave 2b: the rest of the frontend, and every key writer through one path (2026-11-04)
+
+- Questions editor: key-change box (reason + evidence; "verified" only with strong evidence), evidence-first
+  explanation suggestion (abstains / reports a conflict instead of justifying a key), provenance panel; 16 bugs
+  fixed in the editor and evidence endpoints (admin-role permission, raw evidence making a change "verified",
+  client-chosen change source, text saved for another key, 402 from the student citations endpoint, ...).
+- Students: accepted textbook citations after the reveal (snippets <= 240 chars); PYQ-first topic notes with
+  sources and a "provisional" marker (the published list used to send every note, answers included, to free
+  accounts); post-test review with explanation figures and video, none of it in the exam payload during the test.
+- Every path that wrote `correct_answer` directly now goes through `change_answer_key` (question PATCH refuses a
+  key change, resolve-dispute, the explanation generator, undo to a revision, `fix_answer_label_leaks`); a stem
+  edit notifies the audit / evidence / notes; after a key change students no longer see the explanation written
+  for the old key (they get the key and a notice until it is rewritten).
+- Beyond the mission: AI Tutor answers render tables / line breaks / badges in every mode and show related
+  figures from past questions; the blog is managed only in `/admin/blog` and the public blog reads the database;
+  students customise the sidebar, dashboard and opening page (saved per user).
 
 ## Where the work lives
 
@@ -78,13 +96,12 @@ Commits `ff1be80`, `a404b17`, `73fdc41` and the docs commit on `medical-accuracy
 ## Next
 
 1. Production: merge, migrate `cracklabs` (`questions.0042`, `evidence.0001`, `reference_corpus.0001`,
-   `key_audit.0001`-`0002`), then the dry-run imports and the audit (runbook: `ANSWER_KEY_AUDIT.md` §6).
-2. Repair the two import defects above with a dry-run command (then recover and import the signals again,
-   since the content hashes change).
-3. Wave 2 remainder: editor panels (key change, explanation suggestion, provenance), evidence components
-   (student citations ≤ 240 chars, admin page viewer), notes UI; post-test review media (backend + results
-   page).
-4. AI first pass for the remaining 7,379 questions (review signals only); a second, independent pass where
-   a reviewer disagrees with the key.
-5. Corpus: OCR for the 26 deferred sources, the remaining embeddings (or BM25-only with a benchmark), the
+   `key_audit.0001`-`0002`, `accounts.0030`, `blog_engine.0003`), `seed_blogs --dry-run` then `seed_blogs`, then
+   the dry-run imports and the audit (runbook: `ANSWER_KEY_AUDIT.md` §6).
+2. Owner decision: `fix_answer_label_leaks` (repairs 673 rows, hides 85 until fixed); then recover and import
+   the signals again, since the content hashes change. The 515 stems starting with ":" stay as they are (the
+   frontend shows them; a repair also changes the hashes).
+3. AI first pass for the remaining 7,379 questions (review signals only; deferred by the owner on 2026-11-04 for
+   its token cost); a second, independent pass where a reviewer disagrees with the key.
+4. Corpus: OCR for the 26 deferred sources, the remaining embeddings (or BM25-only with a benchmark), the
    retrieval / answer benchmarks.
