@@ -735,16 +735,13 @@ class QuestionListSerializer(serializers.ModelSerializer):
         return path
 
     def _resolve_image_url(self, img):
-        """Pick the best URL for a QuestionImage — proxy or stored public URL."""
-        # Local MEDIA / Supabase URL recorded at ingest time. These are
-        # already absolute or already rooted paths. Return as-is so the
-        # frontend can hit them directly without going through the proxy.
-        url = (getattr(img, 'url', '') or '').strip()
-        if not url:
-            return ''
-        if url.startswith(('http://', 'https://', '/')):
-            return url
-        return f"/{url.lstrip('/')}"
+        """Fallback when the absolute proxy URL cannot be built: the relative proxy path.
+
+        Never the stored address: `/media/` is not served in production and the
+        Supabase Storage host most stored URLs name is retired (2026-11-03); the
+        proxy serves the file, the /media/ copy or the restored storage copy.
+        """
+        return f"/api/questions/images/{img.id}/serve/"
 
 
 class QuestionAdminListSerializer(QuestionListSerializer):
@@ -870,19 +867,16 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
             # auth-gated /api/questions/images/<id>/serve/ proxy URL
             # instead so the player always has a reachable target.
             #
-            # 2026-07-27: prefer `img.url` (Supabase public URL for admin
-            # uploads) when present — the proxy can redirect there, but
-            # handing the browser the absolute URL avoids the redirect hop
-            # entirely. Falls back to proxy for recall-imported images.
-            url = ''
+            # 2026-11-04: always the proxy, like the list serializer. From
+            # 2026-07-27 this handed the browser a stored absolute `img.url`
+            # (the Supabase public URL of an admin upload) to skip a redirect;
+            # Supabase Storage was shut down on 2026-11-03, so every admin-
+            # uploaded figure broke in the question view while the proxy
+            # serves it from the restored copy (SUPABASE_STORAGE_MIRROR_DIR).
             try:
-                stored = (getattr(img, 'url', '') or '').strip()
-                if stored.startswith(('http://', 'https://')):
-                    url = stored
-                else:
-                    url = self._build_image_serve_url(img) or self._resolve_image_url(img)
+                url = self._build_image_serve_url(img) or self._resolve_image_url(img)
             except Exception:
-                url = self._resolve_image_url(img) or ''
+                url = self._resolve_image_url(img)
             # Bug fix 2026-08-01 (belt-and-suspenders): reclassify the role
             # at response time so stale admin uploads with the wrong role
             # are corrected before reaching the client. See
@@ -938,13 +932,9 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         return memo[obj.pk]
 
     def _resolve_image_url(self, img):
-        """Pick the best URL for a QuestionImage — proxy or stored public URL."""
-        url = (getattr(img, 'url', '') or '').strip()
-        if not url:
-            return ''
-        if url.startswith(('http://', 'https://', '/')):
-            return url
-        return f"/{url.lstrip('/')}"
+        """Fallback when the absolute proxy URL cannot be built: the relative proxy path
+        (never the stored address, see QuestionListSerializer._resolve_image_url)."""
+        return f"/api/questions/images/{img.id}/serve/"
 
     def _build_image_serve_url(self, img):
         """Return the prod-safe proxy URL for a QuestionImage.

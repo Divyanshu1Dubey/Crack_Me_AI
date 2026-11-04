@@ -4259,10 +4259,11 @@ class QuestionImageServeView(APIView):
         #   1. `img.file` (ImageField) — recall imports ship bytes here.
         #   2. `img.url` starting with /media/ — recall path failed to
         #      hydrate the ImageField but the row still points at MEDIA_ROOT.
-        #   3. `img.url` is an absolute http(s) URL (Supabase public URL for
-        #      admin uploads) — proxy the request as a 302 redirect so the
-        #      browser fetches directly from Supabase instead of round-tripping
-        #      through Django. Saves bandwidth and avoids needing to re-stream.
+        #   3. `img.url` is an absolute http(s) URL. A Supabase public URL (old
+        #      admin uploads) is served from the restored copy
+        #      (SUPABASE_STORAGE_MIRROR_DIR); without a copy it answers 404
+        #      `image_missing` (Supabase Storage was shut down on 2026-11-03, a
+        #      redirect there cannot load). Any other host: a 302 redirect.
         serve_path = None
         if img.file:
             try:
@@ -4280,6 +4281,21 @@ class QuestionImageServeView(APIView):
         if not serve_path and img.url and img.url.startswith(("http://", "https://")):
             serve_path = _supabase_storage_mirror_path(img.url)
             if not serve_path:
+                from .image_context import is_retired_storage_url
+                if is_retired_storage_url(img.url):
+                    # Supabase Storage is shut down (2026-11-03): a redirect would send the browser to a
+                    # host that no longer resolves. The figure is missing from the restored copy.
+                    logger.warning("QuestionImage #%s: retired storage URL with no copy in the storage mirror",
+                                   image_id)
+                    return Response(
+                        {
+                            "code": "image_missing",
+                            "error": "image file missing on server",
+                            "image_id": image_id,
+                            "hint": "re-upload via admin",
+                        },
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
                 from django.http import HttpResponseRedirect
                 return _harden_image_response(HttpResponseRedirect(img.url))
         if not serve_path:
@@ -4379,6 +4395,22 @@ class QuestionImageServeView(APIView):
             )
         resp["Cache-Control"] = "private, max-age=3600"
         return _harden_image_response(resp)
+
+
+class QuestionImageHealthView(APIView):
+    """``GET /api/questions/images/health/`` (admins): which question figures this server can
+    serve, by source, with a sample of the missing ones (``questions.image_health``). Read-only;
+    ``?limit=`` caps the sample (default 200, at most 2000)."""
+
+    permission_classes = [IsControlTowerAdmin]
+
+    def get(self, request):
+        from .image_health import image_health_report
+        try:
+            limit = max(0, min(int(request.query_params.get("limit", 200)), 2000))
+        except (TypeError, ValueError):
+            limit = 200
+        return Response(image_health_report(sample_limit=limit))
 
 
 #: Raster formats the image endpoint serves inline (magic bytes -> type).

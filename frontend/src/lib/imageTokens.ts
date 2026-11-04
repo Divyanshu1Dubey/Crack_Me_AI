@@ -22,7 +22,7 @@
  * `/media/...` path so the admin can spot it.
  */
 
-import { apiUrl } from './apiBase';
+import { figureSrc } from './figureSrc';
 
 export interface QuestionImageLike {
   id: number;
@@ -133,12 +133,9 @@ export function resolveImageTokens(
     const base = stripped.split('/').pop() || '';
     const found = byBasename.get(base.toLowerCase());
     if (found) {
-      // Prefer the canonical QuestionImage — `serve_url` is what the
-      // auth-gated proxy will return. Inline `img.url || img.file` as
-      // a fallback for environments where the proxy isn't wired up.
-      const served =
-        (found.url && found.url.length > 0 ? found.url : null) ||
-        apiUrl(`/questions/images/${found.id}/serve/`);
+      // The canonical QuestionImage address (figureSrc: the API's address,
+      // or the image endpoint for an empty / retired-storage / /media/ one).
+      const served = figureSrc(found);
       const alt = (found.caption || `Question image ${base}`).replace(/"/g, '&quot;');
       return `<img src="${escapeAttr(served)}" alt="${alt}" loading="lazy" class="question-inline-image" />`;
     }
@@ -194,7 +191,7 @@ function escapeHtml(value: string): string {
 }
 
 function _imgTag(img: QuestionImageLike, fallbackAlt: string): string {
-  const src = escapeAttr((img.url || img.file) ?? '');
+  const src = escapeAttr(figureSrc(img));
   const alt = (img.caption || fallbackAlt).replace(/"/g, '&quot;');
   const widthAttr = img.width ? ` width="${img.width}"` : '';
   const heightAttr = img.height ? ` height="${img.height}"` : '';

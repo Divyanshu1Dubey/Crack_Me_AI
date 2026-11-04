@@ -142,7 +142,11 @@ images + 172 page screenshots), `backend/media/mocktest_assets`, and the restore
 `crack-cms-question-images` (the 495 admin-uploaded images)). After each start, `start_web.sh` writes
 missing files onto `/data` in the background (`manage.py restore_media_transfer`, idempotent, SHA-256
 checked; the deploy log shows `start_web.sh: media steps complete`). This cannot run in `release.sh`:
-Railway's pre-deploy container has no volume and discards its files. Once images show in production,
+Railway's pre-deploy container has no volume and discards its files. Check with
+`GET /api/questions/images/health/` as an admin (or `python manage.py image_health` in the web container):
+`missing` should be 0 and `mirror_configured` true; `missing_sample` lists the figures to re-upload.
+Keep `SUPABASE_STORAGE_MIRROR_DIR` set: every old admin upload is still stored with its Supabase address and
+is served from that copy (the browser always gets the image endpoint). Once images show in production,
 free the space: `python manage.py restore_media_transfer --drop` (or `DROP TABLE ops_media_transfer;`).
 
 Without Supabase, new admin image uploads are stored on the volume too (`questions/image_upload.py`).
