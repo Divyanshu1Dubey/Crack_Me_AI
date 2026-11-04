@@ -825,9 +825,28 @@ topic (free users: questions they may open), no AI call, throttle `ai_figures`.
 **Blog** (`blog_engine`): public `GET /api/blog/posts/catalog/` (every published post with a body, unpaginated;
 what the public pages read), `GET /api/blog/posts/`, `GET /api/blog/posts/by-slug/<slug>/` (published only for
 non-admins; throttle `blog_read`). Admin role or staff: create / update / delete,
-`POST /api/blog/posts/<id>/toggle-publish/`, `GET /api/blog/posts/facets/`. Writes are validated (slug format and
-reserved slugs, ISO dates, links internal or http(s) only, structured FAQs / TOC / references); publishing an empty
-body answers `400`. Frontend env: `BLOG_API_URL` (server-side base, optional), `BLOG_SOURCE=static` (skip the API).
+`POST /api/blog/posts/<id>/toggle-publish/`, `GET /api/blog/posts/facets/` (`total`, `published`, `drafts`, `thin`,
+`thin_words`, `categories`). Writes are validated (slug format and reserved slugs, ISO dates, links internal or
+http(s) only, structured FAQs / TOC / references); publishing an empty body answers `400`.
+`word_count` and `reading_time` in every response are **read-only and computed from the body**
+(`BlogPost.body_word_count`, `blog_engine/text_stats.py`: "N min" at 200 words a minute, at least 1); values sent for
+them are ignored. List rows carry `is_thin` (under 400 words); the list takes `?thin=true|false` and
+`?ordering=body_word_count` / `-body_word_count`.
+
+**Blog images**: `POST /api/blog/images/` (admin role or staff; multipart `file`) → `201 {src, width, height, bytes,
+mime}`, `src` = `/api/blog/images/<yyyy>/<mm>/<sha256-32>.<png|jpg|gif|webp>` (a path on the API origin, stored in the
+post body). Only PNG / JPEG / GIF / WebP typed from the content (magic bytes + Pillow verification; never the name or
+Content-Type), at most 5 MB (`BLOG_IMAGE_MAX_BYTES`) and 8,000 px a side / 40 MP; anything else answers `400
+{file: [...]}`. Files are stored under `MEDIA_ROOT/blog/` (Railway: `/data/media` on the volume), once per content
+hash. `GET /api/blog/images/<name>` (public, throttle `blog_read`) serves only stored raster files, with
+`X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
+`Cache-Control: public, max-age=31536000, immutable`; any other name is `404`.
+
+**Blog revalidation (Next.js, frontend origin)**: `POST /api/blog-revalidate` `{slugs: [...]}` with the admin's
+`Authorization: Bearer` token (and `X-Session-ID`). The route asks `GET /api/auth/profile/` with that token; only
+`role === 'admin'` or `is_admin` passes (`401` expired session, `403` not an admin). It then calls
+`revalidateTag('blog', { expire: 0 })` and `revalidatePath` for `/blog` and each slug. Frontend env: `BLOG_API_URL`
+(server-side base, optional), `BLOG_SOURCE=static` (skip the API).
 
 ---
 

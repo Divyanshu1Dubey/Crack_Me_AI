@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ExternalLink, Loader2, Newspaper, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ExternalLink, Eye, Loader2, Newspaper, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import { blogAPI, type BlogFacets, type BlogPostAdmin, type BlogPostAdminRow } from '@/lib/blogAPI';
+import { THIN_POST_WORDS } from '@/lib/blogText';
 import BlogEditor from './BlogEditor';
-import { blogListParams, describeBlogError } from './blogForm';
+import { blogListParams, describeBlogError, editorTargetFromSearch } from './blogForm';
 
 const PAGE_SIZE = 25;
 const STATUSES: { value: '' | 'published' | 'draft'; label: string }[] = [
@@ -19,9 +20,23 @@ const STATUSES: { value: '' | 'published' | 'draft'; label: string }[] = [
 const ORDERINGS = [
     { value: '', label: 'Newest first' },
     { value: '-updated', label: 'Recently edited' },
+    { value: 'body_word_count', label: 'Shortest first' },
+    { value: '-body_word_count', label: 'Longest first' },
     { value: 'title', label: 'Title A–Z' },
     { value: 'date_published', label: 'Oldest first' },
 ];
+
+/** Refresh the public pages of these posts now; false when that failed (they follow within ~10 minutes). */
+async function refreshPublicPages(slugs: string[]): Promise<boolean> {
+    try {
+        await blogAPI.revalidate(slugs);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const LATER = 'The public blog follows within about 10 minutes.';
 
 export default function AdminBlogPage() {
     const router = useRouter();
@@ -38,6 +53,7 @@ export default function AdminBlogPage() {
     const [searchInput, setSearchInput] = useState('');
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState<'' | 'published' | 'draft'>('');
+    const [thinOnly, setThinOnly] = useState(false);
     const [category, setCategory] = useState('');
     const [ordering, setOrdering] = useState('');
 
@@ -52,7 +68,7 @@ export default function AdminBlogPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await blogAPI.list(blogListParams({ page, pageSize: PAGE_SIZE, search, status, category, ordering }));
+            const res = await blogAPI.list(blogListParams({ page, pageSize: PAGE_SIZE, search, status, category, ordering, thin: thinOnly }));
             if (seq !== requestSeq.current) return;
             const data = res.data as { results?: BlogPostAdminRow[]; count?: number } | BlogPostAdminRow[];
             const results = Array.isArray(data) ? data : data?.results ?? [];
@@ -66,7 +82,7 @@ export default function AdminBlogPage() {
         } finally {
             if (seq === requestSeq.current) setLoading(false);
         }
-    }, [page, search, status, category, ordering]);
+    }, [page, search, status, category, ordering, thinOnly]);
 
     const loadFacets = useCallback(async () => {
         try {
@@ -83,7 +99,24 @@ export default function AdminBlogPage() {
         const t = window.setTimeout(() => setSearch(searchInput.trim()), 350);
         return () => window.clearTimeout(t);
     }, [searchInput]);
-    useEffect(() => { setPage(1); }, [search, status, category, ordering]);
+    useEffect(() => { setPage(1); }, [search, status, category, ordering, thinOnly]);
+
+    // /admin/blog?edit=<slug> (the "Edit post" button of a post page) or ?new=1 opens the editor.
+    const [deepLink, setDeepLink] = useState<string | null>(null);
+    useEffect(() => {
+        if (!isAdmin) return;
+        const target = editorTargetFromSearch(window.location.search);
+        if (!target) return;
+        window.history.replaceState(null, '', '/admin/blog');
+        if ('create' in target) {
+            setEditor({ id: null });
+            return;
+        }
+        setDeepLink(`Opening “${target.slug}”…`);
+        blogAPI.getBySlug(target.slug)
+            .then((res) => { setDeepLink(null); setEditor({ id: res.data.id }); })
+            .catch((err) => setDeepLink(describeBlogError(err, `opening /blog/${target.slug}`)));
+    }, [isAdmin]);
 
     const openEditor = (id: number | null) => {
         setNotice(null);
@@ -97,10 +130,10 @@ export default function AdminBlogPage() {
         loadFacets();
     };
 
-    const onSaved = (post: BlogPostAdmin, created: boolean) => {
+    const onSaved = (post: BlogPostAdmin, created: boolean, refreshed: boolean) => {
         setNotice(post.is_published
-            ? `Saved “${post.title}”. The public page updates within about 10 minutes.`
-            : `Saved “${post.title}” as a draft (not on the site).`);
+            ? `Saved “${post.title}”. ${refreshed ? 'The live post shows it now.' : LATER}`
+            : `Saved “${post.title}” as a draft (only admins can open it).`);
         if (created) setEditor({ id: post.id });
         loadFacets();
     };
@@ -111,9 +144,10 @@ export default function AdminBlogPage() {
         try {
             const res = await blogAPI.togglePublish(row.id);
             setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, is_published: res.data.is_published } : r)));
+            const refreshed = await refreshPublicPages([row.slug]);
             setNotice(res.data.is_published
-                ? `Published “${row.title}”. It appears on the blog within about 10 minutes.`
-                : `Unpublished “${row.title}”. It leaves the blog within about 10 minutes.`);
+                ? `Published “${row.title}”. ${refreshed ? 'It is on the blog now.' : LATER}`
+                : `Unpublished “${row.title}”. ${refreshed ? 'It has left the blog.' : LATER}`);
             loadFacets();
         } catch (err) {
             setNotice(describeBlogError(err, 'changing the publish state'));
@@ -127,7 +161,8 @@ export default function AdminBlogPage() {
         try {
             await blogAPI.remove(row.id);
             setConfirmDelete(null);
-            setNotice(`Deleted “${row.title}”. It leaves the blog within about 10 minutes.`);
+            const refreshed = await refreshPublicPages([row.slug]);
+            setNotice(`Deleted “${row.title}”. ${refreshed ? 'It has left the blog.' : LATER}`);
             loadList();
             loadFacets();
         } catch (err) {
@@ -190,11 +225,13 @@ export default function AdminBlogPage() {
             </div>
             <p className="mb-4 text-xs text-muted-foreground">
                 The public blog (/blog, its category, tag and author pages, the feed and the sitemap) shows exactly the published
-                posts listed here. Saved changes appear on the site within about 10 minutes. Deploys import new posts from the
-                site&apos;s post files but never overwrite or bring back a post edited or deleted here.
+                posts listed here; saving, publishing or deleting refreshes it right away. Deploys import new posts from the
+                site&apos;s post files but never overwrite or bring back a post edited or deleted here. Word counts are worked out
+                from each body; a post under {THIN_POST_WORDS} words is marked “Thin”.
             </p>
 
             {noticeBox}
+            {deepLink ? <p className="mb-3 text-sm text-muted-foreground" role="status">{deepLink}</p> : null}
 
             <div className="mb-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Status">
                 {STATUSES.map((s) => {
@@ -207,6 +244,11 @@ export default function AdminBlogPage() {
                         </button>
                     );
                 })}
+                <button type="button" aria-pressed={thinOnly} onClick={() => setThinOnly((v) => !v)}
+                    title={`Posts under ${THIN_POST_WORDS} words: candidates to expand`}
+                    className={`rounded-full border px-3 py-1 text-xs ${thinOnly ? 'border-amber-600 bg-amber-500/20 text-amber-900 dark:text-amber-200' : 'border-border hover:bg-accent'}`}>
+                    Thin posts{typeof facets?.thin === 'number' && <span className="opacity-75"> {facets.thin}</span>}
+                </button>
             </div>
 
             <div className="mb-4 flex flex-wrap items-end gap-2 text-sm">
@@ -248,6 +290,7 @@ export default function AdminBlogPage() {
                                 <div className="flex flex-wrap items-center gap-1.5">
                                     <Badge variant={row.is_published ? 'success' : 'secondary'}>{row.is_published ? 'Published' : 'Draft'}</Badge>
                                     {row.is_stub && <Badge variant="warning" title="The body is empty or a placeholder: not shown on the site">No body</Badge>}
+                                    {!row.is_stub && row.is_thin && <Badge variant="warning" title={`Under ${THIN_POST_WORDS} words: expand this post`}>Thin</Badge>}
                                     {row.pinned && <Badge variant="outline">Pinned</Badge>}
                                     {row.trending && <Badge variant="outline">Trending</Badge>}
                                     <span className="text-xs text-muted-foreground">{row.category}{row.subcategory ? ` · ${row.subcategory}` : ''}</span>
@@ -258,7 +301,10 @@ export default function AdminBlogPage() {
                                 </button>
                                 <p className="break-all font-mono text-xs text-muted-foreground">/blog/{row.slug}</p>
                                 <p className="mt-0.5 text-xs text-muted-foreground">
-                                    Published {row.date_published || '–'}{row.updated_at ? ` · updated ${row.updated_at}` : ''} · {row.reading_time}
+                                    <strong className={row.is_thin ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}>
+                                        {typeof row.word_count === 'number' ? row.word_count.toLocaleString('en-IN') : '–'} words
+                                    </strong>
+                                    {' '}· {row.reading_time} read · published {row.date_published || '–'}{row.updated_at ? ` · updated ${row.updated_at}` : ''}
                                     {row.updated ? ` · last saved ${new Date(row.updated).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}
                                 </p>
                             </div>
@@ -271,10 +317,11 @@ export default function AdminBlogPage() {
                                     onClick={() => togglePublish(row)}>
                                     {row.is_published ? 'Unpublish' : 'Publish'}
                                 </Button>
-                                {row.is_published && !row.is_stub && (
+                                {!row.is_stub && (
                                     <a href={`/blog/${row.slug}`} target="_blank" rel="noopener noreferrer"
+                                        title={row.is_published ? 'The published post' : 'A draft: only admins see it at this address'}
                                         className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-accent">
-                                        <ExternalLink className="h-4 w-4" /> View
+                                        {row.is_published ? <><ExternalLink className="h-4 w-4" /> View</> : <><Eye className="h-4 w-4" /> Preview</>}
                                     </a>
                                 )}
                                 <Button variant="outline" size="sm" className="text-destructive" disabled={busyId === row.id}

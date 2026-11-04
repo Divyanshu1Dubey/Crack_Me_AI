@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
+import BlogExplorer from '@/components/blog/BlogExplorer';
 import { TrackedLink } from '@/components/TrackedLink';
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import { categoriesOf, loadBlogCatalog } from '@/lib/blog';
+import { categoriesOf, loadBlogCatalog, toCardData, type BlogPost } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 import { CMS_PYQ_COUNT } from '@/lib/bankStats';
 import Breadcrumbs from '@/components/Breadcrumbs';
@@ -28,22 +29,24 @@ export const metadata: Metadata = buildPageMetadata({
     ],
 });
 
-// The hub shows the newest posts and links every category; the full list
-// lives on the category pages (it used to render all 130 posts in a sidebar,
-// a ~700 KB page).
-const LATEST_POSTS = 9;
 const JSON_LD_POSTS = 20;
-/** Posts shown beside the featured one; the rest go in the grid below. */
-const ASIDE_POSTS = 3;
+/** The featured row: one lead card beside two stacked ones. */
+const FEATURED_POSTS = 3;
 
 // The published posts in the database (edited at /admin/blog), regenerated at
-// most every 5 minutes (BLOG_REVALIDATE_SECONDS).
+// most every 5 minutes (BLOG_REVALIDATE_SECONDS) or right after an admin saves
+// (app/api/blog-revalidate).
 export const revalidate = 300;
+
+/** Pinned posts first, then the newest. */
+function featuredPosts(posts: BlogPost[]): BlogPost[] {
+    return [...posts.filter((p) => p.pinned), ...posts.filter((p) => !p.pinned)].slice(0, FEATURED_POSTS);
+}
 
 export default async function BlogIndexPage() {
     const posts = await loadBlogCatalog();
-    const [featured, ...others] = posts;
-    const rest = others.slice(0, LATEST_POSTS - 1);
+    const featured = featuredPosts(posts);
+    const [lead, ...side] = featured.map(toCardData);
     const categories = categoriesOf(posts);
 
     const jsonLd = {
@@ -83,7 +86,7 @@ export default async function BlogIndexPage() {
                 </div>
                 {/* Hub hero */}
                 <section className="border-b border-border bg-linear-to-br from-indigo-600/10 via-background to-violet-600/10">
-                    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+                    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                                 <BookOpen className="h-3 w-3" /> The CrackCMS Blog
@@ -124,45 +127,43 @@ export default async function BlogIndexPage() {
                     </div>
                 </section>
 
-                {/* Featured + grid */}
-                <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-                    {featured ? (
-                        <div className="mb-10 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            <Sparkles className="h-4 w-4 text-primary" /> Latest strategy
-                        </div>
-                    ) : null}
-
-                    {featured ? (
-                        <>
-                            {/* Featured post + the next few beside it. The aside is a
-                                grid so every card is its own block (space-y on inline
-                                card links let them run together). */}
-                            <div className="grid gap-6 lg:grid-cols-12">
-                                <div className="lg:col-span-8">
-                                    <BlogCard post={featured} featured />
-                                </div>
-                                <aside className="lg:col-span-4 grid content-start gap-4">
-                                    {rest.slice(0, ASIDE_POSTS).map((p) => (
-                                        <BlogCard key={p.slug} post={p} />
-                                    ))}
-                                </aside>
+                {lead ? (
+                    <section aria-labelledby="featured-heading" className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 sm:pt-14">
+                        <h2 id="featured-heading" className="mb-5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            <Sparkles className="h-4 w-4 text-primary" /> Featured
+                        </h2>
+                        {/* The lead card spans both rows beside two stacked cards, so the
+                            row heights match and no empty block is left beside it. */}
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2">
+                            <div className="md:col-span-2 lg:row-span-2">
+                                <BlogCard post={lead} featured />
                             </div>
-                            {/* Everything else uses the full width instead of one long
-                                narrow column next to an empty two-thirds of the page. */}
-                            {rest.length > ASIDE_POSTS && (
-                                <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                                    {rest.slice(ASIDE_POSTS).map((p) => (
-                                        <BlogCard key={p.slug} post={p} />
-                                    ))}
-                                </div>
-                            )}
-                        </>
-                    ) : null}
+                            {side.map((p) => (
+                                <BlogCard key={p.slug} post={p} />
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
+
+                <section aria-labelledby="all-posts-heading" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
+                    <div className="mb-6">
+                        <h2 id="all-posts-heading" className="text-2xl font-black tracking-tight sm:text-3xl">All posts</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {posts.length} posts on UPSC CMS, NEET PG and medical PG preparation. Search, or pick a category.
+                        </p>
+                    </div>
+                    {posts.length > 0 ? (
+                        <BlogExplorer posts={posts.map(toCardData)} categories={categories} featuredSlugs={featured.map((p) => p.slug)} />
+                    ) : (
+                        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
+                            No posts yet. Check back soon.
+                        </div>
+                    )}
 
                     {categories.length > 0 && (
-                        <nav aria-label="Blog categories" className="mt-12">
+                        <nav aria-label="Blog categories" className="mt-14 border-t border-border pt-8">
                             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                                Browse all {posts.length} posts by category
+                                Category pages
                             </h2>
                             <div className="flex flex-wrap gap-2">
                                 {categories.map((c) => (
@@ -176,12 +177,6 @@ export default async function BlogIndexPage() {
                                 ))}
                             </div>
                         </nav>
-                    )}
-
-                    {posts.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground">
-                            No posts yet. Check back soon.
-                        </div>
                     )}
 
                     <div className="mt-12 rounded-2xl border border-border bg-linear-to-br from-primary/10 via-accent/20 to-teal-500/10 p-6 sm:p-8 text-center">

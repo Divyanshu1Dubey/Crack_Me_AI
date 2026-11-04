@@ -16,6 +16,8 @@ def unpublish_posts(modeladmin, request, queryset):
 
 @admin.register(BlogPost)
 class BlogPostAdmin(admin.ModelAdmin):
+    """The posts are edited at /admin/blog (the site's editor); this is the raw view."""
+
     list_display = [
         "title",
         "category",
@@ -24,11 +26,12 @@ class BlogPostAdmin(admin.ModelAdmin):
         "is_published",
         "pinned",
         "difficulty",
-        "reading_time",
+        "words",
     ]
     list_filter = ["category", "difficulty", "is_published", "pinned", "date_published"]
     search_fields = ["title", "slug", "body", "excerpt", "tags", "author"]
-    readonly_fields = ["created_at", "updated"]
+    # word_count / reading_time: the seed's metadata, not shown on the site.
+    readonly_fields = ["created_at", "updated", "words", "reading_time", "word_count"]
     actions = [publish_posts, unpublish_posts]
     list_editable = ["is_published", "pinned"]
     fieldsets = (
@@ -39,16 +42,25 @@ class BlogPostAdmin(admin.ModelAdmin):
             "fields": ("category", "subcategory", "tags", "difficulty")
         }),
         ("Author", {
-            "fields": ("author_id", "reviewed_by", "author", "author_role", "date_published", "date_modified", "updated_at", "reading_time")
+            "fields": ("author_id", "reviewed_by", "author", "author_role", "date_published", "date_modified", "updated_at")
         }),
         ("Visibility", {
-            "fields": ("is_published", "pinned", "trending", "word_count")
+            "fields": ("is_published", "pinned", "trending", "words")
         }),
         ("Extended Content", {
             "fields": ("primary_cta", "related_exam_paths", "faqs", "toc", "references", "revision_log", "prelude", "outro"),
             "classes": ("collapse",),
         }),
+        ("Seed metadata (not shown on the site)", {
+            "fields": ("reading_time", "word_count"),
+            "classes": ("collapse",),
+        }),
     )
+
+    @admin.display(description="Words", ordering="body_word_count")
+    def words(self, obj):
+        thin = " (thin)" if obj.is_thin else ""
+        return f"{obj.body_word_count} · {obj.reading_time_label}{thin}"
 
 
 @admin.register(BlogSeedImport)

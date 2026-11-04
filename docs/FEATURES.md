@@ -32,6 +32,7 @@
 23. [Jobs / Career Listings](#23-jobs--career-listings)
 24. [Video Engine (TTS Slides)](#24-video-engine-tts-slides)
 25. [SEO & Marketing Pages](#25-seo--marketing-pages)
+26. [Blog](#26-blog-blog-edited-at-adminblog)
 
 ---
 
@@ -604,6 +605,77 @@ Medura_Train/{textbooks,PYQ,web_knowledge}/ → manage.py train_ai → chunk →
 - Next.js metadata API, Google Analytics (`G-MM88RT1QQK`), Datadog RUM
 
 See [`SEO.md`](./SEO.md) for the full SEO audit.
+
+---
+
+## 26. Blog (`/blog`, edited at `/admin/blog`)
+
+### Purpose
+Exam-strategy and subject articles for UPSC CMS / NEET PG aspirants. The `blog_engine` database is the single source of
+truth: admins write and edit every post at `/admin/blog` (a visual editor), and the public pages render the published
+rows server-side with ISR.
+
+### Files
+- Backend: `backend/blog_engine/` — `models.py` (`BlogPost`, `BlogSeedImport`), `serializers.py`, `views.py`,
+  `images.py` (image upload + hardened serve), `text_stats.py` (word count / reading time), `seeding.py` +
+  `management/commands/seed_blogs.py` (imports `seed_data/static_posts.json`, never overwrites an admin edit).
+- Rendering: `frontend/src/lib/blogMarkdown.ts` (the one markdown pipeline: parse, sanitize, callouts, figures,
+  tables, heading ids, `blogToc`), `src/components/blog/BlogArticle.tsx` (Server Component; core in
+  `blogArticleCore.ts`), `.blog-prose` styles in `src/app/globals.css`, `src/lib/blogText.ts` (counts, dates,
+  heading slugs, callout kinds; safe for client bundles).
+- Pages: `src/app/blog/page.tsx` (featured row + `components/blog/BlogExplorer.tsx`: search, category chips,
+  "Show more" over every published post), `src/app/blog/[slug]/page.tsx` → `components/BlogPostLayout.tsx`,
+  category / tag / author pages, `feed.xml`, `[slug]/opengraph-image.tsx`, `[slug]/not-found.tsx` (admins get
+  `components/blog/DraftPreview.tsx` for an unpublished post).
+- Admin: `src/app/admin/blog/{page,BlogEditor,RowsEditor}.tsx`, `blogForm.ts`, `editor/` (`BodyEditor.tsx`
+  tabs, `RichTextEditor.tsx` TipTap editor, `schema.ts`, `markdownDoc.ts` markdown ⇄ editor document);
+  `src/app/api/blog-revalidate/route.ts` (on-demand revalidation; its admin check is `src/lib/blogRevalidate.ts`);
+  `src/lib/blogAPI.ts`.
+- Data: `src/lib/blog.ts` (post type, API loaders with `tags: ['blog']`, static fallback, `postReadingStats`,
+  `toCardData`).
+
+### Models
+`BlogPost` (markdown `body`; `faqs` / `toc` / `references` / `revision_log` / `primary_cta` JSON;
+`body_word_count`, recounted on every save) and `BlogSeedImport` — see [`DATA_MODEL.md`](./DATA_MODEL.md).
+
+### APIs
+`/api/blog/posts/` (catalog, by-slug, admin CRUD, `toggle-publish`, `facets`, `?thin=`), `POST /api/blog/images/`,
+`GET /api/blog/images/<yyyy>/<mm>/<hash>.<ext>`, and the frontend's `POST /api/blog-revalidate` — see
+[`API_REFERENCE.md`](./API_REFERENCE.md).
+
+### Flow
+1. **Markdown dialect** (`lib/blogMarkdown.ts`): CommonMark + GFM (tables, task items, `~~strike~~`, autolinks; a
+   single `~` stays text). A newline inside a paragraph is a line break (`remark-breaks`): 38 of the 129 seeded posts
+   write "**Term:** text" lines that way. Raw HTML is parsed and cut down by the shared allow-list
+   (`lib/markdownSanitize.ts`) before the renderer adds its own structure, so a post cannot inject classes, ids,
+   scripts or styles.
+2. **Rendering**: `##`/`###` headings get ids from their text (unique; ids from a stored TOC are kept for the headings
+   they name, so old `#anchors` keep working) and a hover `#` link; "On this page" is built from the `##` headings by
+   the same pipeline (`blogToc`). `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` blockquotes
+   become callout boxes; an image alone in its paragraph becomes a `<figure>` with its title as the caption;
+   `/api/...` image paths point at the API origin; tables scroll sideways in their own box; task items render as
+   ☐ / ☑. The body renders on the server (no markdown JavaScript on the public page).
+3. **Counts**: `count_words(body)` (`text_stats.py`; `lib/blogText.ts` is the same rule, step for step) is stored
+   as `body_word_count` on every save; the API's `word_count` / `reading_time` (200 words a minute, rounded half up,
+   at least 1 min) come from it, and cards, the post header, the social image and `/admin/blog` show them
+   (`postReadingStats` in `lib/blog.ts`: a post with its body is counted on the page; a catalog row uses the API's
+   count only when the row carries `is_thin`, so an older API's seed figure is never shown — the card then shows no
+   reading time). The seed's `word_count` / `reading_time` columns (mostly ~2,000 words for ~100-word bodies) are
+   never shown. Posts under 400 words are "thin" (`?thin=true`, a badge in `/admin/blog`).
+4. **Editing** (see [`ADMIN_SYSTEM.md`](./ADMIN_SYSTEM.md) §10.1): Visual (TipTap on the same `.blog-prose`
+   styles), Markdown and Preview (the public `BlogArticle`) tabs over one markdown body. The body stays markdown in
+   the database; `editor/markdownDoc.ts` reads it into the editor and writes it back, and every seeded post
+   round-trips to identical article HTML (`tests/unit/blog-editor-roundtrip.test.ts`).
+5. **Publishing**: a save / (un)publish / delete in `/admin/blog` calls `POST /api/blog-revalidate`, which checks the
+   caller's backend profile is an admin, then expires the `blog` fetch tag and re-renders `/blog` and the post, so
+   the live site shows the change on the next visit (otherwise within ~2 × `BLOG_REVALIDATE_SECONDS` = 10 min). An
+   unpublished post's address is a 404 for visitors and a draft preview for admins.
+
+### Not lossless
+Marks over exactly the same text have one nesting in the editor's document: `[**x**](/y)` is written back as
+`**[x](/y)**` (the same bold link; the HTML nests `<strong><a>` instead of `<a><strong>`). No seeded post has such a
+construct. Footnotes are not supported by the visual editor (such a post opens in the Markdown tab). Table cells with
+merged cells cannot be written in GFM (the editor offers no merge).
 
 ---
 

@@ -27,8 +27,8 @@ export function CopyLinkButton({ url, slug }: { url: string; slug?: string }) {
                 }
             }}
         >
-            <LinkIcon className="h-3.5 w-3.5" />
-            {copied ? 'Copied!' : 'Copy link'}
+            <LinkIcon aria-hidden="true" />
+            <span aria-live="polite">{copied ? 'Copied!' : 'Copy link'}</span>
         </button>
     );
 }

@@ -13,6 +13,7 @@ from crack_cms.throttling import AnonRateThrottle, UserRateThrottle
 from .models import BlogPost
 from .seeding import is_placeholder_body
 from .serializers import PUBLISH_NEEDS_BODY, BlogPostListSerializer, BlogPostSerializer
+from .text_stats import THIN_POST_WORDS
 
 # Read-only actions anyone may call. Everyone but a blog admin sees published
 # posts with a real body only; ``catalog`` (the public site's post list) is
@@ -66,10 +67,15 @@ class BlogPostViewSet(viewsets.ModelViewSet):
     /admin/blog lists, creates, edits, (un)publishes and deletes them.
 
     * ``list`` / ``retrieve`` / ``by-slug``: public, published posts with a
-      real body only; blog admins also see drafts.
+      real body only; blog admins also see drafts. ``list`` takes
+      ``?thin=true`` (under THIN_POST_WORDS words) / ``?thin=false`` and
+      ``?ordering=body_word_count`` (shortest first).
     * ``catalog``: every published post (summary fields), unpaginated.
-    * ``facets``: admin totals and categories for the filters.
+    * ``facets``: admin totals, thin posts and categories for the filters.
     * writes and ``toggle-publish``: blog admins only.
+
+    ``word_count`` / ``reading_time`` in every response are computed from the
+    body (BlogPost.body_word_count); see blog_engine.text_stats.
     """
 
     queryset = BlogPost.objects.all()
@@ -79,7 +85,8 @@ class BlogPostViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, BoundedSearchFilter, filters.OrderingFilter]
     filterset_fields = ["category", "difficulty", "is_published", "pinned", "trending", "author_id"]
     search_fields = ["title", "slug", "body", "excerpt", "tags", "author", "category"]
-    ordering_fields = ["date_published", "created_at", "updated", "title", "word_count"]
+    # body_word_count, not the seed's word_count column (never shown, mostly wrong).
+    ordering_fields = ["date_published", "created_at", "updated", "title", "body_word_count"]
 
     def get_permissions(self):
         if self.action in _PUBLIC_ACTIONS:
@@ -97,6 +104,12 @@ class BlogPostViewSet(viewsets.ModelViewSet):
             self.action in _PUBLIC_ACTIONS and not is_blog_admin(self.request.user)
         ):
             qs = public_posts(qs)
+        if self.action == "list":
+            thin = (self.request.query_params.get("thin") or "").strip().lower()
+            if thin in ("true", "1"):
+                qs = qs.filter(body_word_count__lt=THIN_POST_WORDS)
+            elif thin in ("false", "0"):
+                qs = qs.filter(body_word_count__gte=THIN_POST_WORDS)
         return qs
 
     def get_serializer_class(self):
@@ -123,6 +136,8 @@ class BlogPostViewSet(viewsets.ModelViewSet):
             "total": total,
             "published": published,
             "drafts": total - published,
+            "thin": posts.filter(body_word_count__lt=THIN_POST_WORDS).count(),
+            "thin_words": THIN_POST_WORDS,
             "categories": [{"name": row["category"], "count": row["count"]} for row in categories],
         })
 

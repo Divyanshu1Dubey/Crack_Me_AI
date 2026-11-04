@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import DraftPreview from '@/components/blog/DraftPreview';
 
+/** A missing or unpublished post. Admins see an unpublished one as a draft preview instead. */
 export default function BlogPostNotFound() {
     return (
+        <DraftPreview>
         <div className="min-h-screen bg-background text-foreground">
             <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6 sm:py-28 text-center">
                 <p className="text-sm font-bold uppercase tracking-wider text-primary">404</p>
@@ -28,5 +31,6 @@ export default function BlogPostNotFound() {
                 </div>
             </div>
         </div>
+        </DraftPreview>
     );
 }

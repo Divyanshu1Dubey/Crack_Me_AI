@@ -16,6 +16,7 @@ import {
     isLocalhostApiUrl,
     normalizeApiBaseUrl,
 } from '@/lib/apiBase';
+import { countBlogWords, formatPostDate, readingMinutes, readingTimeLabel, slugifyHeading } from '@/lib/blogText';
 
 import cmsLast5Days from '@/content/blog/upsc-cms-last-5-days-strategy';
 import cmsNeetPgLastWeek from '@/content/blog/cms-and-neet-pg-last-week-shared-revision';
@@ -220,11 +221,15 @@ export interface BlogPost {
     dateModified: string;
     /** ISO date string — last editorial copy refresh (drives "Updated on …"). */
     updatedAt: string;
-    /** Human-readable reading time, e.g. "14 min". */
+    /** Reading time as stored: the seed's metadata in the static posts, the
+     *  body-derived value from the API. Display postReadingStats(post). */
     readingTime: string;
-    /** Word count (filled by build script — falls back to actual count
-     *  of `body` if not set). */
+    /** Word count as stored: the seed's metadata in the static posts (mostly
+     *  wrong), the body-derived count from the API. Display postReadingStats(post). */
     wordCount?: number;
+    /** wordCount was counted from the body by the API (catalog rows that carry
+     *  `is_thin`; an older API sent the seed's figure). */
+    wordCountFromBody?: boolean;
     /** Inline CTA shown above the fold. Use helpful framing
      *  ("Practise 50 matched PYQs" — not "Sign up now!"). */
     primaryCta: {
@@ -522,30 +527,101 @@ export function getFeaturedPosts(n = 4): BlogPost[] {
     return [...pinned, ...rest].slice(0, n);
 }
 
-/** Approximate word count of a markdown body. */
-export function countWords(markdown: string): number {
-    return markdown
-        .replace(/```[\s\S]*?```/g, ' ')
-        .replace(/[#>*_`~|\[\]]/g, ' ')
-        .split(/\s+/)
-        .filter(Boolean).length;
+/** Word count of a markdown body: the site's one rule (lib/blogText countBlogWords). */
+export const countWords = countBlogWords;
+
+export { formatPostDate, slugifyHeading };
+
+export interface ReadingStats {
+    words: number;
+    minutes: number;
+    /** "N min" */
+    label: string;
 }
 
-/** Human-readable date in long form, e.g. "28 July 2026". */
-export function formatPostDate(iso: string): string {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+/**
+ * Word count and reading time a card or the post header shows, or null when
+ * unknown. A post with its body (the post page, the static posts) is counted
+ * here; a catalog row (no body) uses the count the API computed from the body
+ * (blog_engine.text_stats, the same rule; rows that carry `is_thin`). The
+ * seed's `readingTime` / `wordCount` metadata is never shown: most posts
+ * claimed about 2,000 words for a ~100-word body.
+ */
+export function postReadingStats(post: Pick<BlogPost, 'body' | 'wordCount' | 'wordCountFromBody'>): ReadingStats | null {
+    let words: number;
+    if (post.body?.trim()) words = countBlogWords(post.body);
+    else if (post.wordCountFromBody && typeof post.wordCount === 'number' && post.wordCount >= 0) words = post.wordCount;
+    else return null;
+    return { words, minutes: readingMinutes(words), label: readingTimeLabel(words) };
 }
 
-/** Slugify a heading into an anchor id. */
-export function slugifyHeading(text: string): string {
-    return text
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .slice(0, 80);
+/**
+ * What a post card shows, as plain data: client components (the /blog
+ * explorer) receive this instead of BlogPost so they never import this
+ * module, which bundles every static post.
+ */
+export interface BlogCardData {
+    slug: string;
+    title: string;
+    excerpt: string;
+    category: string;
+    author: string;
+    /** ISO date the card shows (last update, else publication). */
+    date: string;
+    /** "N min", or '' when unknown (the card then shows no reading time). */
+    readingLabel: string;
+    tags: string[];
+    coverImage?: string;
+    pinned?: boolean;
+}
+
+/**
+ * Cover folders the static posts point at that frontend/public does not ship
+ * (backend/blog_engine/seeding.py UNSHIPPED_COVER_PREFIXES blanks them in the
+ * database; the static fallback posts still carry them).
+ */
+const UNSHIPPED_COVER_PREFIXES = ['/blog/og/', '/blog/obg/'];
+
+/** A post's cover as the browser loads it, or '' (none, unsafe, or a file the site does not ship). */
+export function usableCoverImage(src: string | undefined): string {
+    const value = safeLinkTarget(src ?? '');
+    if (!value || UNSHIPPED_COVER_PREFIXES.some((prefix) => value.startsWith(prefix))) return '';
+    return resolveBlogMediaUrl(value);
+}
+
+export function toCardData(post: BlogPost): BlogCardData {
+    const cover = usableCoverImage(post.coverImage);
+    return {
+        slug: post.slug,
+        title: post.title,
+        excerpt: post.excerpt,
+        category: post.category,
+        author: post.author,
+        date: post.dateModified || post.datePublished,
+        readingLabel: postReadingStats(post)?.label ?? '',
+        tags: post.tags.slice(0, 8),
+        ...(cover ? { coverImage: cover } : {}),
+        ...(post.pinned ? { pinned: true } : {}),
+    };
+}
+
+/** Origin uploaded blog images (/api/blog/images/...) are served from: the API's. */
+export function blogImageOrigin(env: BlogApiEnv = currentBlogApiEnv()): string {
+    try {
+        return new URL(blogApiBaseUrl(env)).origin;
+    } catch {
+        return '';
+    }
+}
+
+/** A cover / media path as the browser loads it: /api/... paths point at the API origin. */
+export function resolveBlogMediaUrl(src: string, env: BlogApiEnv = currentBlogApiEnv()): string {
+    const value = safeLinkTarget(src);
+    if (value.startsWith('/api/')) {
+        const origin = blogImageOrigin(env);
+        return origin ? `${origin}${value}` : value;
+    }
+    return value;
 }
 
 /** Auto-build a Table of Contents from a markdown body
@@ -837,6 +913,7 @@ export function postFromRecord(input: unknown): BlogPost | null {
         updatedAt: text(r.updated_at) || dateModified,
         readingTime: text(r.reading_time),
         wordCount: typeof r.word_count === 'number' && Number.isFinite(r.word_count) ? r.word_count : undefined,
+        ...(typeof r.is_thin === 'boolean' ? { wordCountFromBody: true } : {}),
         primaryCta: ctaFromRecord(r.primary_cta),
         relatedExamPaths: relatedExamPaths.length ? relatedExamPaths : undefined,
         faqs: objectList(r.faqs)

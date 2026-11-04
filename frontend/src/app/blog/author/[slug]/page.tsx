@@ -5,7 +5,7 @@ import { ChevronLeft, GraduationCap, User } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, personSchema, jsonLdString } from '@/lib/metadata';
-import { authorSlugsOf, loadBlogCatalog } from '@/lib/blog';
+import { authorSlugsOf, loadBlogCatalog, toCardData } from '@/lib/blog';
 import { getAuthor, RETIRED_AUTHOR_SLUGS } from '@/content/authors';
 import { siteUrl } from '@/lib/seo';
 
@@ -144,7 +144,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
                     ) : (
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {posts.map((p) => (
-                                <BlogCard key={p.slug} post={p} />
+                                <BlogCard key={p.slug} post={toCardData(p)} />
                             ))}
                         </div>
                     )}
@@ -157,7 +157,7 @@ export default async function BlogAuthorPage({ params }: PageProps) {
                             </h2>
                             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                                 {reviewed.map((p) => (
-                                    <BlogCard key={p.slug} post={p} />
+                                    <BlogCard key={p.slug} post={toCardData(p)} />
                                 ))}
                             </div>
                         </div>

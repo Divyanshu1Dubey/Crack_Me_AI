@@ -5,7 +5,7 @@ import { BookOpen, ChevronLeft } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import { categoriesOf, loadBlogCatalog, postsInCategory } from '@/lib/blog';
+import { categoriesOf, loadBlogCatalog, postsInCategory, toCardData } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
@@ -122,7 +122,7 @@ export default async function BlogCategoryPage({ params }: PageProps) {
                     ) : (
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {posts.map((p) => (
-                                <BlogCard key={p.slug} post={p} />
+                                <BlogCard key={p.slug} post={toCardData(p)} />
                             ))}
                         </div>
                     )}

@@ -6,6 +6,11 @@ the public page: list items have the shape the page renders, links are
 internal paths or http(s) URLs (never javascript:), dates are ISO dates, and a
 post is published only with a real body. Every static post passes this
 validation unchanged (tests_blog_api), so a seeded post can be saved as is.
+
+``word_count`` and ``reading_time`` are read-only: both come from the body
+(``BlogPost.body_word_count``, blog_engine.text_stats), so a card, the post
+header and /admin/blog can never claim "9 min" for a 99-word post. Values a
+client sends for them are ignored.
 """
 from __future__ import annotations
 
@@ -16,6 +21,7 @@ from rest_framework import serializers
 
 from .models import BlogPost
 from .seeding import is_placeholder_body
+from .text_stats import is_thin, reading_time_label
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ANCHOR_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -72,7 +78,20 @@ def _items(value, allowed: set[str]) -> list[dict]:
     return value
 
 
-class BlogPostSerializer(serializers.ModelSerializer):
+class _BodyStatsFields(serializers.Serializer):
+    """word_count / reading_time computed from the body (read-only)."""
+
+    word_count = serializers.IntegerField(
+        source="body_word_count", read_only=True,
+        help_text="Words in the body (blog_engine.text_stats.count_words).")
+    reading_time = serializers.SerializerMethodField(
+        help_text="'N min' at 200 words a minute, from word_count.")
+
+    def get_reading_time(self, obj) -> str:
+        return reading_time_label(obj.body_word_count)
+
+
+class BlogPostSerializer(_BodyStatsFields, serializers.ModelSerializer):
     class Meta:
         model = BlogPost
         fields = [
@@ -159,17 +178,6 @@ class BlogPostSerializer(serializers.ModelSerializer):
         value = (value or "").strip()
         if value and not is_safe_link(value):
             raise serializers.ValidationError("Use a path such as /blog/cover.png or an https:// URL.")
-        return value
-
-    def validate_reading_time(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Give a reading time, e.g. 8 min.")
-        return value
-
-    def validate_word_count(self, value):
-        if value is not None and value < 0:
-            raise serializers.ValidationError("Must be zero or more.")
         return value
 
     # ── structured fields (JSON) ────────────────────────────────────────
@@ -289,11 +297,13 @@ class BlogPostSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class BlogPostListSerializer(serializers.ModelSerializer):
+class BlogPostListSerializer(_BodyStatsFields, serializers.ModelSerializer):
     """Summary of a post: admin list rows and the public catalog (no body or lists)."""
 
     is_stub = serializers.SerializerMethodField(
         help_text="The body is empty or the old seed placeholder: never shown publicly.")
+    is_thin = serializers.SerializerMethodField(
+        help_text="Fewer than blog_engine.text_stats.THIN_POST_WORDS words: a post to expand.")
 
     class Meta:
         model = BlogPost
@@ -321,6 +331,7 @@ class BlogPostListSerializer(serializers.ModelSerializer):
             "trending",
             "is_published",
             "is_stub",
+            "is_thin",
             "created_at",
             "updated",
         ]
@@ -328,3 +339,6 @@ class BlogPostListSerializer(serializers.ModelSerializer):
 
     def get_is_stub(self, obj) -> bool:
         return is_placeholder_body(obj.body)
+
+    def get_is_thin(self, obj) -> bool:
+        return is_thin(obj.body_word_count)
