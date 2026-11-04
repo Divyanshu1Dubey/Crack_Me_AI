@@ -74,10 +74,20 @@ ADAPTIVE_WEAK_AREAS = 10
 # 20-question practice tests apart).
 GENERATED_TITLES = {'daily': 'Daily Quick Test', 'mixed': 'Mixed Practice'}
 
-# Study-aid fields of QuestionListSerializer that can give an answer away
-# (textbook excerpts, concept tags). The exam player never shows them; the
-# post-test review returns them when the student may see the answer.
-EXAM_HIDDEN_FIELDS = ('textbook_references', 'reference_text', 'concept_tags', 'concept_id')
+# Fields of QuestionListSerializer that can give an answer away, left out of
+# the exam payload (/start/, and GET /tests/<id>/ for students) for every
+# viewer, premium included: the study aids (textbook excerpts, concept tags),
+# the textbook pointers (a chapter title can name the diagnosis), the
+# screenshot of the textbook page that discusses the answer and the generated
+# explanation video. The explanation figures are dropped from the image lists
+# as well (_without_exam_hidden_fields). After submit, /review/ returns the
+# textbook pointers, the explanation figures and the video to a student who may
+# see the answer (_review_media).
+EXAM_HIDDEN_FIELDS = (
+    'textbook_references', 'reference_text', 'concept_tags', 'concept_id',
+    'book_name', 'chapter', 'page_number', 'page_screenshot',
+    'video_url', 'video_status', 'video_thumbnail', 'video_duration', 'video_subtitles_url',
+)
 
 # Older importers (e.g. import_neet_pg) left Question.exam_type at its 'cms'
 # default and recorded the real exam only in exam_source ('NEET PG',
@@ -225,24 +235,64 @@ def _attach_duplicate_clusters(questions):
 
 
 def _without_exam_hidden_fields(question_rows):
-    """Serialized exam questions minus the study aids that can give the
-    answer away (EXAM_HIDDEN_FIELDS); /review/ returns them after submit."""
+    """Serialized exam questions without what can give the answer away
+    (EXAM_HIDDEN_FIELDS) and without explanation figures (role
+    'explanation'), whoever the viewer is: the player shows the question
+    side only. /review/ returns the answer media after submit."""
     for row in question_rows:
         for field in EXAM_HIDDEN_FIELDS:
             row.pop(field, None)
+        strip_explanation_images(row)
     return question_rows
 
 
-def _without_locked_answer_media(question_rows, full_access):
-    """For a viewer without full access, drop the explanation figures of
-    every row that is not a free question (``is_showcase``, annotated with
-    the free set). QuestionListSerializer already blanks such a row's
-    explanation video and page screenshot."""
-    if not full_access:
-        for row in question_rows:
-            if not row.get('is_showcase'):
-                strip_explanation_images(row)
-    return question_rows
+# Explanation video fields of a /review/ row (_review_media).
+REVIEW_VIDEO_FIELDS = ('video_url', 'video_status', 'video_thumbnail', 'video_duration', 'video_subtitles_url')
+
+
+def _review_media(question, *, visible, request, memo):
+    """The figures and the explanation video of one /review/ row.
+
+    * ``stem_images``: the question-side figures (runtime role not
+      'explanation', ``questions.image_context.runtime_role``, the rule the
+      image serve view applies), with the caption only after the reveal.
+    * ``explanation_images``: the explanation figures with their signed URL
+      (``serialize_image_for_student(img, revealed=True)``), only when the
+      student may see this question's answer (``visible``,
+      ``entitlement.answer_visibility``); ``[]`` otherwise.
+    * the video fields: the finished explanation video under the same
+      entitlement (``video_status`` without a URL while it is not finished),
+      ``None`` for a locked row, as QuestionListSerializer blanks them.
+
+    Reads the ``images`` prefetch (no query per row); ``memo`` caches the
+    runtime roles for one response.
+    """
+    from questions.image_context import active_images, runtime_role, serialize_image_for_student
+    from questions.serializers import _derive_subtitles_url
+
+    stem_images, explanation_images = [], []
+    for img in active_images(question):
+        role = runtime_role(question, img, memo)
+        if role == 'explanation':
+            if visible:
+                explanation_images.append(serialize_image_for_student(
+                    img, revealed=True, question=question, request=request, role=role, memo=memo))
+            continue
+        stem_images.append(serialize_image_for_student(
+            img, revealed=visible, question=question, request=request, role=role, memo=memo))
+    media = {'stem_images': stem_images, 'explanation_images': explanation_images}
+    media.update(dict.fromkeys(REVIEW_VIDEO_FIELDS))
+    if visible:
+        media['video_status'] = question.video_status or None
+        video_url = (question.video_url or '').strip()
+        if video_url and question.video_status == 'completed':
+            media.update({
+                'video_url': video_url,
+                'video_thumbnail': (question.video_thumbnail or '').strip() or None,
+                'video_duration': question.video_duration,
+                'video_subtitles_url': _derive_subtitles_url(video_url) or None,
+            })
+    return media
 
 
 def _no_free_questions_response():
@@ -491,18 +541,17 @@ class TestViewSet(viewsets.ModelViewSet):
 
         The duplicate-cluster fields are computed for all questions at once
         -- QuestionListSerializer otherwise runs one COUNT per clustered
-        question -- and, as in /start/, students do not get the study aids
-        that can give an answer away, nor (without full access) the
-        explanation figures of questions outside the free set.
+        question -- and, as in /start/, students (premium included) get no
+        answer media: no study aids, textbook pointers, page screenshot,
+        explanation video or explanation figures (EXAM_HIDDEN_FIELDS).
+        Admins get the stored payload (test preview).
         """
         test = self.get_object()
         _attach_duplicate_clusters(list(test.questions.all()))
         data = self.get_serializer(test).data
         user = request.user
         if not (getattr(user, 'is_admin', False) or getattr(user, 'is_superuser', False)):
-            rows = data.get('questions') or []
-            _without_exam_hidden_fields(rows)
-            _without_locked_answer_media(rows, has_full_access(user))
+            _without_exam_hidden_fields(data.get('questions') or [])
         return Response(data)
 
     @action(detail=False, methods=['post'], url_path='create-manual')
@@ -924,12 +973,13 @@ class TestViewSet(viewsets.ModelViewSet):
         return Response({
             'attempt_id': attempt.id,
             'test': TestSerializer(test, context={'request': request}).data,
-            'questions': _without_locked_answer_media(_without_exam_hidden_fields(
+            # No answer media for anyone during the test; /review/ has them.
+            'questions': _without_exam_hidden_fields(
                 QuestionListSerializer(
                     questions, many=True,
                     context={'request': request, 'viewer_full_access': full_access},
                 ).data
-            ), full_access),
+            ),
             'started_at': attempt.started_at,
             'resumed': not created,
             'server_time': now,
@@ -1145,6 +1195,12 @@ class TestViewSet(viewsets.ModelViewSet):
         an attempt scored earlier (before that rule, or while premium): its
         selected_answer and is_correct are what the student was already
         shown, so they stay.
+
+        The answer media the exam payload leaves out come back here
+        (_review_media): ``stem_images`` for every row, and on a row whose
+        answer the student may see the ``explanation_images`` (signed URLs)
+        and the finished explanation video (``video_url`` ...); a locked row
+        has ``explanation_images: []`` and no video.
         """
         attempt_id = request.query_params.get('attempt_id')
 
@@ -1158,8 +1214,10 @@ class TestViewSet(viewsets.ModelViewSet):
         responses = list(
             QuestionResponse.objects.filter(attempt=attempt)
             .select_related('question', 'question__subject', 'question__topic')
+            .prefetch_related('question__images')
         )
         visible = answer_visibility(request.user, [resp.question_id for resp in responses])
+        role_memo = {}
 
         questions_review = []
         subject_breakdown = {}
@@ -1203,7 +1261,9 @@ class TestViewSet(viewsets.ModelViewSet):
                 'concept_tags': q.concept_tags or [],
                 'answer_locked': False,
             }
-            if not visible.get(q.id, False):
+            answer_visible = visible.get(q.id, False)
+            row.update(_review_media(q, visible=answer_visible, request=request, memo=role_memo))
+            if not answer_visible:
                 lock_answer(row)
             questions_review.append(row)
 

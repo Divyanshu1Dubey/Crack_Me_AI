@@ -1,22 +1,28 @@
 """Topic-notes builder endpoints (2026-11, notes group; routes in questions/urls_notes.py).
 
-* ``POST topic-notes/build/``                  admin: plan + build notes (async above 25 notes)
+* ``POST topic-notes/build/``                  admin: plan + build notes (async above 25 notes);
+  ``GET`` the builder status (flag, offline mode, evidence store)
 * ``GET  topic-notes/library/<pk>/sources/``   admin: the questions a built note cites / excludes
 * ``GET  topic-notes/published/<pk>/``         student: one published note, filtered per viewer
+* ``GET  topic-notes/published/facets/``       student: exams / subjects / topics with published notes
 * ``generate_response`` / ``generation_throttles``: the old generate endpoints (questions.views)
   delegate here when TOPIC_NOTES_BUILDER is on.
-* ``published_list_response``: the published list (questions.views.PublishedTopicNoteListView),
-  filtered per viewer whatever the flag says (an entitlement fix, not a feature).
+* ``published_queryset`` / ``published_list_response``: the published list
+  (questions.views.PublishedTopicNoteListView), filtered per viewer whatever the flag says (an
+  entitlement fix, not a feature).
 
 Entitlement: a note restates answers, so a free viewer reads only the points whose questions are
 all free showcase questions (``questions.views.free_showcase_rows``); a manual note citing premium
-questions is withheld from free viewers. The builder routes answer 404 ``feature_disabled``
-while TOPIC_NOTES_BUILDER is off.
+questions is withheld from free viewers. The builder routes (build, sources, published detail)
+answer 404 ``feature_disabled`` while TOPIC_NOTES_BUILDER is off; the published list and its
+facets (metadata only) do not depend on it, since manual notes are published too.
 """
 from __future__ import annotations
 
 import logging
+from collections import Counter
 
+from django.db.models import Count, Q
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -98,6 +104,73 @@ def _views_for(notes, request) -> dict:
             for note in notes}
 
 
+PUBLISHED_EXAMS = (*nb.EXAMS, 'all')
+_COMBINED_Q = Q(is_combined=True) | Q(exam_type='all')
+
+
+def filter_published_exam(queryset, exam_type):
+    """``?exam_type=``: an exam's own notes plus the cross-exam ('all') notes, which cover it
+    too; ``all`` alone = the cross-exam notes only; blank = every note."""
+    exam = str(exam_type or '').strip().lower()
+    if not exam:
+        return queryset
+    if exam == 'all':
+        return queryset.filter(_COMBINED_Q)
+    return queryset.filter(Q(exam_type=exam, is_combined=False) | _COMBINED_Q)
+
+
+def published_queryset(params):
+    """Published, active notes for students, newest first. Filters: ``id``, ``subject``,
+    ``topic`` (ids; junk -> none), ``exam_type`` (``filter_published_exam``) and ``q`` (title,
+    topic or subject name; never the content, which restates answers)."""
+    qs = TopicNote.objects.filter(is_published=True, is_active=True).select_related(
+        'subject', 'topic').order_by('-updated_at', '-id')
+    for param, lookup in (('id', 'pk'), ('subject', 'subject_id'), ('topic', 'topic_id')):
+        value = params.get(param)
+        if value not in (None, ''):
+            try:
+                qs = qs.filter(**{lookup: int(value)})
+            except (TypeError, ValueError):
+                return qs.none()
+    qs = filter_published_exam(qs, params.get('exam_type'))
+    term = ' '.join(str(params.get('q') or '').split())[:80]
+    if term:
+        qs = qs.filter(Q(title__icontains=term) | Q(topic__name__icontains=term) | Q(subject__name__icontains=term))
+    return qs
+
+
+class PublishedTopicNoteFacetsView(APIView):
+    """GET /api/questions/topic-notes/published/facets/?exam_type=: what the student notes page
+    can filter by -- ``{total, exams: [{value, count}], subjects: [{id, name, count, topics:
+    [{id, name, count}]}]}`` over the published, active notes (subjects / topics scoped by
+    ``exam_type`` like the list). Metadata only: no title, content or source question."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from questions.serializers import public_subject_name
+
+        base = TopicNote.objects.filter(is_published=True, is_active=True)
+        exams = Counter()
+        for exam_type, is_combined in base.values_list('exam_type', 'is_combined'):
+            exams['all' if (is_combined or exam_type == 'all') else exam_type] += 1
+        scoped = filter_published_exam(base, request.query_params.get('exam_type'))
+        topics = {}
+        for row in scoped.filter(topic__isnull=False).values('topic_id', 'topic__name', 'topic__subject_id').annotate(
+                n=Count('id')).order_by('topic__name'):
+            topics.setdefault(row['topic__subject_id'], []).append(
+                {'id': row['topic_id'], 'name': row['topic__name'] or '', 'count': row['n']})
+        subjects = []
+        for row in scoped.filter(subject__isnull=False).values('subject_id', 'subject__name').annotate(
+                n=Count('id')).order_by('subject__name'):
+            subjects.append({'id': row['subject_id'], 'name': public_subject_name(row['subject__name'] or ''),
+                             'count': row['n'], 'topics': topics.get(row['subject_id'], [])})
+        return Response({
+            'total': scoped.count(),
+            'exams': [{'value': exam, 'count': exams[exam]} for exam in PUBLISHED_EXAMS if exams.get(exam)],
+            'subjects': subjects,
+        })
+
+
 def published_list_response(view, request) -> Response:
     """Body of GET topic-notes/published/ (paged), each note filtered for this viewer."""
     queryset = view.filter_queryset(view.get_queryset())
@@ -124,8 +197,9 @@ def generation_throttles(request, throttles) -> list:
 def generate_response(request, note, *, shape='note') -> Response:
     """The old generate endpoints with the builder (TOPIC_NOTES_BUILDER on). ``shape`` keeps each
     endpoint's response keys: 'note' = the note's fields (+ build), 'library' = {detail, content}
-    (+ note, build). Never 503: the extractive build needs no AI provider."""
-    from questions.serializers import TopicNoteSerializer
+    (+ note, build). Never 503: the extractive build needs no AI provider. The note is serialized
+    with its build state (``AdminTopicNoteSerializer``, a superset of the old fields)."""
+    from questions.serializers_notes import AdminTopicNoteSerializer as TopicNoteSerializer
 
     options, error = parse_build_options(request.data)
     if error:
@@ -171,6 +245,18 @@ class TopicNoteBuildView(APIView):
     def get_throttles(self):
         return generation_throttles(self.request, super().get_throttles())
 
+    def get(self, request):
+        """Builder status for the admin page (answers whatever the flag says): ``{enabled,
+        builder_version, ai_offline, evidence_state, async_threshold}``."""
+        enabled = nb.builder_enabled()
+        return Response({
+            'enabled': enabled,
+            'builder_version': nb.BUILDER_VERSION,
+            'ai_offline': nb.ai_offline(),
+            'evidence_state': nb.evidence_state() if enabled else 'off',
+            'async_threshold': ASYNC_THRESHOLD,
+        })
+
     def post(self, request):
         if not nb.builder_enabled():
             return _disabled()
@@ -201,9 +287,12 @@ class TopicNoteBuildView(APIView):
                                       f"for this selection.", 'notes': 0}, status=status.HTTP_400_BAD_REQUEST)
         if len(specs) > ASYNC_THRESHOLD and not options['dry_run']:
             from django_q.tasks import async_task
-            task_id = async_task('questions.tasks_notes.build_topic_notes_task', params, timeout=3600)
+            task_id = async_task('questions.tasks_notes.build_topic_notes_task', params, request.user.pk,
+                                 timeout=3600)
             return Response({'queued': True, 'task_id': task_id, 'notes': len(specs)}, status=status.HTTP_202_ACCEPTED)
-        report = nb.run_build(params, apply=not options['dry_run'])
+        # A dry run of a single note also returns its markdown (the admin preview).
+        report = nb.run_build(params, apply=not options['dry_run'], actor=request.user,
+                              preview=options['dry_run'] and len(specs) == 1)
         return Response(report)
 
 

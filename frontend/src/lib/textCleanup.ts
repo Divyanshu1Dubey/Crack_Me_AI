@@ -139,7 +139,38 @@ export function decodeMojiB(text: unknown): string {
     for (const [pattern, replacement] of MOJIBAKE_MAP) {
         out = out.replace(pattern, replacement);
     }
-    return out;
+    return repairCp437Triplets(out);
+}
+
+// The characters of bytes 0x80-0xFF in cp437 (the old DOS code page).
+const CP437_HIGH =
+    'ÇüéâäàåçêëèïîìÄÅ'
+    + 'ÉæÆôöòûùÿÖÜ¢£¥₧ƒ'
+    + 'áíóúñÑªº¿⌐¬½¼¡«»'
+    + '░▒▓│┤╡╢╖╕╣║╗╝╜╛┐'
+    + '└┴┬├─┼╞╟╚╔╩╦╠═╬╧'
+    + '╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀'
+    + 'αßΓπΣσµτΦΘΩδ∞φε∩'
+    + '≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ';
+const CP437_BYTE = new Map<string, number>(Array.from(CP437_HIGH, (ch, i) => [ch, 0x80 + i] as [string, number]));
+// 'Γ' is cp437 byte 0xE2, the UTF-8 lead byte of U+2000-U+2FFF.
+const CP437_TRIPLET_RE = /Γ[\u0080-￿]{2}/g;
+
+/**
+ * 'ΓåÆ' -> '→', 'Γéé' -> '₂', 'ΓëÑ' -> '≥': UTF-8 text an importer read as cp437 (arrows, sub /
+ * superscripts, math signs, dashes, quotes; the same rule as the backend notes builder's
+ * repair_cp437_triplets). Display only: the stored text, and the content hashes computed from it,
+ * stay as they are. A triplet is replaced only when it decodes to one U+2000-U+2FFF character, so
+ * real Greek text is left alone.
+ */
+export function repairCp437Triplets(text: string): string {
+    if (!text.includes('Γ')) return text;
+    return text.replace(CP437_TRIPLET_RE, (chunk) => {
+        const b1 = CP437_BYTE.get(chunk[1]);
+        const b2 = CP437_BYTE.get(chunk[2]);
+        if (b1 === undefined || b2 === undefined || b1 > 0xbf || b2 > 0xbf) return chunk;   // continuation bytes only
+        return String.fromCharCode(0x2000 | ((b1 & 0x3f) << 6) | (b2 & 0x3f));
+    });
 }
 
 /**

@@ -10,12 +10,54 @@ from rest_framework import serializers
 
 from questions import notes_builder as nb
 from questions.models import TopicNote, TopicNoteSource
-from questions.serializers import PublicSubjectNameField
+from questions.serializers import PublicSubjectNameField, TopicNoteSerializer
+
+# Totals of a built note shown to readers (none of them names an answer).
+PUBLIC_COUNT_FIELDS = ('cited', 'verified', 'provisional', 'points', 'facts', 'practice', 'repeated_points',
+                       'evidence_points', 'sections')
+BUILDER_FIELDS = ['generation_method', 'builder_version', 'built_at', 'is_stale', 'verified_source_count',
+                  'provisional_source_count', 'excluded_source_count']
 
 
 def _preview(content: str) -> str:
     content = content or ''
     return content if len(content) <= 300 else content[:300] + '...'
+
+
+def _build_counts(note) -> dict:
+    counts = (note.structured or {}).get('counts') if nb.is_built(note) else None
+    if not isinstance(counts, dict):
+        return {}
+    return {name: counts[name] for name in PUBLIC_COUNT_FIELDS if isinstance(counts.get(name), int)}
+
+
+class AdminTopicNoteSerializer(TopicNoteSerializer):
+    """Admin library rows (questions.views.TopicNoteViewSet): the note plus its build state.
+    The builder fields are read-only (only a build writes them); ``excluded_reasons`` counts why
+    candidate PYQs were left out (questions.key_status reasons)."""
+    build_counts = serializers.SerializerMethodField()
+    excluded_reasons = serializers.SerializerMethodField()
+    evidence_state = serializers.SerializerMethodField()
+    is_built = serializers.SerializerMethodField()
+
+    class Meta(TopicNoteSerializer.Meta):
+        fields = TopicNoteSerializer.Meta.fields + BUILDER_FIELDS + [
+            'is_built', 'build_counts', 'excluded_reasons', 'evidence_state']
+        read_only_fields = TopicNoteSerializer.Meta.read_only_fields + BUILDER_FIELDS
+
+    def get_build_counts(self, obj):
+        counts = (obj.structured or {}).get('counts') if nb.is_built(obj) else None
+        return dict(counts) if isinstance(counts, dict) else {}
+
+    def get_excluded_reasons(self, obj):
+        reasons = (obj.structured or {}).get('excluded_reasons') if nb.is_built(obj) else None
+        return dict(reasons) if isinstance(reasons, dict) else {}
+
+    def get_evidence_state(self, obj):
+        return (obj.structured or {}).get('evidence_state', '') if nb.is_built(obj) else ''
+
+    def get_is_built(self, obj):
+        return nb.is_built(obj)
 
 
 class PublishedTopicNoteSerializer(serializers.ModelSerializer):
@@ -28,6 +70,7 @@ class PublishedTopicNoteSerializer(serializers.ModelSerializer):
     answers_locked = serializers.SerializerMethodField()
     locked_points = serializers.SerializerMethodField()
     hidden_points = serializers.SerializerMethodField()
+    counts = serializers.SerializerMethodField()
 
     class Meta:
         model = TopicNote
@@ -36,9 +79,12 @@ class PublishedTopicNoteSerializer(serializers.ModelSerializer):
             'title', 'content', 'content_preview', 'source_question_ids', 'source_question_count',
             'ai_generated', 'is_published', 'generation_method', 'builder_version', 'built_at', 'is_stale',
             'verified_source_count', 'provisional_source_count', 'answers_locked', 'locked_points',
-            'hidden_points', 'created_at', 'updated_at',
+            'hidden_points', 'counts', 'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+    def get_counts(self, obj):
+        return _build_counts(obj)
 
     def _view(self, obj) -> dict:
         view = (self.context.get('views') or {}).get(obj.pk) or self.context.get('view')

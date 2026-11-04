@@ -46,7 +46,9 @@ from questions.content_hashes import stem_hash, valid_key
 
 logger = logging.getLogger(__name__)
 
-BUILDER_VERSION = 'pyq-notes/1'
+# pyq-notes/2: every point lists its source questions (``sources``: id, asked-in label, year, exam,
+# key status), so readers can show and link each PYQ. Notes built by /1 rebuild on the next run.
+BUILDER_VERSION = 'pyq-notes/2'
 CATCH_ALL_TOPICS = frozenset({'general', 'imported', 'expert curated', 'misc', 'miscellaneous', 'other', 'others'})
 MIN_PYQS = 3
 MAX_CANDIDATES = 2000          # questions read for one note (safety cap)
@@ -77,6 +79,8 @@ _GENERIC_ANSWER_RE = re.compile(
     r'^(?:all|none|both|neither)\b'
     r'|^(?:only )?(?:[1-9]|i{1,3}|iv|vi{0,3}|ix|x)(?:(?: ?, ?| and | & | or | nor )(?:[1-9]|i{1,3}|iv|vi{0,3}|ix|x))*(?: only)?$'
     r'|^[a-e](?:(?: ?, ?| and | & )[a-e])+$'
+    # an order or match of numbered / lettered statements: "4 → 3 → 1 → 2", "B-D-A-C", "ii > i > iii"
+    r'|^(?:[1-9]|[a-e]|i{1,3}|iv|vi{0,3}|ix|x)(?:\s*(?:→|->|>|-|–|—)\s*(?:[1-9]|[a-e]|i{1,3}|iv|vi{0,3}|ix|x))+$'
     r'|\bboth a and r\b|\b(?:a|r) (?:is|are) (?:true|false|correct|incorrect)\b'
     r'|^\(?[a-e]\)?\s*[-–:]\s*\(?\d',
     re.IGNORECASE,
@@ -113,10 +117,32 @@ def ai_offline() -> bool:
 
 # ─── Text helpers ───────────────────────────────────────────────────────────
 
+_CP437_TRIPLET_RE = re.compile('Γ..', re.DOTALL)
+
+
+def repair_cp437_triplets(text: str) -> str:
+    """'ΓåÆ' -> '→', 'Γéé' -> '₂', 'ΓÇÖ' -> '’': the UTF-8 bytes of a U+2000-U+2FFF character
+    (arrows, sub/superscripts, punctuation, math signs) read as cp437 by an importer, a family
+    questions.text_encoding's table does not list. A triplet is replaced only when it round-trips
+    to exactly one such character, so real Greek text is left alone."""
+    if 'Γ' not in text:
+        return text
+
+    def _sub(match):
+        chunk = match.group(0)
+        try:
+            char = chunk.encode('cp437').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return chunk
+        return char if len(char) == 1 and 0x2000 <= ord(char) <= 0x2FFF else chunk
+
+    return _CP437_TRIPLET_RE.sub(_sub, text)
+
+
 def _plain(text) -> str:
     """Public text without HTML tags, image tokens and extra whitespace (mojibake repaired)."""
     from questions.text_encoding import normalize_text
-    text = normalize_text(text or '') if isinstance(text, str) else ''
+    text = repair_cp437_triplets(normalize_text(text or '')) if isinstance(text, str) else ''
     text = _IMG_TOKEN_RE.sub(' ', text)
     text = _TAG_RE.sub(' ', text)
     return ' '.join(text.split())
@@ -396,6 +422,9 @@ def make_point(members, statuses: dict, *, include_provisional=True, stop_tags=f
         'key_status': ks.VERIFIED if verified else ks.PROVISIONAL,
         'reasons': sorted({statuses[q.pk].reason for q in members if statuses[q.pk].status != ks.VERIFIED}),
         'question_ids': [q.pk for q in members],
+        # One entry per source question (members are newest first): what a reader shows and links.
+        'sources': [{'id': q.pk, 'label': asked_in_label(q), 'year': q.year, 'exam_type': q.exam_type,
+                     'key_status': statuses[q.pk].status} for q in members],
         'primary_id': canonical.pk,
         'asked_in': asked,
         'frequency': len(sittings),
@@ -1093,7 +1122,8 @@ def plan_notes(*, exams=EXAMS, combined=False, levels=('subject',), subject_id=N
     for exam, is_combined in variants:
         qs = base if is_combined else base.filter(exam_type=exam)
         if 'subject' in levels:
-            rows = qs.values('subject_id', 'subject__name').annotate(
+            # Questions without a subject cannot make a subject note (the build would only fail).
+            rows = qs.filter(subject__isnull=False).values('subject_id', 'subject__name').annotate(
                 n=Count('id'), exams=Count('exam_type', distinct=True)).order_by('subject__name')
             for row in rows:
                 if row['n'] < min_questions or (is_combined and row['exams'] < 2):
@@ -1117,13 +1147,18 @@ def plan_notes(*, exams=EXAMS, combined=False, levels=('subject',), subject_id=N
     return specs
 
 
-def run_build(params: dict, *, apply=False, statuses=None, log=None) -> dict:
+def run_build(params: dict, *, apply=False, statuses=None, log=None, actor=None, preview=False) -> dict:
     """Plan and build notes (shared by the management command, the build endpoint and the
-    background task). ``apply=False`` writes nothing. Returns a JSON-able report."""
-    exams = tuple(params.get('exams') or EXAMS)
+    background task). ``apply=False`` writes nothing. Returns a JSON-able report.
+
+    ``params['exams']`` may be empty only with ``combined`` (the cross-exam notes alone).
+    ``actor``: recorded as ``created_by`` of the notes this run creates. ``preview``: each built
+    row also carries its markdown (``row['preview']``, admin dry runs of one note)."""
+    combined = bool(params.get('combined'))
+    exams = tuple(params.get('exams') or (() if combined else EXAMS))
     levels = tuple(params.get('levels') or ('subject',))
     mode = params.get('mode') or 'extractive'
-    specs = plan_notes(exams=exams, combined=bool(params.get('combined')), levels=levels,
+    specs = plan_notes(exams=exams, combined=combined, levels=levels,
                        subject_id=params.get('subject_id'), topic_id=params.get('topic_id'),
                        min_questions=params.get('min_questions', MIN_PYQS))
     max_notes = params.get('max_notes')
@@ -1132,10 +1167,13 @@ def run_build(params: dict, *, apply=False, statuses=None, log=None) -> dict:
     report = {'builder_version': BUILDER_VERSION, 'apply': bool(apply), 'mode': mode, 'levels': list(levels),
               'notes': [], 'totals': Counter()}
     statuses = statuses if statuses is not None else {}
+    actor = actor if getattr(actor, 'pk', None) else None
     for spec in specs:
         # A new note is an unsaved draft: the build saves it (never published), and a spec whose
         # questions turn out unusable leaves nothing behind.
         note = spec.instance()
+        if note.pk is None and actor is not None:
+            note.created_by = actor
         result = build_topic_note(
             note, mode=mode, include_provisional=params.get('include_provisional', True),
             verified_only=bool(params.get('verified_only')), dry_run=not apply, force=bool(params.get('force')),
@@ -1157,6 +1195,8 @@ def run_build(params: dict, *, apply=False, statuses=None, log=None) -> dict:
         if result.built:
             row['excluded_reasons'] = (result.structured or {}).get('excluded_reasons', {})
             row['evidence_state'] = (result.structured or {}).get('evidence_state', '')
+            if preview:
+                row['preview'] = {'markdown': result.markdown}
         else:
             row['counts_by_reason'] = result.counts_by_reason
         report['notes'].append(row)
@@ -1222,8 +1262,13 @@ def source_state(note_ids) -> dict:
             state['hidden'].add(qid)
             continue
         if row['key_status'] == ks.VERIFIED:
-            audit_ok = bool(audit and audit['status'] == 'verified' and not audit['is_stale']
-                            and valid_key(audit['stored_key']) == key)
+            if audit:
+                audit_ok = bool(audit['status'] == 'verified' and not audit['is_stale']
+                                and valid_key(audit['stored_key']) == key)
+            else:
+                # No audit row: the stored status, as key_statuses reads it (the key is the one
+                # it had at build time, checked above).
+                audit_ok = audit_status == 'verified'
             if not (row['question__is_verified_by_admin'] or audit_ok):
                 state['provisional'].add(qid)
     return out
@@ -1298,10 +1343,21 @@ def viewer_view(note, *, full_access: bool, free_ids: set, state: Optional[dict]
     for point in structured.get('points') or []:
         if point['id'] not in visible:
             continue
+        key_status = ks.PROVISIONAL if point['id'] in provisional_now else point['key_status']
+        # pyq-notes/1 points carry no per-question sources: their ids, without labels.
+        sources = point.get('sources') or [
+            {'id': qid, 'label': '', 'year': None, 'exam_type': '', 'key_status': point['key_status']}
+            for qid in point['question_ids']]
         points.append({
             'id': point['id'], 'kind': point['kind'], 'stem': point['stem'], 'answer': point['answer'],
-            'key_status': ks.PROVISIONAL if point['id'] in provisional_now else point['key_status'],
+            'key_status': key_status,
             'question_ids': point['question_ids'], 'asked_in': point['asked_in'], 'frequency': point['frequency'],
+            'sources': [{
+                'id': source['id'], 'label': source.get('label') or '', 'year': source.get('year'),
+                'exam_type': source.get('exam_type') or '',
+                'key_status': ks.PROVISIONAL if source['id'] in provisional_q else (
+                    source.get('key_status') or point['key_status']),
+            } for source in sources],
             'latest_year': point['latest_year'], 'why': point.get('why', ''),
             'practice_reason': point.get('practice_reason', ''),
             'evidence': [{name: entry.get(name) for name in (

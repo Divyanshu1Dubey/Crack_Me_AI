@@ -118,27 +118,13 @@ def _instance_role_cache(serializer) -> dict:
 
 
 def resolve_runtime_image_role(obj, img, memo=None) -> str:
-    """Reclassify ``img.role`` from which text fields reference ``[[img:N]]``:
-    a token in the stem keeps the stored role, a token only in the
-    explanation / concept explanation / mnemonic means 'explanation'."""
-    per_q = memo.setdefault(obj.id, {}) if memo is not None else {}
-    if img.id in per_q:
-        return per_q[img.id]
-    stem = (obj.question_text or "")
-    expl = (
-        (obj.explanation or "")
-        + (obj.concept_explanation or "")
-        + (obj.mnemonic or "")
-    )
-    token = f"[[img:{img.id}]]"
-    if token in stem:
-        role = img.role  # legitimate stem image; keep stored role
-    elif token in expl:
-        role = "explanation"
-    else:
-        role = img.role
-    per_q[img.id] = role
-    return role
+    """The role ``img`` plays in ``obj``: ``questions.image_context.runtime_role`` (one rule for every
+    payload). A token in the stem or in an option is never 'explanation', also when the explanation
+    cites the same figure: the exam payload drops explanation figures for everyone, and this used to
+    drop an option's figure that the explanation also referenced. A token only in the explanation /
+    concept explanation / mnemonic means 'explanation'."""
+    from .image_context import runtime_role
+    return runtime_role(obj, img, memo)
 
 
 def effective_explanation_for(obj):

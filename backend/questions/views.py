@@ -4428,34 +4428,58 @@ class QuestionImageViewSet(viewsets.ModelViewSet):
 from rest_framework.permissions import IsAdminUser
 
 class TopicNoteViewSet(viewsets.ModelViewSet):
-    """Admin CRUD for topic-wise notes compiled from PYQ explanations.
+    """Admin CRUD for topic notes (``topic-notes/library/``): manual notes and
+    the drafts the PYQ builder writes (questions/notes_builder.py).
 
-    The notes-generation pipeline groups questions by (subject, topic, exam_type)
-    and synthesizes their reviewed explanations into concise revision notes.
-    This viewset exposes the resulting notes for admin editing and publishing.
+    Rows carry the build state (questions.serializers_notes.AdminTopicNoteSerializer).
+    A hand edit of a built note's content turns it into a manual note: its
+    stored markdown is then what students read (built notes are re-rendered
+    from their structure, which would silently drop the edit), the free plan
+    sees it only when every source PYQ is free, and a rebuild replaces it.
+    ``generate/`` rebuilds from PYQs when TOPIC_NOTES_BUILDER is on and keeps
+    the LLM generator otherwise.
     """
     queryset = TopicNote.objects.select_related('subject', 'topic', 'created_by').order_by('-updated_at')
     permission_classes = [IsControlTowerAdmin]
     serializer_class = TopicNoteSerializer
-    filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated']
+    filterset_fields = ['subject', 'topic', 'exam_type', 'is_published', 'ai_generated', 'is_combined', 'is_stale',
+                        'generation_method']
     search_fields = ['title', 'content']
+
+    def get_serializer_class(self):
+        from questions.serializers_notes import AdminTopicNoteSerializer
+        return AdminTopicNoteSerializer
 
     def perform_create(self, serializer):
         note = serializer.save(created_by=self.request.user)
         _refresh_topic_note_derived_fields(note)
 
     def perform_update(self, serializer):
-        note = serializer.save()
+        from questions import notes_builder as nb
+
+        note = serializer.instance
+        content = serializer.validated_data.get('content')
+        extra = {}
+        if content is not None and content != (note.content or '') and nb.is_built(note):
+            extra = {'builder_version': '', 'generation_method': 'manual'}
+        note = serializer.save(**extra)
         _refresh_topic_note_derived_fields(note)
 
     @action(detail=True, methods=["post"], url_path="generate")
     def generate_from_topic(self, request, pk=None):
         """Generate a note from all questions in the same topic.
 
-        Uses the AI to synthesize explanations from questions sharing
-        this note's subject + topic + exam_type into a concise note.
+        With TOPIC_NOTES_BUILDER on: the PYQ builder (no AI provider needed;
+        body ``mode``, ``include_provisional``, ``verified_only``, ``force``,
+        ``dry_run``; questions.views_notes.generate_response). Otherwise the
+        AI synthesizes explanations from questions sharing this note's
+        subject + topic + exam_type into a concise note.
         """
         note = self.get_object()
+        from questions import notes_builder as nb
+        if nb.builder_enabled():
+            from questions.views_notes import generate_response
+            return generate_response(request, note, shape='library')
         from ai_engine.services import AIService
         from questions.models import Question
 
@@ -4745,29 +4769,32 @@ class TopicNoteCreateView(APIView):
 
 class PublishedTopicNoteListView(generics.ListAPIView):
     """Read-only list of published topic notes for students
-    (``GET /api/questions/topic-notes/published/?subject=&topic=&exam_type=``).
+    (``GET /api/questions/topic-notes/published/?subject=&topic=&exam_type=&q=&id=``).
 
     The admin CRUD is admin-only, so the student "Topic Notes" page had no
     way to read notes even when they were marked ``is_published``.
+
+    A note restates answers, so every row is filtered for the viewer
+    (questions.views_notes.published_list_response): free accounts read the
+    points of built notes whose PYQs are all free showcase questions, and a
+    manual note citing premium PYQs without its content. This list used to
+    return every note's full content to every signed-in account. The exam
+    filter also returns the cross-exam ('all') notes.
     """
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = TopicNoteSerializer
+    ordering_fields = ['updated_at', 'built_at', 'title']
+
+    def get_serializer_class(self):
+        from questions.serializers_notes import PublishedTopicNoteSerializer
+        return PublishedTopicNoteSerializer
 
     def get_queryset(self):
-        qs = TopicNote.objects.filter(is_published=True, is_active=True).select_related(
-            'subject', 'topic', 'created_by',
-        ).order_by('-updated_at')
-        params = self.request.query_params
-        for param, lookup in (('subject', 'subject_id'), ('topic', 'topic_id')):
-            value = params.get(param)
-            if value not in (None, ''):
-                try:
-                    qs = qs.filter(**{lookup: int(value)})
-                except (TypeError, ValueError):
-                    return qs.none()
-        if params.get('exam_type'):
-            qs = qs.filter(exam_type=params['exam_type'])
-        return qs
+        from questions.views_notes import published_queryset
+        return published_queryset(self.request.query_params)
+
+    def list(self, request, *args, **kwargs):
+        from questions.views_notes import published_list_response
+        return published_list_response(self, request)
 
 
 class AITopicNoteGenerationView(APIView):
@@ -4775,11 +4802,22 @@ class AITopicNoteGenerationView(APIView):
 
     Routed as ``topic-notes/<pk>/generate/``; ``topic_note_id`` in the body
     is still accepted for older clients.
+
+    With TOPIC_NOTES_BUILDER on, the note is built from its PYQs instead
+    (questions.views_notes.generate_response: no AI provider needed, never
+    503, the ``ai_heavy`` throttle only for ``mode`` llm / auto); a note the
+    body lookup would create is saved only when the build succeeds.
     """
     permission_classes = [IsControlTowerAdmin]
     throttle_scope = 'ai_heavy'
 
+    def get_throttles(self):
+        from questions.views_notes import generation_throttles
+        return generation_throttles(self.request, super().get_throttles())
+
     def post(self, request, pk=None):
+        from questions import notes_builder as nb
+        builder = nb.builder_enabled()
         topic_note_id = pk or request.data.get('topic_note_id')
         if topic_note_id:
             try:
@@ -4787,10 +4825,12 @@ class AITopicNoteGenerationView(APIView):
             except (TopicNote.DoesNotExist, TypeError, ValueError):
                 return Response({'error': 'TopicNote not found'}, status=404)
         else:
-            exam_type = request.data.get('exam_type', 'cms')
+            exam_type = request.data.get('exam_type') or 'cms'
             subject_id = request.data.get('subject')
             topic_id = request.data.get('topic')
             title = request.data.get('title', '')
+            if not isinstance(exam_type, str) or exam_type not in dict(TopicNote.EXAM_TYPE_CHOICES) or exam_type == 'all':
+                return Response({'error': 'exam_type is not a single exam'}, status=400)
             if not all([subject_id, topic_id]):
                 return Response({'error': 'subject and topic are required'}, status=400)
             try:
@@ -4806,7 +4846,7 @@ class AITopicNoteGenerationView(APIView):
                 topic_id=topic_id, exam_type=exam_type, is_combined=False,
             ).select_related('subject', 'topic').first()
             if note is None:
-                note = TopicNote.objects.create(
+                note = TopicNote(
                     exam_type=exam_type,
                     subject_id=subject_id,
                     topic_id=topic_id,
@@ -4815,6 +4855,12 @@ class AITopicNoteGenerationView(APIView):
                     content_preview='',
                     created_by=request.user,
                 )
+                if not builder:
+                    note.save()
+
+        if builder:
+            from questions.views_notes import generate_response
+            return generate_response(request, note, shape='note')
 
         if not note.subject or not note.topic:
             return Response({'error': 'This note has no subject/topic to generate from.'}, status=400)
