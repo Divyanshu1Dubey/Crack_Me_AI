@@ -22,27 +22,25 @@ from django.conf import settings
 
 logger = logging.getLogger("reference_corpus.api")
 
-DEFAULT_STORE_PATH = r"C:\Users\DIVYANSHU\crack_local\reference_corpus\reference_corpus.sqlite3"
-DEFAULT_REGISTRY_PATH = r"C:\Users\DIVYANSHU\crack_local\reference_corpus\registry.json"
-
 _LETTERS = ("A", "B", "C", "D")
 
 
-def get_store_path() -> Path:
+def get_store_path() -> Path | None:
+    """The configured store (``REFERENCE_STORE_PATH``), or None: an empty setting means no store
+    (docs/audit/MEDICAL_ACCURACY_DESIGN.md section 4), never a machine-specific default path."""
     configured = getattr(settings, "REFERENCE_STORE_PATH", "") or os.getenv("REFERENCE_STORE_PATH", "")
-    p = Path(configured) if configured else Path(DEFAULT_STORE_PATH)
-    return p
+    return Path(configured) if configured else None
 
 
 def store_available() -> bool:
     """Return True if the reference store SQLite database exists and is readable."""
     p = get_store_path()
-    return p.exists() and p.is_file() and p.stat().st_size > 0
+    return bool(p is not None and p.exists() and p.is_file() and p.stat().st_size > 0)
 
 
 def _connect_ro() -> sqlite3.Connection:
     p = get_store_path()
-    if not p.exists():
+    if p is None or not p.exists():
         raise FileNotFoundError(f"Reference corpus store not found at {p}")
     uri = f"file:{p.as_posix()}?mode=ro"
     conn = sqlite3.connect(uri, uri=True, timeout=10.0)

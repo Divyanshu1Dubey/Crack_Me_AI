@@ -2,9 +2,21 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { questionsAPI } from '@/lib/api';
+import { editorialAPI, type ExplanationField, type ExplanationSuggestion, type KeyChangeResult, type VerifyResult } from '@/lib/editorialAPI';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { Sparkles } from 'lucide-react';
 import { buildQuestionEditPayload, isValidAnswerLetter, mergeGeneratedFields, unpersistedEditFields } from '../_lib/adminHelpers';
+import ExplanationSuggestionPanel from './ExplanationSuggestionPanel';
+import KeyChangeBox from './KeyChangeBox';
+import ProvenancePanel, { useProvenance } from './ProvenancePanel';
+import {
+  EXPLANATION_FIELDS,
+  EXPLANATION_FIELD_LABELS,
+  changedExplanationFields,
+  describeEditorialError,
+  draftFromForm,
+  saveExplanationBody,
+} from './editorialRules';
 
 interface QuestionEditModalProps {
   question: any;
@@ -90,10 +102,129 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   // dry run: nothing is stored until Save), so closing asks first.
   const aiUnsavedRef = useRef(false);
 
+  // Medical-accuracy panels: provenance (key audit, verification, explanation
+  // provenance), the key-change box (the only way this editor changes a key)
+  // and the evidence-first explanation check.
+  const provenance = useProvenance(question.id);
+  const [proposedKey, setProposedKey] = useState('');
+  const [keyBoxOpen, setKeyBoxOpen] = useState(false);
+  const keyBoxRef = useRef<HTMLDetailsElement | null>(null);
+  // Explanation text taken from an evidence suggestion, not saved yet.
+  const acceptedRef = useRef<{ id: string; fields: ExplanationField[] } | null>(null);
+  const [unsavedSuggestion, setUnsavedSuggestion] = useState(false);
+
   // Closing (×, Cancel, Escape) would silently drop unsaved AI output.
   function requestClose() {
     if (aiUnsavedRef.current && !window.confirm('The AI-generated fields are not saved yet. Close and discard them?')) return;
+    if (!aiUnsavedRef.current && acceptedRef.current
+      && !window.confirm('The explanation taken from the evidence suggestion is not saved yet. Close and discard it?')) return;
     onClose();
+  }
+
+  // ── Medical-accuracy panels ────────────────────────────────────────────
+  // A key change (KeyChangeBox) bumps the row's updated_at and clears
+  // needs_review / is_disputed: take both into the form so the next Save is
+  // neither refused as "edited by another user" nor writes the old flags back.
+  function handleKeyChanged(result: KeyChangeResult) {
+    const key = result.new_key;
+    if (acceptedRef.current) {
+      setError(`The explanation text taken from the evidence suggestion was written for the old key: check it before saving it for ${key}.`);
+    }
+    setForm((prev) => ({ ...prev, correct_answer: key, needs_review: result.needs_review }));
+    baselineRef.current = { ...baselineRef.current, correct_answer: key, needs_review: result.needs_review };
+    if (result.updated_at) setUpdatedAt(result.updated_at);
+    acceptedRef.current = null;
+    setUnsavedSuggestion(false);
+    setProposedKey('');
+    provenance.reload();
+    onSaved({
+      id: question.id, correct_answer: key, needs_review: result.needs_review, is_disputed: result.is_disputed,
+      answer_key_status: result.answer_key_status, updated_at: result.updated_at,
+    });
+  }
+
+  function handleVerified(result: VerifyResult) {
+    setForm((prev) => ({ ...prev, needs_review: result.needs_review }));
+    baselineRef.current = { ...baselineRef.current, needs_review: result.needs_review };
+    if (result.updated_at) setUpdatedAt(result.updated_at);
+    onSaved({
+      id: question.id, needs_review: result.needs_review, is_disputed: result.is_disputed,
+      is_verified_by_admin: result.verification.is_verified_by_admin, answer_key_status: result.answer_key_status,
+      updated_at: result.updated_at,
+    });
+  }
+
+  function handleReviewed(at: string) {
+    if (at) setUpdatedAt(at);
+  }
+
+  function openKeyBox(letter?: string) {
+    if (letter) setProposedKey(letter);
+    setKeyBoxOpen(true);
+    requestAnimationFrame(() => keyBoxRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  }
+
+  // "Use in the editor": the suggestion's text replaces the explanation
+  // fields of the form (asked first when they hold text); nothing is saved.
+  function applySuggestionFields(fields: Partial<Record<ExplanationField, string>>, suggestion: ExplanationSuggestion): boolean {
+    const current = formRef.current as Record<string, unknown>;
+    const names = EXPLANATION_FIELDS.filter((f) => typeof fields[f] === 'string');
+    if (!names.length) return false;
+    const replacing = names.filter((f) => String(current[f] ?? '').trim() !== '' && current[f] !== fields[f]);
+    if (replacing.length && !window.confirm(
+      `Replace the ${replacing.map((f) => EXPLANATION_FIELD_LABELS[f]).join(', ')} text in the editor with the suggestion? Nothing is saved yet.`,
+    )) return false;
+    setForm((prev) => ({ ...prev, ...fields }));
+    acceptedRef.current = { id: suggestion.id, fields: [...names] };
+    setUnsavedSuggestion(true);
+    return true;
+  }
+
+  // POST save-explanation/: the explanation fields of `source` with their
+  // provenance (written for the stored key; 'mixed' when they came from a
+  // suggestion or the AI generator).
+  async function postExplanation(source: EditForm): Promise<{ error: string } | { updatedAt: string }> {
+    const accepted = acceptedRef.current;
+    const built = saveExplanationBody({
+      fields: { explanation: source.explanation, concept_explanation: source.concept_explanation, mnemonic: source.mnemonic },
+      forKey: baselineRef.current.correct_answer,
+      suggestionId: accepted?.id,
+      acceptedFields: accepted?.fields,
+      aiFields: aiGeneratedFields,
+    });
+    if ('error' in built) return { error: built.error };
+    try {
+      const res = await editorialAPI.saveExplanation(question.id, built.body);
+      if (res.data.updated_at) setUpdatedAt(res.data.updated_at);
+      return { updatedAt: res.data.updated_at };
+    } catch (err) {
+      return { error: describeEditorialError(err) };
+    } finally {
+      provenance.reload();
+    }
+  }
+
+  // The suggestion panel's "Save explanation": only the explanation fields.
+  async function saveExplanationFromPanel(): Promise<string | null> {
+    if (savingRef.current || loadingDetail) return 'Wait for the current save to finish.';
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const sent = scrubMediaUrls(formRef.current);
+      const result = await postExplanation(sent);
+      if ('error' in result) return result.error;
+      const saved = { explanation: sent.explanation, concept_explanation: sent.concept_explanation, mnemonic: sent.mnemonic };
+      // Saved: the main Save no longer treats these fields as edits.
+      setForm((prev) => ({ ...prev, ...saved }));
+      baselineRef.current = { ...baselineRef.current, ...saved };
+      acceptedRef.current = null;
+      setUnsavedSuggestion(false);
+      onSaved({ id: question.id, ...saved, updated_at: result.updatedAt });
+      return null;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   // Latest save handlers for the keyboard shortcuts below. The listener is
@@ -512,7 +643,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   // PATCH the question (Save and Save & Next share this). Resolves to the
   // saved row plus any edited fields the server did not store, or null when
   // the save failed (the error / conflict banner is shown).
-  async function persist(force: boolean): Promise<{ saved: any; dropped: string[] } | null> {
+  async function persist(force: boolean): Promise<{ saved: any; dropped: string[]; warnings: string[] } | null> {
     // No save while a save is in flight or before the full question has
     // loaded (the keyboard shortcuts bypass the disabled buttons).
     if (savingRef.current || loadingDetail) return null;
@@ -522,9 +653,13 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     setConflict(null);
     try {
       const baseline = baselineRef.current;
-      // concept_keywords goes out as a list, correct_answer only when it is a
-      // real letter, is_controversial only when toggled (buildQuestionEditPayload).
-      const payload = buildQuestionEditPayload(scrubMediaUrls(form), baseline);
+      const sent = scrubMediaUrls(form);
+      // concept_keywords goes out as a list, is_controversial only when toggled
+      // (buildQuestionEditPayload). The key never goes out: it changes only
+      // through the key-change box (reason + evidence, recorded), and a PATCH
+      // carrying the loaded key could write an old key back over a newer one.
+      const payload = buildQuestionEditPayload(sent, baseline);
+      delete payload.correct_answer;
       // Optimistic lock: If-Match carries the row's updated_at (admin list
       // rows and the detail payload both include it, so the first save is
       // locked too; the server compares instants). Without a value, e.g. a
@@ -537,17 +672,30 @@ export default function QuestionEditModal({ question, images: initialImages, onC
       // Edits the PATCH silently ignored (the field is absent from the
       // response): keep them marked as unsaved and tell the admin.
       const dropped = unpersistedEditFields(payload, baseline, res.data);
-      const nextBaseline: any = { ...form };
+      const nextBaseline: any = { ...form, correct_answer: baseline.correct_answer };
       for (const field of dropped) nextBaseline[field] = (baseline as any)[field];
       baselineRef.current = nextBaseline;
+      const problems: string[] = [];
       if (dropped.length > 0) {
-        setError(
+        problems.push(
           `Saved, but the server did not store: ${dropped.join(', ')}. ` +
           'Those edits are only in this form and will be lost if you leave it.',
         );
       }
-      onSaved(res.data);
-      return { saved: res.data, dropped };
+      // A changed explanation also gets its provenance (written for the stored
+      // key, by you, from a suggestion / the AI or not): the PATCH stores only text.
+      let savedRow = res.data;
+      if (changedExplanationFields(sent, baseline).length > 0 && isValidAnswerLetter(baseline.correct_answer)) {
+        const recorded = await postExplanation(sent);
+        if ('error' in recorded) problems.push(`Saved, but the explanation's provenance was not recorded: ${recorded.error}`);
+        else savedRow = { ...res.data, updated_at: recorded.updatedAt };
+      }
+      // The text is stored either way; a suggestion is not reused for later edits.
+      acceptedRef.current = null;
+      setUnsavedSuggestion(false);
+      if (problems.length > 0) setError(problems.join(' '));
+      onSaved(savedRow);
+      return { saved: savedRow, dropped, warnings: problems };
     } catch (e: any) {
       if (e?.response?.status === 409) {
         setConflict(e.response.data.current);
@@ -575,8 +723,9 @@ export default function QuestionEditModal({ question, images: initialImages, onC
 
   async function saveAndNext(): Promise<void> {
     const result = await persist(false);
-    // Stay on this question if the save failed or some edits were not stored.
-    if (result && result.dropped.length === 0 && onSaveAndNext) onSaveAndNext(result.saved);
+    // Stay on this question if the save failed, some edits were not stored or
+    // the explanation's provenance could not be recorded (the warning shows here).
+    if (result && result.dropped.length === 0 && result.warnings.length === 0 && onSaveAndNext) onSaveAndNext(result.saved);
   }
 
   saveRef.current = save;
@@ -596,7 +745,7 @@ export default function QuestionEditModal({ question, images: initialImages, onC
     // The AI is told this letter is correct (and Save stores it as the
     // answer), so it must be an explicit choice; the endpoint 400s without it.
     if (!isValidAnswerLetter(form.correct_answer)) {
-      setAiError('Select the correct answer first: the explanation is written for that answer.');
+      setAiError('Set the answer key first ("Set the key…" under Correct Answer): the explanation is written for that answer.');
       return;
     }
     const correctAnswer = form.correct_answer;
@@ -733,17 +882,40 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           ))}
         </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Correct Answer</span>
-          <select
-            className="border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 p-2 rounded ml-3"
-            value={form.correct_answer}
-            onChange={(e) => setForm({ ...form, correct_answer: e.target.value })}
-          >
-            {!isValidAnswerLetter(form.correct_answer) && <option value="">— Not set —</option>}
-            {['A', 'B', 'C', 'D'].map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </label>
+        {/* The key is read-only here: Save never changes it. It changes only
+            through the key-change box below (reason + evidence, recorded). */}
+        <section aria-label="Answer key" className="space-y-3 border-t border-gray-200 dark:border-slate-700 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Correct Answer</span>
+            <span className="rounded border border-gray-300 dark:border-slate-700 px-2.5 py-1 font-mono text-sm font-semibold text-gray-900 dark:text-slate-100">
+              {isValidAnswerLetter(form.correct_answer) ? form.correct_answer : '— not set —'}
+            </span>
+            <button type="button" onClick={() => openKeyBox()}
+              className="text-sm font-medium text-indigo-600 dark:text-indigo-400 underline-offset-2 hover:underline">
+              {isValidAnswerLetter(form.correct_answer) ? 'Change the key…' : 'Set the key…'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-slate-400">
+            Save never changes the key: a key change needs a reason and is recorded with its evidence.
+          </p>
+          <ProvenancePanel questionId={question.id} state={provenance} onVerified={handleVerified} onReviewed={handleReviewed} />
+          <details ref={keyBoxRef} open={keyBoxOpen}
+            onToggle={(e) => setKeyBoxOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary className="cursor-pointer text-sm font-medium text-gray-900 dark:text-slate-100">
+              {isValidAnswerLetter(form.correct_answer) ? 'Change the answer key' : 'Set the answer key'}
+            </summary>
+            <div className="mt-2">
+              <KeyChangeBox
+                questionId={question.id}
+                storedKey={form.correct_answer}
+                sourceKeys={provenance.data?.source_keys ?? []}
+                proposedKey={proposedKey}
+                disabled={saving || loadingDetail}
+                onChanged={handleKeyChanged}
+              />
+            </div>
+          </details>
+        </section>
 
         <label className="block">
           <div className="flex items-center justify-between">
@@ -806,6 +978,25 @@ export default function QuestionEditModal({ question, images: initialImages, onC
           />
           {renderInlinePreview(form.concept_explanation)}
         </label>
+
+        {/* Evidence-first explanation help (reference passages only, nothing saved until you save). */}
+        <details className="rounded border border-gray-300 dark:border-slate-700 p-2">
+          <summary className="cursor-pointer text-sm font-medium text-gray-900 dark:text-slate-100">
+            Check the evidence and get an explanation suggestion
+          </summary>
+          <div className="mt-2">
+            <ExplanationSuggestionPanel
+              questionId={question.id}
+              storedKey={form.correct_answer}
+              storeAvailable={provenance.data ? provenance.data.reference_store_available : null}
+              getDraft={() => draftFromForm(formRef.current as Record<string, unknown>)}
+              onUseFields={applySuggestionFields}
+              onProposeKey={(letter) => openKeyBox(letter)}
+              onSaveExplanation={saveExplanationFromPanel}
+              unsavedSuggestion={unsavedSuggestion}
+            />
+          </div>
+        </details>
 
         {/* Why correct + why wrong grid */}
         <div className="border-t border-gray-200 dark:border-slate-700 pt-3 space-y-3">

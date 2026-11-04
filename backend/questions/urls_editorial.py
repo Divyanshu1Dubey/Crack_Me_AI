@@ -8,6 +8,7 @@ from django.urls import path
 from questions import views_editorial
 
 urlpatterns = [
+    path('<int:pk>/provenance/', views_editorial.ProvenanceView.as_view(), name='question-provenance'),
     path('<int:pk>/change-key/', views_editorial.ChangeAnswerKeyView.as_view(), name='question-change-key'),
     path('<int:pk>/explain-option/', views_editorial.ExplainOptionView.as_view(), name='question-explain-option'),
     path('<int:pk>/key-history/', views_editorial.KeyHistoryListView.as_view(), name='question-key-history'),

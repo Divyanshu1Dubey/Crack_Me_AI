@@ -55,7 +55,8 @@ class EvidenceServicesTestCase(TestCase):
             page_end=1450,
             page_label="1450",
             snippet=snippet_text,
-            snippet_sha1=hashlib.sha1(snippet_text.encode()).hexdigest(),
+            snippet_sha1=hashlib.sha1(snippet_text.encode(), usedforsecurity=False).hexdigest(),
+            quote_verified=True,   # rows reach students only with a quote checked against the page
             option_letter="A",
             stance="supports",
             origin="admin_manual",

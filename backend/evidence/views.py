@@ -18,8 +18,10 @@ Admin (``IsControlTowerAdmin``, throttle scope ``evidence_admin``):
   GET    recall-pages/<question_source_id>/image.png?dpi=  the question's recall PDF page (private, no-store)
 
 Student:
-  GET    questions/<qid>/citations/               accepted, student-visible, current citations (402 when the viewer
-                                                  may not see the answer); throttle scope ``evidence_student``
+  GET    questions/<qid>/citations/               accepted, student-visible, current citations for a viewer entitled
+                                                  to the answer; anyone else gets ``{citations: [], locked: true}``
+                                                  (HTTP 200, like the reveal panel's other GETs: a 402 would open
+                                                  the paywall from a panel); throttle scope ``evidence_student``
   GET    figures/<id>/?t=                         a figure crop: admins, or a valid signed token for that figure
 
 Students never receive file paths, sha256 hashes, page text or full pages.
@@ -412,26 +414,33 @@ class EvidenceSearchView(_AdminView):
 
 class StudentCitationsView(APIView):
     """Accepted, student-visible, current citations of one question for a viewer entitled to its
-    answer (402 ``upgrade_required`` otherwise): title, edition, chapter, page label and a short
-    verified snippet, plus a signed figure crop where the source allows it."""
+    answer: title, edition, chapter, page label and a short verified snippet, plus a signed figure
+    crop where the source allows it.
+
+    A citation names the option it supports, so it follows the answer's entitlement rule
+    (``questions.views.user_can_view_answer``). A viewer who may not see the answer gets HTTP 200
+    ``{citations: [], locked: true}`` -- nothing about the evidence, not even whether there is any --
+    as the reveal panel's AI-text GETs do; a 402 would open the global upgrade dialog from a panel
+    that only loads after the answer is shown."""
 
     permission_classes = [permissions.AllowAny]
     throttle_scope = 'evidence_student'
 
     def get(self, request, qid):
         from questions.image_context import student_image_context
-        from questions.views import _upgrade_required_response, user_can_view_answer
+        from questions.views import user_can_view_answer
 
         question = Question.objects.filter(pk=qid).first()
         user = getattr(request, 'user', None)
         if question is None or (not question.is_active and not _is_admin(user)):
             raise Http404('Question not found')
         if not user_can_view_answer(user, question):
-            return _upgrade_required_response()
+            return _no_store(Response({'question_id': question.pk, 'citations': [], 'locked': True}))
         citations = services.student_citations(question, revealed=True, request=request)
         return _no_store(Response({
             'question_id': question.pk,
             'citations': citations,
+            'locked': False,
             'image_context': student_image_context(question),
         }))
 

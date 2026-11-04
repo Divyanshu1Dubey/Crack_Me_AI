@@ -20,6 +20,7 @@ import { questionsAPI, aiAPI } from '@/lib/api';
 import { analytics } from '@/lib/analytics';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
+import StudentCitations from '@/components/evidence/StudentCitations';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
@@ -779,6 +780,9 @@ function PracticeContent() {
                                         )}
                                     </CardContent>
                                 </Card>
+
+                                {/* Accepted textbook citations (snippets only; nothing when there are none). */}
+                                {currentQ && <StudentCitations questionId={currentQ.id} revealed={answerShown} />}
 
                                 {/* Mnemonic */}
                                 {revealData.mnemonic && !aiExplanation?.mnemonic && (

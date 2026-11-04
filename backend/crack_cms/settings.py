@@ -546,7 +546,7 @@ REST_FRAMEWORK = {
         'contact_us_hourly': os.getenv('DRF_THROTTLE_CONTACT_US_HOURLY', '20/hour'),
         # Medical-accuracy mission (2026-11).
         'admin_explain': os.getenv('DRF_THROTTLE_ADMIN_EXPLAIN', '30/min'),
-        'evidence_student': os.getenv('DRF_THROTTLE_EVIDENCE_STUDENT', '120/hour'),
+        'evidence_student': os.getenv('DRF_THROTTLE_EVIDENCE_STUDENT', '300/hour'),   # one per revealed question
         'evidence_admin': os.getenv('DRF_THROTTLE_EVIDENCE_ADMIN', '240/min'),
         'answer_insights': os.getenv('DRF_THROTTLE_ANSWER_INSIGHTS', '120/min'),
         'review_queue': os.getenv('DRF_THROTTLE_REVIEW_QUEUE', '240/min'),

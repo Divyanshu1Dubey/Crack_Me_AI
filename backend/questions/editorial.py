@@ -6,6 +6,7 @@ provenance preservation, explanation staleness checks, and triggering content ho
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any, Sequence
 
@@ -23,6 +24,22 @@ logger = logging.getLogger("questions.editorial")
 # else in the dict (``correct_answer``, ``answer_key_status``, ``verified_by``, ``is_active``, ...) is
 # rejected: the editor and review-queue endpoints pass the client's dict through.
 EXPLANATION_FIELDS = ("explanation", "concept_explanation", "mnemonic")
+
+
+def _is_admin(actor) -> bool:
+    """An admin account (role admin, superuser or staff): its saves count as a human review."""
+    return bool(
+        actor is not None
+        and getattr(actor, "is_authenticated", False)
+        and (getattr(actor, "is_admin", False) or getattr(actor, "is_superuser", False)
+             or getattr(actor, "is_staff", False))
+    )
+
+
+def explanation_hash(question) -> str:
+    """sha256 over the explanation fields (Question.explanation_hash / explanation_reviewed_hash)."""
+    parts = [(getattr(question, name, "") or "").strip() for name in EXPLANATION_FIELDS]
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
 
 
 def _audit_before(question) -> tuple[str, int | None]:
@@ -91,6 +108,12 @@ def change_answer_key(
             question.explanation_for_key = clean_key
             question.explanation_stem_hash = old_stem_hash
             question.explanation_status = "human_edited"
+            question.explanation_status_reason = ""
+            question.explanation_origin = "human"
+            question.explanation_hash = explanation_hash(question)
+            # As a PATCH of the explanation: students see this text, not an older AI explanation
+            # (serializers.effective_explanation_for), and AI regeneration leaves it alone.
+            question.lock_explanation = True
         elif question.explanation:
             # If key changed without updating explanation, mark it stale for the new key
             question.explanation_status = "stale"
@@ -144,23 +167,52 @@ def save_explanation(
     for_key: str | None = None,
     suggestion=None,
     accepted_fields: Sequence[str] | None = None,
+    ai_fields: Sequence[str] | None = None,
 ) -> Question:
-    """Save updated explanation text and provenance metadata."""
+    """Save updated explanation text and provenance metadata.
+
+    ``accepted_fields``: fields whose text the admin took from ``suggestion``; ``ai_fields``: fields
+    the legacy AI generator filled and the admin saved. Either makes the origin 'mixed' (else
+    'human'). Only the explanation fields and their provenance are written (``update_fields``), so a
+    concurrent change of the key or the stem is never overwritten with this instance's values.
+    """
     current_stem_hash = stem_hash(question)
     target_key = for_key or question.correct_answer
+    human = bool(actor) and not getattr(actor, "is_ai", False)
 
     for f in EXPLANATION_FIELDS:
         if f in fields:
             setattr(question, f, fields[f])
 
+    accepted = [f for f in (accepted_fields or ()) if f in EXPLANATION_FIELDS]
+    used_suggestion = suggestion if (suggestion is not None and accepted) else None
+    ai_used = [f for f in (ai_fields or ()) if f in EXPLANATION_FIELDS]
     question.explanation_for_key = target_key
     question.explanation_stem_hash = current_stem_hash
-    question.explanation_status = "human_edited" if (actor and not getattr(actor, "is_ai", False)) else "ai_generated"
-    if actor and actor.is_staff:
+    question.explanation_status = "human_edited" if human else "ai_generated"
+    question.explanation_status_reason = ""
+    question.explanation_origin = ("mixed" if (used_suggestion is not None or ai_used) else "human") if human else "ai"
+    question.explanation_hash = explanation_hash(question)
+    update_fields = [*[f for f in EXPLANATION_FIELDS if f in fields], "explanation_for_key", "explanation_stem_hash",
+                     "explanation_status", "explanation_status_reason", "explanation_origin", "explanation_hash"]
+    if used_suggestion is not None:
+        question.explanation_suggestion = used_suggestion
+        update_fields.append("explanation_suggestion")
+    if human:
+        # As a PATCH of the explanation (QuestionViewSet.perform_update): students see this text rather
+        # than an older AI explanation, and AI regeneration does not overwrite it.
+        question.lock_explanation = True
+        update_fields.append("lock_explanation")
+    if _is_admin(actor):
         question.explanation_reviewed_by = actor
         question.explanation_reviewed_at = timezone.now()
+        question.explanation_reviewed_hash = question.explanation_hash
+        update_fields += ["explanation_reviewed_by", "explanation_reviewed_at", "explanation_reviewed_hash"]
 
-    question.save()
+    question.save(update_fields=[*update_fields, "updated_at"])
+    if used_suggestion is not None and used_suggestion.accepted_at is None:
+        type(used_suggestion).objects.filter(pk=used_suggestion.pk).update(
+            accepted_at=timezone.now(), accepted_by=actor if getattr(actor, "is_authenticated", False) else None)
     return question
 
 
@@ -176,15 +228,32 @@ def compute_explanation_status(question: Question, suggestion=None) -> tuple[str
     if question.explanation_for_key and question.explanation_for_key != question.correct_answer:
         return "conflict", f"Explanation was written for option {question.explanation_for_key}, but key is {question.correct_answer}"
 
-    return getattr(question, "explanation_status", "human_edited") or "human_edited", ""
+    stored = getattr(question, "explanation_status", "") or ""
+    if stored in ("", "none"):
+        # Text saved before provenance was recorded (or by a path that records none): nobody has
+        # reviewed it for the current key and content.
+        return "pending_review", "No provenance recorded for this explanation"
+    return stored, ""
 
 
 def mark_explanation_reviewed(question: Question, *, actor) -> None:
-    """Mark an explanation as human-reviewed by staff."""
+    """Mark an explanation as human-reviewed by staff, for the question's current key and content."""
     question.explanation_reviewed_by = actor
     question.explanation_reviewed_at = timezone.now()
     question.explanation_status = "reviewed"
-    question.save(update_fields=["explanation_reviewed_by", "explanation_reviewed_at", "explanation_status"])
+    question.explanation_status_reason = ""
+    # The review is for what the admin saw: the current key and stem / options (so a later change
+    # shows the explanation as stale again) and the current text.
+    question.explanation_for_key = valid_key(question.correct_answer)
+    question.explanation_stem_hash = stem_hash(question)
+    question.explanation_hash = explanation_hash(question)
+    question.explanation_reviewed_hash = question.explanation_hash
+    fields = ["explanation_reviewed_by", "explanation_reviewed_at", "explanation_status", "explanation_status_reason",
+              "explanation_for_key", "explanation_stem_hash", "explanation_hash", "explanation_reviewed_hash"]
+    if not question.explanation_origin:
+        question.explanation_origin = "legacy"
+        fields.append("explanation_origin")
+    question.save(update_fields=fields)
 
 
 def _record_decision(question: Question, *, actor, resolution: str, reason: str) -> str:
@@ -210,7 +279,12 @@ def _record_decision(question: Question, *, actor, resolution: str, reason: str)
 
 
 def verify_question(question: Question, *, actor) -> str:
-    """Record a staff confirmation of the question's key; returns the audit status it leads to."""
+    """Record a staff confirmation of the question's key; returns the audit status it leads to.
+
+    A key that is not A-D cannot be confirmed (raises ``ValidationError``): change it instead.
+    """
+    if not valid_key(question.correct_answer):
+        raise ValidationError("The stored key is not A-D: change it instead of confirming it.")
     question.verified_by = actor
     question.verified_at = timezone.now()
     question.is_disputed = False
@@ -221,11 +295,17 @@ def verify_question(question: Question, *, actor) -> str:
 
 
 def unverify_question(question: Question, *, actor, reason: str = "") -> str:
-    """Withdraw a verification: the question goes back to the review queue."""
+    """Withdraw a verification: the question goes back to the review queue.
+
+    The student-facing "Verified by Admin" badge goes too: it must not sit on a question an admin
+    just sent back for review.
+    """
     question.needs_review = True
     question.verified_by = None
     question.verified_at = None
-    question.save(update_fields=["needs_review", "verified_by", "verified_at"])
+    question.is_verified_by_admin = False
+    question.verified_hash = ""
+    question.save(update_fields=["needs_review", "verified_by", "verified_at", "is_verified_by_admin", "verified_hash"])
     text = (reason or "").strip()
     return _record_decision(question, actor=actor, resolution="deferred",
                             reason=text if len(text) >= 10 else "Verification withdrawn in the question editor.")

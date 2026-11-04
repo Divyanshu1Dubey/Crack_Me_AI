@@ -525,14 +525,15 @@ def _option_text(question, letter: str) -> str:
 
 
 def student_rows(question) -> list:
-    """Accepted, student-visible, current rows of displayable sources, best first, capped."""
+    """Accepted, student-visible, current rows of displayable sources whose quote was verified
+    against the page, best first, capped."""
     from .models import QuestionEvidence
 
     tiers = tuple(getattr(settings, 'REFERENCE_STUDENT_TIERS', (1, 2, 3, 4)) or ())
     max_rows = max(0, int(getattr(settings, 'EVIDENCE_MAX_STUDENT_ROWS', 3)))
     rows = (
         QuestionEvidence.objects.filter(
-            question_id=question.pk, review_status='accepted', student_visible=True,
+            question_id=question.pk, review_status='accepted', student_visible=True, quote_verified=True,
             source__is_active=True, source__tier__in=[t for t in tiers if t != 5],
         )
         .exclude(source__student_display='none')
@@ -588,7 +589,7 @@ def figure_publicly_viewable(figure) -> bool:
     from .models import QuestionEvidence
 
     rows = QuestionEvidence.objects.filter(
-        figure_id=figure.pk, review_status='accepted', student_visible=True,
+        figure_id=figure.pk, review_status='accepted', student_visible=True, quote_verified=True,
         source__student_display='figure', source__is_active=True,
     ).select_related('question', 'source')
     return any(is_current(row, row.question) and source_student_displayable(row.source) for row in rows)

@@ -103,6 +103,18 @@ export default function ReviewQueuePage() {
     }
   }, [params]);
 
+  // `?q=<question id>` (the editor's provenance panel links here): show that question in any status.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q && /^\d+$/.test(q)) {
+      setSearch(q);
+      setStatus('');
+      setUnclaimed(false);
+      setSelected(Number(q));
+    }
+  }, []);
+
   // On a phone the detail sits below the filters: bring it into view when a question is opened.
   const detailRef = React.useRef<HTMLElement | null>(null);
   useEffect(() => {
