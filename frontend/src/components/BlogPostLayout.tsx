@@ -16,7 +16,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrackedLink } from '@/components/TrackedLink';
 import BlogAnalytics from '@/components/BlogAnalytics';
-import { FormattedText } from '@/components/FormattedText';
+import { BlogArticle } from '@/components/blog/BlogArticle';
+import BlogAdminBar from '@/components/blog/BlogAdminBar';
 import { CopyLinkButton } from '@/components/CopyLinkButton';
 import FAQSection from '@/components/FAQSection';
 import Breadcrumbs from '@/components/Breadcrumbs';
@@ -25,7 +26,6 @@ import { CommentsGiscus } from '@/components/CommentsGiscus';
 // From the plain config module: a value imported from a 'use client' file
 // into this Server Component would be a (truthy) client reference.
 import { GISCUS_CONFIGURED } from '@/components/giscusConfig';
-import BlogHeadingAnchors from '@/components/BlogHeadingAnchors';
 import { CMS_PYQ_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 import {
     articleSchema,
@@ -36,7 +36,16 @@ import {
 } from '@/lib/metadata';
 import { siteName, siteUrl } from '@/lib/seo';
 import type { BlogPost } from '@/lib/blog';
-import { formatPostDate, getRelatedPosts, categoryToSlug, postSocialImagePath } from '@/lib/blog';
+import {
+    blogImageOrigin,
+    categoryToSlug,
+    formatPostDate,
+    getRelatedPosts,
+    postReadingStats,
+    postSocialImagePath,
+    resolveBlogMediaUrl,
+} from '@/lib/blog';
+import { blogToc } from '@/lib/blogMarkdown';
 import { getAuthor } from '@/content/authors';
 import AdSense from '@/components/AdSense';
 import PartnerAd from '@/components/PartnerAd';
@@ -70,8 +79,10 @@ function shouldEmitMedicalWebPage(post: BlogPost): boolean {
 
 /**
  * Renders a single blog post — gradient hero, cover image, tag chips,
- * author byline, share row, sticky in-post CTA, body via `<FormattedText>`,
- * FAQ accordion, related posts, and Giscus comments.
+ * author byline, share row, sticky in-post CTA, body via `<BlogArticle>`
+ * (server-rendered: heading ids, callouts, figures, tables), the "On this
+ * page" list built from its `##` headings, FAQ accordion, related posts, and
+ * Giscus comments. Admins get an "Edit post" bar (client-side, backend role).
  *
  * EEAT signals emitted:
  *   • Article (or MedicalWebPage) JSON-LD with citation[] + reviewedBy
@@ -128,11 +139,12 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
     const whatsappShare = `https://wa.me/?text=${encodeURIComponent(`${post.title} — ${shareUrl}`)}`;
 
     const updatedISO = post.updatedAt ?? post.dateModified;
-    const tocItems = post.toc?.length
-        ? post.toc
-        : post.body
-            ? extractH2sFromMarkdown(post.body)
-            : [];
+    // The `##` headings with the ids BlogArticle gives them (a stored TOC only
+    // keeps its anchor ids for the headings it names).
+    const tocItems = blogToc(post.body, post.toc);
+    const stats = postReadingStats(post);
+    const imageOrigin = blogImageOrigin();
+    const cover = post.coverImage ? resolveBlogMediaUrl(post.coverImage) : '';
 
     return (
         <>
@@ -140,7 +152,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
             <BlogAnalytics
                 slug={post.slug}
                 category={post.category}
-                readingTimeMinutes={typeof post.readingTime === 'number' ? post.readingTime : 5}
+                readingTimeMinutes={stats.minutes}
             />
 
             <div className="min-h-screen bg-background text-foreground">
@@ -154,12 +166,15 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 { name: post.title, path: canonical },
                             ]}
                         />
-                        <Link
-                            href="/blog"
-                            className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground mb-5 mt-3"
-                        >
-                            <ArrowLeft className="h-3.5 w-3.5" /> All posts
-                        </Link>
+                        <div className="mb-5 mt-3 flex flex-wrap items-center justify-between gap-3">
+                            <Link
+                                href="/blog"
+                                className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                            >
+                                <ArrowLeft className="h-3.5 w-3.5" /> All posts
+                            </Link>
+                            <BlogAdminBar slug={post.slug} />
+                        </div>
 
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                             <Badge className="bg-primary/10 text-primary border-primary/30 text-xs font-bold uppercase tracking-wider">
@@ -211,11 +226,15 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 <CalendarDays className="h-3.5 w-3.5" /> Updated{' '}
                                 <strong className="text-foreground">{formatPostDate(updatedISO)}</strong>
                             </span>
-                            <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1.5" title={`${stats.words} words`}>
                                 <Clock className="h-3.5 w-3.5" />{' '}
-                                <strong className="text-foreground">{post.readingTime}</strong> read
+                                <strong className="text-foreground">{stats.label}</strong> read
                             </span>
                         </div>
+
+                        {cover ? (
+                            <img src={cover} alt="" className="mt-8 aspect-video w-full max-w-4xl rounded-3xl border border-border object-cover" />
+                        ) : null}
 
                         {/* Inline CTA strip — above the fold (help-first, never sales-y) */}
                         <div className="mt-7 flex flex-wrap items-center gap-2">
@@ -254,39 +273,39 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                     </nav>
                                 </details>
                             ) : null}
-                            <div id="post-body" className="blog-article">
-                                <FormattedText text={post.body} />
-                            </div>
-                            <BlogHeadingAnchors containerId="post-body" items={tocItems} />
+                            <BlogArticle id="post-body" markdown={post.body} preferredIds={post.toc} imageOrigin={imageOrigin} />
 
-                            {/* Share row */}
                             <AdSense slot="in-content" />
                             <PartnerAd kind="native" />
-                            <div className="mt-10 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-4 sm:p-5">
-                                <span className="inline-flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Share2 className="h-4 w-4" /> Share this post
-                                </span>
-                                <a
-                                    href={twitterShare}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="blog-share-btn"
-                                    data-blog-share="twitter"
-                                    aria-label="Share on Twitter"
-                                >
-                                    <Twitter className="h-3.5 w-3.5" /> Twitter / X
-                                </a>
-                                <a
-                                    href={whatsappShare}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="blog-share-btn"
-                                    data-blog-share="whatsapp"
-                                    aria-label="Share on WhatsApp"
-                                >
-                                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                                </a>
-                                <CopyLinkButton url={shareUrl} slug={post.slug} />
+                            {/* Share row: label on the left, the three buttons (icon + label on one
+                                line each) on the right; they wrap below the label on phones. */}
+                            <div className="mt-12 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                                <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                                    <Share2 className="h-4 w-4 text-primary" aria-hidden="true" /> Share this post
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <a
+                                        href={twitterShare}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="blog-share-btn"
+                                        data-blog-share="twitter"
+                                        aria-label="Share on Twitter"
+                                    >
+                                        <Twitter aria-hidden="true" /> Twitter / X
+                                    </a>
+                                    <a
+                                        href={whatsappShare}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="blog-share-btn"
+                                        data-blog-share="whatsapp"
+                                        aria-label="Share on WhatsApp"
+                                    >
+                                        <MessageCircle aria-hidden="true" /> WhatsApp
+                                    </a>
+                                    <CopyLinkButton url={shareUrl} slug={post.slug} />
+                                </div>
                             </div>
 
                             {/* References */}
@@ -368,7 +387,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                                     {r.category}
                                                 </Badge>
                                                 <h3 className="mt-2 text-base font-bold text-foreground">{r.title}</h3>
-                                                <p className="mt-1 text-xs text-muted-foreground">{r.readingTime} read</p>
+                                                <p className="mt-auto pt-1 text-xs text-muted-foreground">{postReadingStats(r).label} read</p>
                                             </Link>
                                         ))}
                                     </div>
@@ -498,11 +517,6 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
     );
 }
 
-/**
- * Local fallback — build a minimal TOC from h2 headings in the markdown
- * body. We only use this when the post hasn't explicitly supplied a
- * pre-built `toc[]` (keeps older posts rendering without edit).
- */
 /** The numbered "On this page" list (sidebar on desktop, collapsible on phones). */
 function TocList({ items }: { items: { id: string; label: string }[] }) {
     return (
@@ -522,25 +536,3 @@ function TocList({ items }: { items: { id: string; label: string }[] }) {
     );
 }
 
-function extractH2sFromMarkdown(markdown: string): { id: string; label: string }[] {
-    const out: { id: string; label: string }[] = [];
-    let inCode = false;
-    for (const line of markdown.split(/\r?\n/)) {
-        if (line.startsWith('```')) {
-            inCode = !inCode;
-            continue;
-        }
-        if (inCode) continue;
-        const m = /^##\s+(.+?)\s*$/.exec(line);
-        if (!m) continue;
-        const label = m[1].replace(/[`*_]/g, '').trim();
-        const id = label
-            .toLowerCase()
-            .replace(/[^\w\s-]/g, '')
-            .trim()
-            .replace(/\s+/g, '-')
-            .slice(0, 80);
-        out.push({ id, label });
-    }
-    return out;
-}

@@ -3,11 +3,18 @@
  * and from the blog API record (backend/blog_engine BlogPostSerializer), and
  * client-side checks that mirror the API's validation.
  *
- * No React and no runtime imports (unit-tested with node --test in
- * tests/unit/blog-admin-form.test.ts). It must never import src/lib/blog.ts:
- * that module bundles every static post.
+ * No React (unit-tested with node --test in tests/unit/blog-admin-form.test.ts).
+ * It must never import src/lib/blog.ts: that module bundles every static post.
+ *
+ * Word count and reading time are not edited: the API computes both from the
+ * body (blog_engine.text_stats; lib/blogText is the same rule for the live
+ * count). The table of contents is not edited either: on save it is rebuilt
+ * from the `##` headings (lib/blogMarkdown blogToc), keeping the anchor ids
+ * the post already had.
  */
 import type { BlogPostAdmin } from '@/lib/blogAPI';
+import { blogToc } from '@/lib/blogMarkdown';
+import { countBlogWords, readingTimeLabel } from '@/lib/blogText';
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
@@ -35,9 +42,6 @@ export interface BlogFormState {
     datePublished: string;
     dateModified: string;
     updatedAt: string;
-    readingTime: string;
-    /** '' when not set. */
-    wordCount: string;
     ctaLabel: string;
     ctaHref: string;
     ctaEventName: string;
@@ -46,6 +50,7 @@ export interface BlogFormState {
     /** One path per line. */
     relatedExamPaths: string;
     faqs: FaqRow[];
+    /** The stored table of contents: only its anchor ids matter (kept for headings it names). */
     toc: TocRow[];
     references: ReferenceRow[];
     revisionLog: RevisionRow[];
@@ -63,7 +68,7 @@ export const FIELD_FOR_INPUT: Record<string, string> = {
     category: 'category', subcategory: 'subcategory', tags: 'tags', difficulty: 'difficulty',
     authorId: 'author_id', reviewedBy: 'reviewed_by', author: 'author', authorRole: 'author_role',
     datePublished: 'date_published', dateModified: 'date_modified', updatedAt: 'updated_at',
-    readingTime: 'reading_time', wordCount: 'word_count', cta: 'primary_cta', relatedExamPaths: 'related_exam_paths',
+    cta: 'primary_cta', relatedExamPaths: 'related_exam_paths',
     faqs: 'faqs', toc: 'toc', references: 'references', revisionLog: 'revision_log', body: 'body',
     prelude: 'prelude', outro: 'outro', isPublished: 'is_published',
 };
@@ -76,7 +81,7 @@ export const FIELD_LABELS: Record<string, string> = {
     date_modified: 'Modified on', updated_at: 'Updated on', reading_time: 'Reading time', word_count: 'Word count',
     primary_cta: 'Call to action', related_exam_paths: 'Related pages', faqs: 'FAQs', toc: 'Table of contents',
     references: 'References', revision_log: 'Revision log', body: 'Body', prelude: 'Prelude', outro: 'Outro',
-    is_published: 'Published', non_field_errors: 'Post', detail: 'Post',
+    is_published: 'Published', non_field_errors: 'Post', detail: 'Post', file: 'Image',
 };
 
 // Kept in step with backend/blog_engine/serializers.py.
@@ -118,37 +123,22 @@ export function slugify(text: string): string {
         .replace(/-+$/g, '');
 }
 
-/** Approximate word count of a markdown body (same rule as lib/blog.ts countWords). */
+/** Word count of a markdown body: the API's rule (lib/blogText countBlogWords). */
 export function wordCountOf(markdown: string): number {
-    return markdown
-        .replace(/```[\s\S]*?```/g, ' ')
-        .replace(/[#>*_`~|[\]]/g, ' ')
-        .split(/\s+/)
-        .filter(Boolean).length;
+    return countBlogWords(markdown);
 }
 
-/** "N min" at about 200 words a minute (at least 1 min). */
+/** "N min" at 200 words a minute (at least 1 min): what the post page will show. */
 export function estimateReadingTime(markdown: string): string {
-    return `${Math.max(1, Math.round(wordCountOf(markdown) / 200))} min`;
+    return readingTimeLabel(countBlogWords(markdown));
 }
 
-/** The `##` headings of a body as TOC rows, with the ids the post page gives them. */
-export function tocFromBody(markdown: string): TocRow[] {
-    const rows: TocRow[] = [];
-    let inCode = false;
-    for (const line of markdown.split(/\r?\n/)) {
-        if (line.startsWith('```')) {
-            inCode = !inCode;
-            continue;
-        }
-        if (inCode) continue;
-        const m = /^##\s+(.+?)\s*$/.exec(line);
-        if (!m) continue;
-        const label = m[1].replace(/[`*_]/g, '').trim();
-        const id = label.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 80);
-        if (id && label) rows.push({ id, label });
-    }
-    return rows;
+/**
+ * The `##` headings of a body as TOC rows, with the ids the post page gives
+ * them (`keep`: the stored TOC, whose ids its headings keep).
+ */
+export function tocFromBody(markdown: string, keep: TocRow[] = []): TocRow[] {
+    return blogToc(markdown, keep);
 }
 
 /** An internal path (not protocol-relative) or an http(s) URL. */
@@ -167,7 +157,6 @@ export function emptyBlogForm(today: string, profile?: AuthorOption): BlogFormSt
         authorId: profile?.slug ?? 'crackcms-editorial', reviewedBy: profile?.slug ?? 'crackcms-editorial',
         author: profile?.name ?? '', authorRole: profile?.role ?? '',
         datePublished: today, dateModified: today, updatedAt: today,
-        readingTime: '5 min', wordCount: '',
         ctaLabel: 'Practise UPSC CMS PYQs', ctaHref: '/questions?exam=cms', ctaEventName: 'blog_practice_intent', ctaEventParams: '',
         relatedExamPaths: '', faqs: [], toc: [], references: [], revisionLog: [],
         body: '', prelude: '', outro: '', pinned: false, trending: false, isPublished: false,
@@ -196,8 +185,6 @@ export function formFromPost(post: Partial<BlogPostAdmin>): BlogFormState {
         difficulty: difficulty === 'beginner' || difficulty === 'advanced' ? difficulty : 'intermediate',
         authorId: str(post.author_id), reviewedBy: str(post.reviewed_by), author: str(post.author), authorRole: str(post.author_role),
         datePublished: str(post.date_published), dateModified: str(post.date_modified), updatedAt: str(post.updated_at),
-        readingTime: str(post.reading_time),
-        wordCount: typeof post.word_count === 'number' ? String(post.word_count) : '',
         ctaLabel: str(cta.label), ctaHref: str(cta.href), ctaEventName: str(cta.event_name ?? cta.eventName),
         ctaEventParams: params && typeof params === 'object' && !Array.isArray(params) && Object.keys(params).length
             ? JSON.stringify(params, null, 2) : '',
@@ -231,7 +218,7 @@ export function formToPayload(form: BlogFormState): { payload: Partial<BlogPostA
     else if (RESERVED_SLUGS.has(slug)) errors.slug = `/blog/${slug} is another page; choose another slug.`;
     if (!form.title.trim()) errors.title = 'Give the post a title.';
     for (const [key, label] of [['description', 'an SEO description'], ['excerpt', 'an excerpt'], ['category', 'a category'],
-        ['author', 'the author name'], ['authorRole', 'the author role'], ['readingTime', 'a reading time']] as const) {
+        ['author', 'the author name'], ['authorRole', 'the author role']] as const) {
         if (!form[key].trim()) errors[key] = `Add ${label}.`;
     }
     if (!SLUG_PATTERN.test(form.authorId.trim())) errors.authorId = 'Choose an author profile.';
@@ -243,13 +230,6 @@ export function formToPayload(form: BlogFormState): { payload: Partial<BlogPostA
     }
     const cover = form.coverImage.trim();
     if (cover && !isSafeLink(cover)) errors.coverImage = 'Use a path such as /blog/cover.png or an https:// URL.';
-
-    let wordCount: number | null = null;
-    if (form.wordCount.trim()) {
-        const n = Number(form.wordCount.trim());
-        if (!Number.isInteger(n) || n < 0) errors.wordCount = 'A whole number, or leave it empty.';
-        else wordCount = n;
-    }
 
     const tags: string[] = [];
     const seenTags = new Set<string>();
@@ -292,10 +272,9 @@ export function formToPayload(form: BlogFormState): { payload: Partial<BlogPostA
 
     const faqs = filledRows(form.faqs);
     if (faqs.some((f) => !f.q || !f.a)) errors.faqs = 'Every FAQ needs a question and an answer.';
-    const toc = filledRows(form.toc);
-    if (toc.some((t) => !t.label || !ANCHOR_PATTERN.test(t.id))) {
-        errors.toc = 'Every entry needs a label and an anchor id in lowercase letters, digits and hyphens.';
-    }
+    // Built from the ## headings; stored ids are kept for the headings they name.
+    const body = form.body.trim();
+    const toc = tocFromBody(body, filledRows(form.toc).filter((t) => t.label && ANCHOR_PATTERN.test(t.id)));
     const references = filledRows(form.references);
     if (references.some((r) => !r.label)) errors.references = 'Every reference needs a label.';
     else if (references.some((r) => r.url && !/^https?:\/\/\S+$/i.test(r.url))) errors.references = 'Reference links start with https:// or http://.';
@@ -321,15 +300,13 @@ export function formToPayload(form: BlogFormState): { payload: Partial<BlogPostA
         date_published: form.datePublished.trim(),
         date_modified: form.dateModified.trim(),
         updated_at: form.updatedAt.trim(),
-        reading_time: form.readingTime.trim(),
-        word_count: wordCount,
         primary_cta: primaryCta,
         related_exam_paths: relatedExamPaths,
         faqs,
         toc,
         references: references.map((r) => ({ label: r.label, ...(r.url ? { url: r.url } : {}), ...(r.published ? { published: r.published } : {}) })),
         revision_log: revisionLog,
-        body: form.body.trim(),
+        body,
         prelude: form.prelude.trim(),
         outro: form.outro.trim(),
         pinned: form.pinned,
@@ -374,12 +351,25 @@ export function formsDiffer(a: BlogFormState, b: BlogFormState): boolean {
     return JSON.stringify(a) !== JSON.stringify(b);
 }
 
-/** Admin list params for the filters (page size, status, category, search, ordering). */
-export function blogListParams(filters: { page: number; pageSize: number; search: string; status: '' | 'published' | 'draft'; category: string; ordering: string }) {
+/** Admin list params for the filters (page size, status, thin posts, category, search, ordering). */
+export function blogListParams(filters: {
+    page: number; pageSize: number; search: string; status: '' | 'published' | 'draft'; category: string; ordering: string;
+    thin?: boolean;
+}) {
     const params: Record<string, string | number> = { page: filters.page, page_size: filters.pageSize };
     if (filters.search.trim()) params.search = filters.search.trim();
     if (filters.status) params.is_published = filters.status === 'published' ? 'true' : 'false';
+    if (filters.thin) params.thin = 'true';
     if (filters.category) params.category = filters.category;
     if (filters.ordering) params.ordering = filters.ordering;
     return params;
+}
+
+/** ?edit=<slug> / ?new=1 on /admin/blog (the "Edit post" button of a published post links here). */
+export function editorTargetFromSearch(search: string): { slug: string } | { create: true } | null {
+    const params = new URLSearchParams(search);
+    const slug = (params.get('edit') ?? '').trim();
+    if (SLUG_PATTERN.test(slug)) return { slug };
+    if (params.get('new') === '1') return { create: true };
+    return null;
 }

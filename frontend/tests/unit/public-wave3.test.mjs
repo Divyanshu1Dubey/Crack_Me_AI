@@ -228,8 +228,9 @@ test('blog cards and tag chips use theme utilities (blog-card / blog-tag-chip we
         }
     }
     const card = read('src/components/BlogCard.tsx');
-    assert.match(card, /className="group block rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary\/40"/);
-    assert.match(card, /className="group block rounded-3xl border border-border bg-card p-6 sm:p-8 transition-colors hover:border-primary\/40"/);
+    // Full-height flex columns: cards in a grid row line up (the /blog featured row and explorer).
+    assert.match(card, /className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary\/40"/);
+    assert.match(card, /className="group flex h-full flex-col rounded-3xl border border-border bg-card p-6 sm:p-8 transition-colors hover:border-primary\/40"/);
     assert.match(card, /<Badge className="mr-2 bg-primary/);
 });
 

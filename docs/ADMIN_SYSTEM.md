@@ -13,6 +13,7 @@ CrackCMS exposes **three parallel admin surfaces**:
 | **Django Admin** | Superusers | `/admin/` | `is_staff=True` |
 | **In-app admin page** | Admins & superusers | `/admin` (Next.js) | `role='admin' or is_superuser`, read from the backend profile (`/api/auth/profile/`) |
 | **REST admin APIs** | Scripts + admin SPA | `/api/auth/admin/*`, `/api/auth/tokens/admin/*`, `/api/analytics/admin/*`, `/api/imports/*`, `/api/ingestion/*`, `/api/key-audit/*` | `IsControlTowerAdmin`: `role='admin'` or `is_superuser` |
+| **Blog editor** | Admins | `/admin/blog` (Next.js; API `/api/blog/posts/*`, `/api/blog/images/`) | `role='admin'` / `is_admin` (the API also accepts `is_staff`); see §10.1 |
 
 The answer-key review queue (`/admin/review-queue`, API `/api/key-audit/`) lists questions whose key may be
 wrong, by priority, with the printed source keys and AI review signals behind each; decisions go through
@@ -227,6 +228,66 @@ Django Admin (`/admin/`) is the canonical content-moderation surface. Most usefu
 - `/api/analytics/admin-dashboard/` — aggregate stats
 
 **Tabs**: Dashboard · Users · Tokens · Payments · Audit Log · Campaigns · Knowledge Base.
+
+### 10.1 Blog editor (`/admin/blog`)
+
+Every blog post is written and edited here (the database is the only source of the public blog; see
+[`FEATURES.md`](./FEATURES.md) §26). Access: the backend profile's `role === 'admin'` / `is_admin`; the blog API also
+accepts staff accounts. Files: `frontend/src/app/admin/blog/` (`page.tsx` list, `BlogEditor.tsx` form,
+`editor/` body editor).
+
+**The list** shows each post's real word count and reading time (computed by the API from the body), a **Thin**
+badge for posts under 400 words, a **Thin posts** filter (with its count) and **Shortest / Longest first** sorting,
+so the posts that need expanding are easy to find. **View** opens the live post, **Preview** a draft.
+
+**The body editor** has three tabs over the same markdown body:
+
+| Tab | What it is |
+|---|---|
+| **Visual** | A WYSIWYG editor (TipTap) on the post page's own `.blog-prose` styles: what you see is what is published. Toolbar: undo / redo, paragraph, H2, H3, bold, italic, strikethrough, underline, link (Ctrl+K), bulleted / numbered list, quote, **callout** (Note / Tip / Important / Warning / Caution, or remove), table (insert; inside a table: add / delete rows and columns, delete the table), **image upload**, divider line, code block. Markdown shortcuts work while typing (`## `, `- `, `1. `, `> `). |
+| **Markdown** | The stored text, with a syntax cheat sheet. |
+| **Preview** | The body rendered by the public `BlogArticle` component, exactly as the post page renders it. |
+
+A live counter shows words, reading time and a "Thin" warning under 400 words. Word count, reading time and the
+"On this page" list are **not typed in**: the API counts the body, and the table of contents is rebuilt from the `##`
+headings on every save (anchor ids a post already had are kept for the headings they name).
+
+**Callouts** (GitHub alert syntax; the toolbar writes it for you):
+
+```markdown
+> [!NOTE]
+> Background the reader should know.
+
+> [!TIP]
+> Revise the PYQs of the last five years first.
+
+> [!IMPORTANT]
+> Carry two photo IDs to the centre.
+
+> [!WARNING]
+> Negative marking: a wrong answer costs one-third of the marks.
+
+> [!CAUTION]
+> Reporting late means you are not allowed in.
+```
+
+The marker is the first line of a blockquote, in any case; the box can hold paragraphs, lists and tables. Other
+markdown: `## Heading`, `### Sub-heading`, `**bold**`, `*italic*`, `~~strike~~`, `[text](/questions?exam=cms)`,
+`- item`, `1. item`, `- [ ] checklist item`, `> quote`, GFM tables (`:---:` centres a column), `---` divider. A single
+newline is a line break; an empty line starts a new paragraph.
+
+**Images**: the toolbar's image button (and **Upload** beside the cover image field) sends the file to
+`POST /api/blog/images/` (PNG, JPEG, GIF or WebP, 5 MB at most; checked by content). It is stored on the API's volume
+(`MEDIA_ROOT/blog/`) and inserted as `![alt text](/api/blog/images/… "caption")`: the editor asks for the **alt text**
+(required: what the image shows, read aloud to blind readers) and an optional **caption**; an image alone in its
+paragraph is a figure with the caption below it. Select an image to edit its alt text and caption or remove it. The
+cover image appears above the post and on its card.
+
+**Edit in place**: on a published post (`/blog/<slug>`), admins see an **Edit post** button (client-side, from the
+backend profile; nothing renders for visitors). It opens `/admin/blog?edit=<slug>`. After **Save**, publish,
+unpublish or delete, the editor calls the site's `POST /api/blog-revalidate` (it verifies the caller is an admin with
+the API), so the live post, `/blog`, the feed and the sitemap show the change on the next visit; **View live post**
+opens it. An unpublished post's address shows admins a **draft preview** (with an Edit button) and visitors a 404.
 
 ---
 

@@ -1,7 +1,8 @@
 /**
- * Pure helper for BlogHeadingAnchors: decide which table-of-contents id each
- * rendered `##` heading should get. Kept free of JSX/DOM so it can be
- * unit-tested with Node.
+ * Pure helper for the post page's heading ids (lib/blogMarkdown assigns them
+ * server-side): decide which stored table-of-contents id each `##` heading
+ * keeps, so existing #anchor links keep working. Kept free of JSX/DOM so it
+ * can be unit-tested with Node.
  */
 
 export interface TocItem { id: string; label: string }

@@ -1,5 +1,7 @@
 from django.db import models
 
+from .text_stats import count_words, is_thin, reading_time_label
+
 
 class BlogPost(models.Model):
     """A blog post: the source of truth of the public /blog pages.
@@ -36,8 +38,20 @@ class BlogPost(models.Model):
     date_published = models.CharField(max_length=50)
     date_modified = models.CharField(max_length=50, blank=True, default="")
     updated_at = models.CharField(max_length=50, blank=True, default="")
-    reading_time = models.CharField(max_length=20, default="10 min")
-    word_count = models.IntegerField(null=True, blank=True, default=None)
+    # The static seed's metadata, kept so seed_blogs' content hashes stay
+    # stable; never shown (most seeded posts claimed ~2,000 words for a
+    # ~100-word body). The site shows body_word_count and the reading time
+    # derived from it (blog_engine.text_stats).
+    reading_time = models.CharField(
+        max_length=20, default="10 min",
+        help_text="Seed metadata only; the site shows the reading time computed from the body.")
+    word_count = models.IntegerField(
+        null=True, blank=True, default=None,
+        help_text="Seed metadata only; the site shows body_word_count.")
+    body_word_count = models.PositiveIntegerField(
+        default=0, editable=False,
+        help_text="Words in the body (blog_engine.text_stats.count_words), set on every save. "
+                  "The API reports it as word_count, with reading_time derived from it.")
     primary_cta = models.JSONField(default=dict, blank=True)
     related_exam_paths = models.JSONField(default=list, blank=True)
     faqs = models.JSONField(default=list, blank=True)
@@ -62,6 +76,24 @@ class BlogPost(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        # Every save path that writes the body (the API, Django admin, seed_blogs'
+        # creates) recounts it; a save of other fields only leaves it alone.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or "body" in update_fields:
+            self.body_word_count = count_words(self.body)
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "body_word_count"}
+        super().save(*args, **kwargs)
+
+    @property
+    def reading_time_label(self) -> str:
+        return reading_time_label(self.body_word_count)
+
+    @property
+    def is_thin(self) -> bool:
+        return is_thin(self.body_word_count)
 
 
 class BlogSeedImport(models.Model):

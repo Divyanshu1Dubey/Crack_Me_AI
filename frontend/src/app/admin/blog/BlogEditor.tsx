@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useCallback, useDeferredValue, useEffect, useId, useRef, useState } from 'react';
-import { ExternalLink, ListTree, Loader2, Save, X } from 'lucide-react';
+import { ExternalLink, Eye, ImagePlus, Loader2, Save, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FormattedText } from '@/components/FormattedText';
 import { authors } from '@/content/authors';
-import { blogAPI, type BlogPostAdmin } from '@/lib/blogAPI';
+import { blogAPI, blogApiOrigin, blogMediaUrl, type BlogPostAdmin } from '@/lib/blogAPI';
 import RowsEditor from './RowsEditor';
+import BodyEditor from './editor/BodyEditor';
 import {
     FIELD_FOR_INPUT,
     type BlogFormState,
@@ -15,7 +15,6 @@ import {
     apiFieldErrors,
     describeBlogError,
     emptyBlogForm,
-    estimateReadingTime,
     formFromPost,
     formToPayload,
     formsDiffer,
@@ -23,7 +22,6 @@ import {
     slugify,
     tocFromBody,
     todayIso,
-    wordCountOf,
 } from './blogForm';
 
 interface BlogEditorProps {
@@ -31,13 +29,15 @@ interface BlogEditorProps {
     postId: number | null;
     /** Existing categories, offered as suggestions. */
     categories: string[];
-    onSaved: (post: BlogPostAdmin, created: boolean) => void;
+    /** `refreshed`: the public pages were refreshed (else they follow within ~10 minutes). */
+    onSaved: (post: BlogPostAdmin, created: boolean, refreshed: boolean) => void;
     onClose: () => void;
 }
 
 const INPUT = 'w-full min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground';
 const PROFILES = Object.values(authors).map((a) => ({ slug: a.slug, name: a.name, role: a.role }));
 const INPUT_FOR_FIELD: Record<string, string> = Object.fromEntries(Object.entries(FIELD_FOR_INPUT).map(([k, v]) => [v, k]));
+const IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp';
 
 function Section({ title, children, description }: { title: string; description?: string; children: React.ReactNode }) {
     return (
@@ -78,9 +78,12 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [slugTouched, setSlugTouched] = useState(Boolean(postId));
-    const [bodyView, setBodyView] = useState<'write' | 'preview'>('write');
+    const [coverBusy, setCoverBusy] = useState(false);
+    const [coverError, setCoverError] = useState<string | null>(null);
     const summaryRef = useRef<HTMLDivElement | null>(null);
+    const coverInput = useRef<HTMLInputElement | null>(null);
     const deferredBody = useDeferredValue(form?.body ?? '');
+    const imageOrigin = blogApiOrigin();
 
     const load = useCallback(async () => {
         if (!postId) return;
@@ -105,6 +108,19 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
         window.addEventListener('beforeunload', warn);
         return () => window.removeEventListener('beforeunload', warn);
     }, [dirty]);
+
+    const uploadImage = useCallback(async (file: File) => {
+        try {
+            const res = await blogAPI.uploadImage(file);
+            return { src: res.data.src };
+        } catch (err) {
+            throw new Error(describeBlogError(err, 'uploading the image'));
+        }
+    }, []);
+
+    const setBody = useCallback((body: string) => {
+        setForm((prev) => (prev ? { ...prev, body } : prev));
+    }, []);
 
     if (loadError) {
         return (
@@ -149,6 +165,19 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
         onClose();
     };
 
+    const uploadCover = async (file: File) => {
+        setCoverBusy(true);
+        setCoverError(null);
+        try {
+            const { src } = await uploadImage(file);
+            set('coverImage', src);
+        } catch (err) {
+            setCoverError(err instanceof Error ? err.message : 'The upload failed.');
+        } finally {
+            setCoverBusy(false);
+        }
+    };
+
     const save = async (event: React.FormEvent) => {
         event.preventDefault();
         setSaveError(null);
@@ -163,11 +192,20 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
         try {
             const res = postId ? await blogAPI.update(postId, payload) : await blogAPI.create(payload);
             const saved = formFromPost(res.data);
+            const previousSlug = savedSlug;
             setForm(saved);
             setInitial(saved);
             setSavedSlug(res.data.slug);
             setSlugTouched(true);
-            onSaved(res.data, !postId);
+            // Refresh the public pages now (the post, its old address after a rename, /blog).
+            let refreshed = false;
+            try {
+                await blogAPI.revalidate([res.data.slug, ...(previousSlug && previousSlug !== res.data.slug ? [previousSlug] : [])]);
+                refreshed = true;
+            } catch {
+                refreshed = false;
+            }
+            onSaved(res.data, !postId, refreshed);
         } catch (err) {
             const fields = apiFieldErrors(err);
             const mapped: FormErrors = {};
@@ -192,6 +230,8 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
     const slugChanged = Boolean(postId && savedSlug && form.slug.trim() !== savedSlug);
     const profileKnown = (slug: string) => PROFILES.some((p) => p.slug === slug);
     const errorCount = Object.keys(errors).length;
+    const toc = tocFromBody(deferredBody, form.toc);
+    const live = Boolean(postId && initial?.isPublished && savedSlug);
 
     return (
         <form onSubmit={save} noValidate aria-labelledby={id('heading')} className="space-y-4">
@@ -203,12 +243,13 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                     {dirty && <span className="text-xs text-amber-700 dark:text-amber-400">Unsaved changes</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {postId && initial?.isPublished && savedSlug && (
+                    {postId && savedSlug ? (
                         <a href={`/blog/${savedSlug}`} target="_blank" rel="noopener noreferrer"
+                            title={live ? 'The published post' : 'A draft: only admins see it at this address'}
                             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-accent">
-                            <ExternalLink className="h-4 w-4" /> View
+                            {live ? <><ExternalLink className="h-4 w-4" /> View live post</> : <><Eye className="h-4 w-4" /> Preview draft</>}
                         </a>
-                    )}
+                    ) : null}
                     <Button type="button" variant="outline" size="sm" onClick={close}><X className="h-4 w-4" /> Cancel</Button>
                     <Button type="submit" size="sm" disabled={saving}>
                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
@@ -248,45 +289,12 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
             </Section>
 
             <section className="min-w-0 rounded-xl border border-border bg-card p-4" aria-labelledby={id('body-heading')}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 id={id('body-heading')} className="text-base font-semibold text-foreground">Article body</h2>
-                    <div className="flex gap-1 lg:hidden" role="tablist" aria-label="Body view">
-                        {(['write', 'preview'] as const).map((view) => (
-                            <button key={view} type="button" role="tab" aria-selected={bodyView === view} onClick={() => setBodyView(view)}
-                                className={`rounded-full border px-3 py-1 text-xs ${bodyView === view ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-accent'}`}>
-                                {view === 'write' ? 'Write' : 'Preview'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                    Markdown: ## headings, lists, **bold**, [links](/cms) and tables. The preview renders it the way the post page does.
+                <h2 id={id('body-heading')} className="text-base font-semibold text-foreground">Article body</h2>
+                <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+                    The Visual tab looks like the published post: headings, lists, links, callouts, tables and images are in the
+                    toolbar. Markdown shows the stored text; Preview renders it exactly as the post page does.
                 </p>
-                <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
-                    <div className={`min-w-0 ${bodyView === 'preview' ? 'hidden lg:block' : ''}`}>
-                        <label htmlFor={id('body')} className="mb-1 block text-xs font-medium text-muted-foreground">Body (markdown)</label>
-                        <textarea id={id('body')} value={form.body} rows={22} spellCheck
-                            aria-invalid={Boolean(errors.body)} aria-describedby={describedBy('body')}
-                            onChange={(e) => set('body', e.target.value)}
-                            className={`${INPUT} font-mono text-[13px] leading-relaxed`} />
-                        <div id={`${id('body')}-hint`} className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span>{wordCountOf(form.body)} words · about {estimateReadingTime(form.body)}</span>
-                            <Button type="button" variant="outline" size="sm" onClick={() => {
-                                set('wordCount', String(wordCountOf(form.body)));
-                                set('readingTime', estimateReadingTime(form.body));
-                            }}>Use for word count and reading time</Button>
-                        </div>
-                        {errors.body && <p id={`${id('body')}-error`} className="mt-1 text-xs text-destructive" role="alert">{errors.body}</p>}
-                    </div>
-                    <div className={`min-w-0 ${bodyView === 'write' ? 'hidden lg:block' : ''}`} role="region" aria-label="Body preview">
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">Preview</p>
-                        <div className="blog-article max-h-[70vh] min-w-0 overflow-y-auto rounded-md border border-border bg-background p-3 text-foreground">
-                            {deferredBody.trim()
-                                ? <FormattedText text={deferredBody} />
-                                : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}
-                        </div>
-                    </div>
-                </div>
+                <BodyEditor value={form.body} onChange={setBody} onUploadImage={uploadImage} imageOrigin={imageOrigin} error={errors.body} />
             </section>
 
             <Section title="Classification">
@@ -309,9 +317,24 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                         <option value="advanced">Advanced</option>
                     </select>
                 </Field>
+                <Field id={id('coverImage')} label="Cover image (optional)" error={errors.coverImage || coverError || undefined}
+                    hint="Shown above the post and on its card. Upload a PNG, JPEG, GIF or WebP (5 MB at most), or paste a /path or https:// address.">
+                    <div className="flex min-w-0 gap-2">
+                        {input('coverImage', { placeholder: '/api/blog/images/…' })}
+                        <Button type="button" variant="outline" size="sm" className="h-auto shrink-0" disabled={coverBusy}
+                            onClick={() => { setCoverError(null); coverInput.current?.click(); }}>
+                            {coverBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} Upload
+                        </Button>
+                    </div>
+                    <input ref={coverInput} type="file" accept={IMAGE_TYPES} className="hidden" tabIndex={-1} aria-hidden="true"
+                        onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void uploadCover(file); }} />
+                    {form.coverImage.trim() ? (
+                        <img src={blogMediaUrl(form.coverImage.trim(), imageOrigin)} alt="Cover preview" className="mt-2 aspect-video w-full max-w-xs rounded-md border border-border object-cover" />
+                    ) : null}
+                </Field>
             </Section>
 
-            <Section title="Byline and dates" description="Profiles come from the site's author list (src/content/authors.ts).">
+            <Section title="Byline and dates" description="Profiles come from the site's author list (src/content/authors.ts). Word count and reading time are worked out from the body.">
                 <Field id={id('authorId')} label="Author profile" error={errors.authorId}>
                     <select id={id('authorId')} className={INPUT} value={form.authorId} onChange={(e) => setProfile('authorId', e.target.value)}>
                         {!profileKnown(form.authorId) && <option value={form.authorId}>{form.authorId || 'Choose a profile'} (not a registered profile)</option>}
@@ -336,8 +359,6 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                     hint={<button type="button" className="text-primary hover:underline" onClick={() => set('updatedAt', todayIso())}>Set to today</button>}>
                     {input('updatedAt', { type: 'date' })}
                 </Field>
-                <Field id={id('readingTime')} label="Reading time" error={errors.readingTime}>{input('readingTime', { placeholder: '8 min' })}</Field>
-                <Field id={id('wordCount')} label="Word count" error={errors.wordCount}>{input('wordCount', { inputMode: 'numeric' })}</Field>
             </Section>
 
             <Section title="Call to action and links" description="The button under the post title and at the end of the post.">
@@ -350,10 +371,6 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                 <Field id={id('relatedExamPaths')} label="Related pages (one path per line)" error={errors.relatedExamPaths}>
                     {area('relatedExamPaths', 3, { spellCheck: false, placeholder: '/cms\n/neet-pg' })}
                 </Field>
-                <Field id={id('coverImage')} label="Cover image (optional)" error={errors.coverImage}
-                    hint="The post page and social cards use the generated image; this path is stored only.">
-                    {input('coverImage', { placeholder: '/blog/my-cover.png' })}
-                </Field>
             </Section>
 
             <div className="grid min-w-0 gap-4 xl:grid-cols-2">
@@ -361,15 +378,21 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                     rows={form.faqs} blank={{ q: '', a: '' }} addLabel="Add FAQ" error={errors.faqs}
                     columns={[{ key: 'q', label: 'Question', wide: true }, { key: 'a', label: 'Answer', multiline: true }]}
                     onChange={(rows) => set('faqs', rows)} />
-                <RowsEditor legend="Table of contents" hint="Empty: the post page lists the ## headings itself."
-                    rows={form.toc} blank={{ id: '', label: '' }} addLabel="Add entry" error={errors.toc}
-                    columns={[{ key: 'label', label: 'Label' }, { key: 'id', label: 'Anchor id' }]}
-                    onChange={(rows) => set('toc', rows)}
-                    actions={(
-                        <Button type="button" variant="outline" size="sm" onClick={() => set('toc', tocFromBody(form.body))}>
-                            <ListTree className="h-4 w-4" /> Build from ## headings
-                        </Button>
-                    )} />
+                <section className="min-w-0 rounded-lg border border-border p-3" aria-labelledby={id('toc-heading')}>
+                    <h3 id={id('toc-heading')} className="text-sm font-semibold text-foreground">
+                        On this page <span className="font-normal text-muted-foreground">({toc.length}, built from the ## headings)</span>
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">The post page lists its section headings here; rename or reorder them in the body.</p>
+                    {toc.length ? (
+                        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-foreground">
+                            {toc.map((item) => (
+                                <li key={item.id}>{item.label} <code className="ml-1 text-[11px] text-muted-foreground">#{item.id}</code></li>
+                            ))}
+                        </ol>
+                    ) : (
+                        <p className="mt-2 text-xs text-muted-foreground">No ## headings yet.</p>
+                    )}
+                </section>
                 <RowsEditor legend="References" hint="Listed under the post and cited in its structured data."
                     rows={form.references} blank={{ label: '', url: '', published: '' }} addLabel="Add reference" error={errors.references}
                     columns={[{ key: 'label', label: 'Reference', wide: true }, { key: 'url', label: 'Link (optional)', type: 'url' },
@@ -399,7 +422,7 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                         Published (on /blog)
                     </label>
                     <label className="flex items-center gap-2">
-                        <input type="checkbox" checked={form.pinned} onChange={(e) => set('pinned', e.target.checked)} /> Pinned
+                        <input type="checkbox" checked={form.pinned} onChange={(e) => set('pinned', e.target.checked)} /> Pinned (featured on /blog)
                     </label>
                     <label className="flex items-center gap-2">
                         <input type="checkbox" checked={form.trending} onChange={(e) => set('trending', e.target.checked)} /> Trending
@@ -409,7 +432,10 @@ export default function BlogEditor({ postId, categories, onSaved, onClose }: Blo
                 {form.isPublished && isStubBody(form.body) && !errors.isPublished && (
                     <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">A post without a body is not shown on the site.</p>
                 )}
-                <p className="mt-2 text-xs text-muted-foreground">Saved changes reach the public blog, its feed and the sitemap within about 10 minutes.</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                    Saving refreshes the post, the blog index, its feed and the sitemap right away. A draft is visible only to
+                    admins, at its address.
+                </p>
             </section>
 
             <div className="flex flex-wrap justify-end gap-2">

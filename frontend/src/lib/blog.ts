@@ -16,6 +16,7 @@ import {
     isLocalhostApiUrl,
     normalizeApiBaseUrl,
 } from '@/lib/apiBase';
+import { countBlogWords, formatPostDate, readingMinutes, readingTimeLabel, slugifyHeading } from '@/lib/blogText';
 
 import cmsLast5Days from '@/content/blog/upsc-cms-last-5-days-strategy';
 import cmsNeetPgLastWeek from '@/content/blog/cms-and-neet-pg-last-week-shared-revision';
@@ -220,10 +221,11 @@ export interface BlogPost {
     dateModified: string;
     /** ISO date string — last editorial copy refresh (drives "Updated on …"). */
     updatedAt: string;
-    /** Human-readable reading time, e.g. "14 min". */
+    /** Reading time as stored: the seed's metadata in the static posts, the
+     *  body-derived value from the API. Display postReadingStats(post). */
     readingTime: string;
-    /** Word count (filled by build script — falls back to actual count
-     *  of `body` if not set). */
+    /** Word count as stored: the seed's metadata in the static posts (mostly
+     *  wrong), the body-derived count from the API. Display postReadingStats(post). */
     wordCount?: number;
     /** Inline CTA shown above the fold. Use helpful framing
      *  ("Practise 50 matched PYQs" — not "Sign up now!"). */
@@ -522,30 +524,85 @@ export function getFeaturedPosts(n = 4): BlogPost[] {
     return [...pinned, ...rest].slice(0, n);
 }
 
-/** Approximate word count of a markdown body. */
-export function countWords(markdown: string): number {
-    return markdown
-        .replace(/```[\s\S]*?```/g, ' ')
-        .replace(/[#>*_`~|\[\]]/g, ' ')
-        .split(/\s+/)
-        .filter(Boolean).length;
+/** Word count of a markdown body: the site's one rule (lib/blogText countBlogWords). */
+export const countWords = countBlogWords;
+
+export { formatPostDate, slugifyHeading };
+
+export interface ReadingStats {
+    words: number;
+    minutes: number;
+    /** "N min" */
+    label: string;
 }
 
-/** Human-readable date in long form, e.g. "28 July 2026". */
-export function formatPostDate(iso: string): string {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+/**
+ * Word count and reading time a card or the post header shows. A post with
+ * its body (the post page, the static posts) is counted here; a catalog row
+ * (no body) carries the count the API computed from the body
+ * (blog_engine.text_stats, the same rule). The posts' own `readingTime` /
+ * `wordCount` fields are the seed's metadata and are never shown: most
+ * claimed about 2,000 words for a ~100-word body.
+ */
+export function postReadingStats(post: Pick<BlogPost, 'body' | 'wordCount'>): ReadingStats {
+    const words = post.body?.trim()
+        ? countBlogWords(post.body)
+        : typeof post.wordCount === 'number' && post.wordCount >= 0 ? post.wordCount : 0;
+    return { words, minutes: readingMinutes(words), label: readingTimeLabel(words) };
 }
 
-/** Slugify a heading into an anchor id. */
-export function slugifyHeading(text: string): string {
-    return text
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .slice(0, 80);
+/**
+ * What a post card shows, as plain data: client components (the /blog
+ * explorer) receive this instead of BlogPost so they never import this
+ * module, which bundles every static post.
+ */
+export interface BlogCardData {
+    slug: string;
+    title: string;
+    excerpt: string;
+    category: string;
+    author: string;
+    /** ISO date the card shows (last update, else publication). */
+    date: string;
+    readingLabel: string;
+    tags: string[];
+    coverImage?: string;
+    pinned?: boolean;
+}
+
+export function toCardData(post: BlogPost): BlogCardData {
+    const cover = post.coverImage ? resolveBlogMediaUrl(post.coverImage) : '';
+    return {
+        slug: post.slug,
+        title: post.title,
+        excerpt: post.excerpt,
+        category: post.category,
+        author: post.author,
+        date: post.dateModified || post.datePublished,
+        readingLabel: postReadingStats(post).label,
+        tags: post.tags.slice(0, 8),
+        ...(cover ? { coverImage: cover } : {}),
+        ...(post.pinned ? { pinned: true } : {}),
+    };
+}
+
+/** Origin uploaded blog images (/api/blog/images/...) are served from: the API's. */
+export function blogImageOrigin(env: BlogApiEnv = currentBlogApiEnv()): string {
+    try {
+        return new URL(blogApiBaseUrl(env)).origin;
+    } catch {
+        return '';
+    }
+}
+
+/** A cover / media path as the browser loads it: /api/... paths point at the API origin. */
+export function resolveBlogMediaUrl(src: string, env: BlogApiEnv = currentBlogApiEnv()): string {
+    const value = safeLinkTarget(src);
+    if (value.startsWith('/api/')) {
+        const origin = blogImageOrigin(env);
+        return origin ? `${origin}${value}` : value;
+    }
+    return value;
 }
 
 /** Auto-build a Table of Contents from a markdown body

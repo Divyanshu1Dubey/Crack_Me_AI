@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { loadBlogCatalog, loadBlogPost } from '@/lib/blog';
+import { loadBlogCatalog, loadBlogPost, postReadingStats } from '@/lib/blog';
 
 // Use the Node runtime (default) instead of `edge` — Next.js requires us to
 // pick one, and Node lets `generateStaticParams` co-exist (edge forbids it).
@@ -26,7 +26,7 @@ export default async function PostOgImage({
     const title = post?.title ?? 'CrackCMS Blog';
     const category = post?.category ?? 'Exam Strategy';
     const author = post?.author ?? 'CrackCMS Editorial';
-    const readTime = post?.readingTime ?? '';
+    const readTime = post ? postReadingStats(post).label : '';
 
     return new ImageResponse(
         (

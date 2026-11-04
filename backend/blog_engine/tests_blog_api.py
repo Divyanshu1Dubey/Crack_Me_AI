@@ -17,6 +17,7 @@ from blog_engine.management.commands.seed_blogs import BLOG_POSTS
 from blog_engine.models import BlogPost
 from blog_engine.seeding import CONTENT_FIELDS
 from blog_engine.serializers import BlogPostSerializer
+from blog_engine.text_stats import count_words
 from blog_engine.views import BlogPostViewSet, BlogReadThrottle
 
 User = get_user_model()
@@ -168,7 +169,10 @@ class WritePermissionTests(BlogApiTestCase):
         created = BlogPost.objects.get(slug="renal-physiology-in-ten-minutes")
         detail = self.admin.get(f"/api/blog/posts/{created.id}/").data
         for name, value in full_payload().items():
+            if name in ("word_count", "reading_time"):
+                continue  # computed from the body (tests_blog_editor_api), never taken from the request
             self.assertEqual(detail[name], value, name)
+        self.assertEqual((detail["word_count"], detail["reading_time"]), (count_words(full_payload()["body"]), "1 min"))
 
         r = self.admin.patch(f"/api/blog/posts/{created.id}/", {"title": "Renal, revised", "faqs": []}, format="json")
         self.assertEqual((r.status_code, r.data["title"], r.data["faqs"]), (200, "Renal, revised", []))

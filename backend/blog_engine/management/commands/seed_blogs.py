@@ -50,6 +50,7 @@ from blog_engine.seeding import (
     row_values,
     seed_values,
 )
+from blog_engine.text_stats import count_words
 
 # Module attributes so tests can patch the seed data.
 try:
@@ -159,7 +160,10 @@ def apply(steps):
             BlogPost.objects.create(slug=step.slug, is_published=step.publish, **step.values)
             record_import(step, step.hash)
         elif step.kind in ("update", "fill", "overwrite"):
-            BlogPost.objects.filter(pk=step.row.pk).update(is_published=step.publish, updated=now, **step.values)
+            # .update() bypasses BlogPost.save(), which counts the body otherwise.
+            BlogPost.objects.filter(pk=step.row.pk).update(
+                is_published=step.publish, updated=now, body_word_count=count_words(step.values["body"]),
+                **step.values)
             record_import(step, step.hash)
         elif step.kind == "unchanged":
             if step.imported is None or step.imported.content_hash != step.hash:

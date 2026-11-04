@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
     blogListParams,
     describeBlogError,
+    editorTargetFromSearch,
     emptyBlogForm,
     estimateReadingTime,
     formFromPost,
@@ -67,11 +68,12 @@ test('an API record survives form → payload unchanged', () => {
     const form = formFromPost(RECORD);
     assert.equal(form.tags, 'Physiology, Renal');
     assert.equal(form.relatedExamPaths, '/cms\n/neet-pg');
-    assert.equal(form.wordCount, '1200');
     const { payload, errors } = formToPayload(form);
     assert.deepEqual(errors, {});
-    const { id: _id, created_at: _c, updated: _u, ...content } = RECORD;
+    // word_count / reading_time are the API's (computed from the body), never sent.
+    const { id: _id, created_at: _c, updated: _u, word_count: _w, reading_time: _r, ...content } = RECORD;
     assert.deepEqual(payload, content);
+    assert.ok(!('word_count' in payload) && !('reading_time' in payload));
 });
 
 test('the bundled static posts are valid forms too (a seeded post can be saved unchanged)', () => {
@@ -107,11 +109,9 @@ test('the checks mirror the API: what would break a public page is reported per 
     assert.ok(check({ ctaEventParams: '[1, 2]' }).cta);
     assert.ok(check({ relatedExamPaths: 'https://example.com' }).relatedExamPaths);
     assert.ok(check({ faqs: [{ q: 'Only a question', a: '' }] }).faqs);
-    assert.ok(check({ toc: [{ id: 'Has Space', label: 'L' }] }).toc);
     assert.ok(check({ references: [{ label: '', url: 'https://x.y/', published: '' }] }).references);
     assert.ok(check({ references: [{ label: 'L', url: 'javascript:alert(1)', published: '' }] }).references);
     assert.ok(check({ revisionLog: [{ date: 'yesterday', note: 'n' }] }).revisionLog);
-    assert.ok(check({ wordCount: '12.5' }).wordCount);
     assert.ok(check({ coverImage: 'javascript:alert(1)' }).coverImage);
     assert.ok(check({ body: 'Full article content here.' }).isPublished);
     assert.equal(check({ body: '', isPublished: false }).isPublished, undefined);
@@ -125,16 +125,35 @@ test('inputs are normalised the way the API stores them', () => {
         faqs: [{ q: ' Q? ', a: ' A. ' }, { q: '', a: '' }],
         toc: [{ id: '', label: '' }],
         references: [{ label: ' Ref ', url: '', published: '' }],
-        wordCount: '',
     };
     const { payload, errors } = formToPayload(form);
     assert.deepEqual(errors, {});
     assert.deepEqual(payload.tags, ['Renal', 'UPSC CMS']);
     assert.deepEqual(payload.primary_cta, {}, 'no CTA: the site shows its default one');
     assert.deepEqual(payload.faqs, [{ q: 'Q?', a: 'A.' }], 'blank rows are dropped');
-    assert.deepEqual(payload.toc, []);
+    assert.deepEqual(payload.toc, [{ id: 'gfr', label: 'GFR' }], 'the TOC is built from the ## headings');
     assert.deepEqual(payload.references, [{ label: 'Ref' }]);
-    assert.equal(payload.word_count, null);
+});
+
+test('the table of contents follows the ## headings and keeps the anchor ids it had', () => {
+    const base = formFromPost(RECORD);
+    const body = '## Renal basics\n\ntext\n\n### Not listed\n\n## Acid–base\n\n## GFR';
+    const payload = (changes: Partial<typeof base>) => formToPayload({ ...base, ...changes }).payload;
+    assert.deepEqual(payload({ body, toc: [{ id: 'gfr-old', label: 'GFR' }, { id: 'Has Space', label: 'Renal basics' }] }).toc, [
+        { id: 'renal-basics', label: 'Renal basics' }, // the invalid stored id is not kept
+        { id: 'acidbase', label: 'Acid–base' },
+        { id: 'gfr-old', label: 'GFR' }, // an existing #gfr-old link keeps working
+    ]);
+    assert.deepEqual(payload({ body: 'No headings here.', toc: [{ id: 'gone', label: 'Gone' }] }).toc, []);
+});
+
+test('the editor opens from a post page link: ?edit=<slug> or ?new=1', () => {
+    assert.deepEqual(editorTargetFromSearch('?edit=forensic-medicine-upsc-cms-essentials'), { slug: 'forensic-medicine-upsc-cms-essentials' });
+    assert.deepEqual(editorTargetFromSearch('?new=1'), { create: true });
+    assert.equal(editorTargetFromSearch('?edit=../../etc'), null);
+    assert.equal(editorTargetFromSearch(''), null);
+    assert.deepEqual(blogListParams({ page: 1, pageSize: 25, search: '', status: '', category: '', ordering: 'body_word_count', thin: true }),
+        { page: 1, page_size: 25, thin: 'true', ordering: 'body_word_count' });
 });
 
 test('slugs, TOC, word counts and dates', () => {

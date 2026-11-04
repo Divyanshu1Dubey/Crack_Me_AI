@@ -5,7 +5,7 @@ import { ChevronLeft, Hash } from 'lucide-react';
 import { BlogCard } from '@/components/BlogCard';
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { buildPageMetadata, jsonLdString } from '@/lib/metadata';
-import { MIN_INDEXABLE_TAG_POSTS, loadBlogCatalog, postsWithTag, tagOf, tagsOf } from '@/lib/blog';
+import { MIN_INDEXABLE_TAG_POSTS, loadBlogCatalog, postsWithTag, tagOf, tagsOf, toCardData } from '@/lib/blog';
 import { siteUrl } from '@/lib/seo';
 
 interface PageProps {
@@ -108,7 +108,7 @@ export default async function BlogTagPage({ params }: PageProps) {
                     ) : (
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {posts.map((p) => (
-                                <BlogCard key={p.slug} post={p} />
+                                <BlogCard key={p.slug} post={toCardData(p)} />
                             ))}
                         </div>
                     )}
