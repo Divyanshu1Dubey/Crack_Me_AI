@@ -2496,11 +2496,13 @@ html { scroll-behavior: smooth; }
     line-height: 1.55;
   }
   .blog-prose :is(th, td) {
-    min-width: 7.5rem;
     padding: .7em .95em;
     text-align: left;
     vertical-align: top;
   }
+  /* Wide tables (4+ columns) keep readable columns and scroll sideways on
+     phones instead of squeezing every cell to a few letters. */
+  .blog-prose table:has(tr > :nth-child(4)) :is(th, td) { min-width: 7rem; }
   .blog-prose th {
     background: var(--color-muted);
     font-weight: 700;
@@ -2647,6 +2649,7 @@ html { scroll-behavior: smooth; }
   .blog-related-card {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: .35rem;
     height: 100%;
     padding: 1.1rem 1.2rem;

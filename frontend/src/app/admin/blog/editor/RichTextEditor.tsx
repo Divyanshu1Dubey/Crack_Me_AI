@@ -7,7 +7,7 @@
  * published post. The body stays markdown: it is read with markdownToDoc and
  * written back with docToMarkdown (see ./markdownDoc.ts) after each change.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
@@ -53,6 +53,29 @@ type Panel =
 
 const IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp';
 const SERIALIZE_DELAY_MS = 300;
+
+/** What the toolbar shows as active / enabled at the selection. */
+function toolbarState(e: Editor) {
+    return {
+        paragraph: e.isActive('paragraph') && !e.isActive('listItem') && !e.isActive('blockquote') && !e.isActive('callout'),
+        h2: e.isActive('heading', { level: 2 }),
+        h3: e.isActive('heading', { level: 3 }),
+        bold: e.isActive('bold'),
+        italic: e.isActive('italic'),
+        strike: e.isActive('strike'),
+        underline: e.isActive('underline'),
+        bullet: e.isActive('bulletList'),
+        ordered: e.isActive('orderedList'),
+        quote: e.isActive('blockquote'),
+        callout: e.isActive('callout') ? (String(e.getAttributes('callout').kind || 'note') as CalloutKind) : null,
+        link: e.isActive('link'),
+        table: e.isActive('table'),
+        image: e.isActive('image'),
+        codeBlock: e.isActive('codeBlock'),
+        canUndo: e.can().undo(),
+        canRedo: e.can().redo(),
+    };
+}
 
 /** A typed URL as a link target: site paths and #anchors as they are, bare domains get https://. */
 export function normalizeHref(value: string): string {
@@ -123,28 +146,10 @@ export default function RichTextEditor({ markdown, onChange, onUploadImage, imag
 
     useEffect(() => () => flush(editor), [editor, flush]);
 
-    const state = useEditorState({
-        editor,
-        selector: ({ editor: e }) => (e ? {
-            paragraph: e.isActive('paragraph') && !e.isActive('listItem') && !e.isActive('blockquote') && !e.isActive('callout'),
-            h2: e.isActive('heading', { level: 2 }),
-            h3: e.isActive('heading', { level: 3 }),
-            bold: e.isActive('bold'),
-            italic: e.isActive('italic'),
-            strike: e.isActive('strike'),
-            underline: e.isActive('underline'),
-            bullet: e.isActive('bulletList'),
-            ordered: e.isActive('orderedList'),
-            quote: e.isActive('blockquote'),
-            callout: e.isActive('callout') ? (String(e.getAttributes('callout').kind || 'note') as CalloutKind) : null,
-            link: e.isActive('link'),
-            table: e.isActive('table'),
-            image: e.isActive('image'),
-            codeBlock: e.isActive('codeBlock'),
-            canUndo: e.can().undo(),
-            canRedo: e.can().redo(),
-        } : null),
-    });
+    const live = useEditorState({ editor, selector: ({ editor: e }) => (e ? toolbarState(e) : null) });
+    // useEditorState re-reads on the editor's transactions only: until the first
+    // one after the editor is created, read the state directly.
+    const state = live ?? (editor ? toolbarState(editor) : null);
 
     const showLinkPanel = useCallback(() => {
         if (!editor) return;
@@ -184,8 +189,11 @@ export default function RichTextEditor({ markdown, onChange, onUploadImage, imag
     };
 
     return (
-        <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-background">
-            <div role="toolbar" aria-label="Formatting" className="sticky top-16 z-10 flex flex-wrap items-center gap-1 border-b border-border bg-card/95 p-1.5 backdrop-blur">
+        // No overflow-hidden here: it would make this box the toolbar's sticky container
+        // (the toolbar then sat 4rem down, over the text). The toolbar sticks under the
+        // app's 4rem header while the page scrolls.
+        <div className="min-w-0 rounded-xl border border-border bg-background">
+            <div role="toolbar" aria-label="Formatting" className="sticky top-16 z-10 flex flex-wrap items-center gap-1 rounded-t-xl border-b border-border bg-card/95 p-1.5 backdrop-blur">
                 <ToolButton label="Undo (Ctrl+Z)" disabled={!state.canUndo} onClick={() => chain().undo().run()}><Undo2 /></ToolButton>
                 <ToolButton label="Redo (Ctrl+Shift+Z)" disabled={!state.canRedo} onClick={() => chain().redo().run()}><Redo2 /></ToolButton>
                 <Divider />
@@ -326,6 +334,23 @@ function Divider() {
 const PANEL = 'flex flex-wrap items-end gap-2 border-b border-border bg-accent/40 p-3 text-sm';
 const PANEL_INPUT = 'h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm text-foreground';
 
+/**
+ * Enter applies, Escape cancels. The panels sit inside the post's <form>, so
+ * they are groups, not forms (a nested form is invalid HTML and Enter would
+ * submit the whole post).
+ */
+function panelKeys(apply: () => void, cancel: () => void) {
+    return (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            apply();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+        }
+    };
+}
+
 function LinkPanel({ panel, onChange, onApply, onRemove, onCancel }: {
     panel: Extract<Panel, { kind: 'link' }>;
     onChange: (p: Panel) => void;
@@ -335,8 +360,9 @@ function LinkPanel({ panel, onChange, onApply, onRemove, onCancel }: {
 }) {
     const target = normalizeHref(panel.href);
     const valid = isSafeHref(target);
+    const apply = () => { if (valid) onApply(panel.href, panel.text); };
     return (
-        <form className={PANEL} onSubmit={(e) => { e.preventDefault(); if (valid) onApply(panel.href, panel.text); }} aria-label="Link">
+        <div role="group" className={PANEL} onKeyDown={panelKeys(apply, onCancel)} aria-label="Link">
             <label className="min-w-0 flex-1 basis-60">
                 <span className="mb-1 block text-xs font-medium text-muted-foreground">Link to (a page such as /questions?exam=cms, or https://…)</span>
                 <input autoFocus className={PANEL_INPUT} value={panel.href} placeholder="/questions?exam=cms"
@@ -350,14 +376,14 @@ function LinkPanel({ panel, onChange, onApply, onRemove, onCancel }: {
                 </label>
             ) : null}
             <div className="flex gap-2">
-                <button type="submit" disabled={!valid} className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                <button type="button" onClick={apply} disabled={!valid} className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
                     {panel.editing ? 'Update link' : 'Add link'}
                 </button>
                 {panel.editing ? <button type="button" onClick={onRemove} className="h-9 rounded-md border border-border px-3 text-sm">Remove link</button> : null}
                 <button type="button" onClick={onCancel} className="h-9 rounded-md px-3 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
             </div>
             {panel.href && !valid ? <p className="w-full text-xs text-destructive">Use a site path (/…), #anchor, https://, mailto: or tel: link.</p> : null}
-        </form>
+        </div>
     );
 }
 
@@ -369,8 +395,9 @@ function ImagePanel({ panel, preview, onChange, onApply, onCancel }: {
     onCancel: () => void;
 }) {
     const valid = panel.alt.trim().length > 0;
+    const apply = () => { if (valid) onApply(panel.alt, panel.caption); };
     return (
-        <form className={PANEL} onSubmit={(e) => { e.preventDefault(); if (valid) onApply(panel.alt, panel.caption); }} aria-label="Image">
+        <div role="group" className={PANEL} onKeyDown={panelKeys(apply, onCancel)} aria-label="Image">
             <img src={preview} alt="" className="h-16 w-24 rounded-md border border-border object-cover" />
             <label className="min-w-0 flex-1 basis-56">
                 <span className="mb-1 block text-xs font-medium text-muted-foreground">Alt text: what the image shows (read aloud to blind readers)</span>
@@ -383,11 +410,11 @@ function ImagePanel({ panel, preview, onChange, onApply, onCancel }: {
                     onChange={(e) => onChange({ ...panel, caption: e.target.value })} />
             </label>
             <div className="flex gap-2">
-                <button type="submit" disabled={!valid} className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                <button type="button" onClick={apply} disabled={!valid} className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">
                     {panel.editing ? 'Update image' : 'Insert image'}
                 </button>
                 <button type="button" onClick={onCancel} className="h-9 rounded-md px-3 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
             </div>
-        </form>
+        </div>
     );
 }

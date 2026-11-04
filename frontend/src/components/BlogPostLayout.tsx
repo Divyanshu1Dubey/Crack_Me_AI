@@ -43,7 +43,7 @@ import {
     getRelatedPosts,
     postReadingStats,
     postSocialImagePath,
-    resolveBlogMediaUrl,
+    usableCoverImage,
 } from '@/lib/blog';
 import { blogToc } from '@/lib/blogMarkdown';
 import { getAuthor } from '@/content/authors';
@@ -144,7 +144,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
     const tocItems = blogToc(post.body, post.toc);
     const stats = postReadingStats(post);
     const imageOrigin = blogImageOrigin();
-    const cover = post.coverImage ? resolveBlogMediaUrl(post.coverImage) : '';
+    const cover = usableCoverImage(post.coverImage);
 
     return (
         <>
@@ -152,7 +152,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
             <BlogAnalytics
                 slug={post.slug}
                 category={post.category}
-                readingTimeMinutes={stats.minutes}
+                readingTimeMinutes={stats?.minutes ?? 1}
             />
 
             <div className="min-h-screen bg-background text-foreground">
@@ -226,10 +226,12 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                 <CalendarDays className="h-3.5 w-3.5" /> Updated{' '}
                                 <strong className="text-foreground">{formatPostDate(updatedISO)}</strong>
                             </span>
-                            <span className="inline-flex items-center gap-1.5" title={`${stats.words} words`}>
-                                <Clock className="h-3.5 w-3.5" />{' '}
-                                <strong className="text-foreground">{stats.label}</strong> read
-                            </span>
+                            {stats ? (
+                                <span className="inline-flex items-center gap-1.5" title={`${stats.words} words`}>
+                                    <Clock className="h-3.5 w-3.5" />{' '}
+                                    <strong className="text-foreground">{stats.label}</strong> read
+                                </span>
+                            ) : null}
                         </div>
 
                         {cover ? (
@@ -387,7 +389,9 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                                     {r.category}
                                                 </Badge>
                                                 <h3 className="mt-2 text-base font-bold text-foreground">{r.title}</h3>
-                                                <p className="mt-auto pt-1 text-xs text-muted-foreground">{postReadingStats(r).label} read</p>
+                                                {postReadingStats(r) ? (
+                                                    <p className="mt-auto pt-1 text-xs text-muted-foreground">{postReadingStats(r)?.label} read</p>
+                                                ) : null}
                                             </Link>
                                         ))}
                                     </div>

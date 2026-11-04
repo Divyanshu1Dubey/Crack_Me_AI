@@ -51,8 +51,28 @@ test('reading stats: the body when present, else the API count; never the seed m
     assert.ok(words < 300 && (post.word_count ?? 0) > 1500, `${words} words, seed claims ${post.word_count}`);
     assert.deepEqual(postReadingStats({ body: post.body, wordCount: post.word_count ?? undefined }),
         { words, minutes: readingMinutes(words), label: readingTimeLabel(words) });
-    assert.equal(postReadingStats({ body: '', wordCount: 905 }).label, '5 min'); // a catalog row: the API count
-    assert.equal(postReadingStats({ body: '', wordCount: undefined }).label, '1 min');
+    // A catalog row (no body): the API's count, only when the API counted the body (rows with is_thin).
+    assert.equal(postReadingStats({ body: '', wordCount: 905, wordCountFromBody: true })?.label, '5 min');
+    assert.equal(postReadingStats({ body: '', wordCount: 2700 }), null, "an older API's seed figure is not shown");
+    assert.equal(postReadingStats({ body: '', wordCount: undefined }), null);
+});
+
+test('cards and the post hero never show a cover the site does not ship', async () => {
+    const { getAllPosts, toCardData, usableCoverImage } = await import('../../src/lib/blog.ts');
+    const withUnshipped = getAllPosts().filter((p) => p.coverImage?.startsWith('/blog/og/'));
+    assert.ok(withUnshipped.length > 0, 'the static posts still carry /blog/og/ covers');
+    for (const post of withUnshipped) assert.equal(toCardData(post).coverImage, undefined, post.slug);
+    assert.equal(usableCoverImage('/blog/obg/x.png'), '');
+    assert.equal(usableCoverImage('javascript:alert(1)'), '');
+    assert.equal(usableCoverImage('https://cdn.example/c.png'), 'https://cdn.example/c.png');
+    assert.match(usableCoverImage('/api/blog/images/2026/11/a.png'), /^https?:\/\/[^/]+\/api\/blog\/images\/2026\/11\/a\.png$/);
+});
+
+test('catalog records: the count is trusted only from an API that computes it', async () => {
+    const { postFromRecord } = await import('../../src/lib/blog.ts');
+    const base = { slug: 'p', title: 'P', word_count: 120, reading_time: '9 min' };
+    assert.equal(postFromRecord({ ...base, is_thin: true })?.wordCountFromBody, true);
+    assert.equal(postFromRecord(base)?.wordCountFromBody, undefined);
 });
 
 test('headings: ids from their text, unique, kept from the stored TOC, never a page id', () => {

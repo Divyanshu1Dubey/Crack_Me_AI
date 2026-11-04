@@ -629,7 +629,8 @@ rows server-side with ISR.
   `components/blog/DraftPreview.tsx` for an unpublished post).
 - Admin: `src/app/admin/blog/{page,BlogEditor,RowsEditor}.tsx`, `blogForm.ts`, `editor/` (`BodyEditor.tsx`
   tabs, `RichTextEditor.tsx` TipTap editor, `schema.ts`, `markdownDoc.ts` markdown ⇄ editor document);
-  `src/app/api/blog-revalidate/route.ts` (on-demand revalidation); `src/lib/blogAPI.ts`.
+  `src/app/api/blog-revalidate/route.ts` (on-demand revalidation; its admin check is `src/lib/blogRevalidate.ts`);
+  `src/lib/blogAPI.ts`.
 - Data: `src/lib/blog.ts` (post type, API loaders with `tags: ['blog']`, static fallback, `postReadingStats`,
   `toCardData`).
 
@@ -656,9 +657,11 @@ rows server-side with ISR.
    ☐ / ☑. The body renders on the server (no markdown JavaScript on the public page).
 3. **Counts**: `count_words(body)` (`text_stats.py`; `lib/blogText.ts` is the same rule, step for step) is stored
    as `body_word_count` on every save; the API's `word_count` / `reading_time` (200 words a minute, rounded half up,
-   at least 1 min) come from it, and cards, the post header, the social image and `/admin/blog` show them. The
-   seed's `word_count` / `reading_time` columns (mostly ~2,000 words for ~100-word bodies) are never shown. Posts
-   under 400 words are "thin" (`?thin=true`, a badge in `/admin/blog`).
+   at least 1 min) come from it, and cards, the post header, the social image and `/admin/blog` show them
+   (`postReadingStats` in `lib/blog.ts`: a post with its body is counted on the page; a catalog row uses the API's
+   count only when the row carries `is_thin`, so an older API's seed figure is never shown — the card then shows no
+   reading time). The seed's `word_count` / `reading_time` columns (mostly ~2,000 words for ~100-word bodies) are
+   never shown. Posts under 400 words are "thin" (`?thin=true`, a badge in `/admin/blog`).
 4. **Editing** (see [`ADMIN_SYSTEM.md`](./ADMIN_SYSTEM.md) §10.1): Visual (TipTap on the same `.blog-prose`
    styles), Markdown and Preview (the public `BlogArticle`) tabs over one markdown body. The body stays markdown in
    the database; `editor/markdownDoc.ts` reads it into the editor and writes it back, and every seeded post

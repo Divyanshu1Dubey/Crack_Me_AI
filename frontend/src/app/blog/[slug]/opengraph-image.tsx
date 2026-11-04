@@ -26,7 +26,7 @@ export default async function PostOgImage({
     const title = post?.title ?? 'CrackCMS Blog';
     const category = post?.category ?? 'Exam Strategy';
     const author = post?.author ?? 'CrackCMS Editorial';
-    const readTime = post ? postReadingStats(post).label : '';
+    const readTime = post ? postReadingStats(post)?.label ?? '' : '';
 
     return new ImageResponse(
         (

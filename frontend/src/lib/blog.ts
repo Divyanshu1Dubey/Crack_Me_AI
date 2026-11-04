@@ -227,6 +227,9 @@ export interface BlogPost {
     /** Word count as stored: the seed's metadata in the static posts (mostly
      *  wrong), the body-derived count from the API. Display postReadingStats(post). */
     wordCount?: number;
+    /** wordCount was counted from the body by the API (catalog rows that carry
+     *  `is_thin`; an older API sent the seed's figure). */
+    wordCountFromBody?: boolean;
     /** Inline CTA shown above the fold. Use helpful framing
      *  ("Practise 50 matched PYQs" — not "Sign up now!"). */
     primaryCta: {
@@ -537,17 +540,18 @@ export interface ReadingStats {
 }
 
 /**
- * Word count and reading time a card or the post header shows. A post with
- * its body (the post page, the static posts) is counted here; a catalog row
- * (no body) carries the count the API computed from the body
- * (blog_engine.text_stats, the same rule). The posts' own `readingTime` /
- * `wordCount` fields are the seed's metadata and are never shown: most
+ * Word count and reading time a card or the post header shows, or null when
+ * unknown. A post with its body (the post page, the static posts) is counted
+ * here; a catalog row (no body) uses the count the API computed from the body
+ * (blog_engine.text_stats, the same rule; rows that carry `is_thin`). The
+ * seed's `readingTime` / `wordCount` metadata is never shown: most posts
  * claimed about 2,000 words for a ~100-word body.
  */
-export function postReadingStats(post: Pick<BlogPost, 'body' | 'wordCount'>): ReadingStats {
-    const words = post.body?.trim()
-        ? countBlogWords(post.body)
-        : typeof post.wordCount === 'number' && post.wordCount >= 0 ? post.wordCount : 0;
+export function postReadingStats(post: Pick<BlogPost, 'body' | 'wordCount' | 'wordCountFromBody'>): ReadingStats | null {
+    let words: number;
+    if (post.body?.trim()) words = countBlogWords(post.body);
+    else if (post.wordCountFromBody && typeof post.wordCount === 'number' && post.wordCount >= 0) words = post.wordCount;
+    else return null;
     return { words, minutes: readingMinutes(words), label: readingTimeLabel(words) };
 }
 
@@ -564,14 +568,29 @@ export interface BlogCardData {
     author: string;
     /** ISO date the card shows (last update, else publication). */
     date: string;
+    /** "N min", or '' when unknown (the card then shows no reading time). */
     readingLabel: string;
     tags: string[];
     coverImage?: string;
     pinned?: boolean;
 }
 
+/**
+ * Cover folders the static posts point at that frontend/public does not ship
+ * (backend/blog_engine/seeding.py UNSHIPPED_COVER_PREFIXES blanks them in the
+ * database; the static fallback posts still carry them).
+ */
+const UNSHIPPED_COVER_PREFIXES = ['/blog/og/', '/blog/obg/'];
+
+/** A post's cover as the browser loads it, or '' (none, unsafe, or a file the site does not ship). */
+export function usableCoverImage(src: string | undefined): string {
+    const value = safeLinkTarget(src ?? '');
+    if (!value || UNSHIPPED_COVER_PREFIXES.some((prefix) => value.startsWith(prefix))) return '';
+    return resolveBlogMediaUrl(value);
+}
+
 export function toCardData(post: BlogPost): BlogCardData {
-    const cover = post.coverImage ? resolveBlogMediaUrl(post.coverImage) : '';
+    const cover = usableCoverImage(post.coverImage);
     return {
         slug: post.slug,
         title: post.title,
@@ -579,7 +598,7 @@ export function toCardData(post: BlogPost): BlogCardData {
         category: post.category,
         author: post.author,
         date: post.dateModified || post.datePublished,
-        readingLabel: postReadingStats(post).label,
+        readingLabel: postReadingStats(post)?.label ?? '',
         tags: post.tags.slice(0, 8),
         ...(cover ? { coverImage: cover } : {}),
         ...(post.pinned ? { pinned: true } : {}),
@@ -894,6 +913,7 @@ export function postFromRecord(input: unknown): BlogPost | null {
         updatedAt: text(r.updated_at) || dateModified,
         readingTime: text(r.reading_time),
         wordCount: typeof r.word_count === 'number' && Number.isFinite(r.word_count) ? r.word_count : undefined,
+        ...(typeof r.is_thin === 'boolean' ? { wordCountFromBody: true } : {}),
         primaryCta: ctaFromRecord(r.primary_cta),
         relatedExamPaths: relatedExamPaths.length ? relatedExamPaths : undefined,
         faqs: objectList(r.faqs)
