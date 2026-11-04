@@ -302,7 +302,9 @@ class FrontendSecurityHeadersTests(SimpleTestCase):
         import json
 
         config = json.loads(VERCEL_JSON.read_text(encoding="utf-8"))
-        cls.headers = {h["key"]: h["value"] for block in config["headers"] for h in block["headers"]}
+        # The site-wide block; /ads/(.*) is the sandboxed partner-ad pages (own, looser CSP).
+        cls.headers = {h["key"]: h["value"] for block in config["headers"]
+                       if block["source"] != "/ads/(.*)" for h in block["headers"]}
         cls.csp = {}
         for directive in cls.headers["Content-Security-Policy"].split(";"):
             parts = directive.split()

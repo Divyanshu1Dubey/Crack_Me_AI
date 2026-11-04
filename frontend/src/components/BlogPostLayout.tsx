@@ -39,6 +39,7 @@ import type { BlogPost } from '@/lib/blog';
 import { formatPostDate, getRelatedPosts, categoryToSlug, postSocialImagePath } from '@/lib/blog';
 import { getAuthor } from '@/content/authors';
 import AdSense from '@/components/AdSense';
+import PartnerAd from '@/components/PartnerAd';
 
 interface BlogPostLayoutProps {
     post: BlogPost;
@@ -260,6 +261,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
 
                             {/* Share row */}
                             <AdSense slot="in-content" />
+                            <PartnerAd kind="native" />
                             <div className="mt-10 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-4 sm:p-5">
                                 <span className="inline-flex items-center gap-2 text-xs font-bold text-foreground">
                                     <Share2 className="h-4 w-4" /> Share this post
@@ -423,6 +425,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                         <aside className="lg:col-span-4">
                             {/* top-20 clears the sticky 64px public nav */}
                             <div className="lg:sticky lg:top-20 space-y-5">
+                                <PartnerAd kind="skyscraper" />
                                 {tocItems.length > 0 ? (
                                     <nav
                                         aria-label="Table of contents"

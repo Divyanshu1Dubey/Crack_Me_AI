@@ -36,11 +36,17 @@ const isProtectedRoute = (pathname: string) =>
 const isAdminPath = (pathname: string) => pathname === '/admin' || pathname.startsWith('/admin/');
 
 /**
- * An App Router prefetch (or a browser speculative prefetch), not a navigation. The router keeps
- * prefetch answers in its client cache: a redirect given to a signed-out prefetch of /questions
- * was replayed after the visitor signed in, and every protected link led back to /login. So the
- * gates below never redirect prefetches; the real navigation is still gated (and the pages gate
- * client-side; the API authenticates every request).
+ * A speculative prefetch, not a navigation: the gates below pass it through instead of redirecting
+ * (the real navigation is still gated; the pages gate client-side; the API authenticates every
+ * request).
+ *
+ * Only browser-level prefetches can be recognised here (Purpose / Sec-Purpose). Next.js removes its
+ * own router headers (Next-Router-Prefetch, Next-Router-Segment-Prefetch, RSC) before the
+ * middleware runs -- checked on the live site 2026-11-03: a prefetch with them still got the 307 --
+ * so the App Router's prefetches of protected links are still answered with the redirect to /login
+ * while the visitor is signed out, and the router caches it. That is why every sign-in and sign-out
+ * leaves the page with a full load (lib/authNavigation.ts): the new page starts with an empty router
+ * cache. The router-header checks are kept for Next versions that pass them on.
  */
 const isPrefetchRequest = (request: NextRequest) => {
   const headers = request.headers;

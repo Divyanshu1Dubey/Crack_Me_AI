@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { siteName, siteUrl } from '@/lib/seo';
 import Breadcrumbs from '@/components/Breadcrumbs';
 import AdSense from '@/components/AdSense';
+import PartnerAd from '@/components/PartnerAd';
 import EligibilityChecker from './EligibilityChecker';
 
 const title = 'UPSC CMS Eligibility Checker 2026 — MBBS, Age Limit, Attempts';
@@ -43,6 +44,7 @@ export default function UPSCCMSEligibilityCheckerPage() {
                     <EligibilityChecker />
 
                     <AdSense slot="in-content" />
+                    <PartnerAd kind="native" />
 
                     <h2 className="text-2xl font-bold mt-12 mb-4">UPSC CMS 2026 Eligibility Criteria</h2>
                     <div className="space-y-6 text-muted-foreground">

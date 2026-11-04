@@ -251,7 +251,11 @@ test('no Supabase keys never crashes the middleware (MIDDLEWARE_INVOCATION_FAILE
   assert.equal(supabaseRequests, before, 'made a Supabase request without Supabase keys');
 });
 
-test('router prefetches are never redirected (a cached redirect sent signed-in users back to /login)', async () => {
+// The prefetch headers reach updateSession() here because the test calls it directly. In a deployed
+// app Next.js strips its router headers (Next-Router-Prefetch, RSC, ...) before the middleware runs,
+// so only Purpose / Sec-Purpose prefetches are passed through there; the /login bounce after sign-in
+// is fixed by the full page load in lib/authNavigation.ts (tests/e2e/signin-navigation.spec.ts).
+test('prefetch requests are not redirected when the middleware can recognise them', async () => {
   process.env.NEXT_PUBLIC_AUTH_MODE = 'django';
   const prefetch = (path: string, headers: Record<string, string>, cookie = '') =>
     new NextRequest(new URL(path, 'http://localhost:3000'), { headers: { ...headers, ...(cookie ? { cookie } : {}) } });
