@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { rehypeAllowlist } from '@/lib/markdownSanitize';
 import { decodeMojiB } from '@/lib/textCleanup';
@@ -74,9 +75,15 @@ export function FormattedText({ text, className = '', images }: FormattedTextPro
     return (
         <div className={`formatted-text ${className}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkBreaks]}
+                // GFM: tables (they rendered as raw "|" text before), autolinks, ~~strike~~. One tilde
+                // stays text: "pH ~7.4" is common in medical content.
+                remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkBreaks]}
                 rehypePlugins={[rehypeRaw, rehypeAllowlist]}
                 components={{
+                    // Wide tables scroll inside their own box instead of widening the page.
+                    table: ({ children }) => (
+                        <div className="formatted-table-wrap"><table>{children}</table></div>
+                    ),
                     // Bug 2026-07-28: wire an `onError` on every `<img>`
                     // emitted by react-markdown so a missing/broken
                     // image renders an explanatory placeholder span
