@@ -103,6 +103,25 @@ Username changes, refused attempts included, are limited to 10 per account per h
 
 ---
 
+### `GET / PATCH /api/auth/preferences/`
+**Auth**: required (a user reads and writes only their own row). Layout chosen in Settings > Customise
+(`accounts/preferences.py`, `CustomUser.ui_preferences`); only what the user changed is stored.
+
+```json
+{
+  "sidebar":   { "sections": ["study", "ai-tools", "resources", "account"], "items": ["questions", "..."], "hidden": ["jobs"] },
+  "dashboard": { "order": ["today", "stats", "..."], "hidden": ["calendar"] },
+  "landing_page": "questions"
+}
+```
+`GET` → `200 {"preferences": {...}}` (ids no longer on the allow-lists are dropped). `PATCH` replaces each
+top-level key it names and keeps the others; `null` or `{}` resets that key. Ids come from the allow-lists in
+`accounts/preferences.py` (same lists in `frontend/src/lib/preferences.ts`); unknown keys or ids, repeated ids,
+wrong types and hiding the free plan's `upgrade` widget → `400 {"code": "invalid_preferences", "errors": {...}}`;
+a body over 4096 bytes → `413`; non-JSON → `415`. Saves are limited to 60 per minute per account.
+
+---
+
 ### `POST /api/auth/scholarship/start/`
 **Auth**: required. Throttle: 10 starts per hour.
 The server picks the five scholarship questions (`is_scholarship_eligible=True`, active).

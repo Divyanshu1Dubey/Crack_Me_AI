@@ -4,6 +4,8 @@
  * Desktop:
  *   - 260px fixed sidebar, collapsible to hidden via top-left toggle.
  *   - Grouped sections (Study / AI Tools / Resources / Account) + admin.
+ *     The learner's order and hidden links come from Settings > Customise
+ *     (lib/preferences.ts); hidden links are listed under "More".
  *   - Active route highlighted with primary-tinted border + soft bg.
  *
  * Mobile (<768px):
@@ -13,13 +15,15 @@
  *   - Scroll position persists across route changes.
  */
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { navigateAfterAuthChange } from '@/lib/authNavigation';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, BarChart3, Lock, FileUp, Layers, ClipboardCheck, type LucideIcon } from 'lucide-react';
+import { navItemAvailable, resolveNavHref, sidebarLayout, type NavItemDef } from '@/lib/preferences';
+import { useUiPreferences } from '@/components/customize/usePreferences';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, ChevronDown, BarChart3, Lock, FileUp, Layers, ClipboardCheck, Ellipsis, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
@@ -34,78 +38,11 @@ const ThemeToggle = dynamic(() => import('@/components/ThemeToggle'), {
     loading: () => <div className="h-[34px] w-[34px]" aria-hidden="true" />,
 });
 
-interface NavItem {
-    href: string;
-    iconName: string;
-    label: string;
-    badge?: string;
-    adminOnly?: boolean;
-    requireTrack?: string[];
-    /** Freemium gate (Task 10): if true, free users see a lock icon next to
-     *  the label, and clicking opens the UpgradeModal. Premium + admin
-     *  users see no lock and the link is fully clickable. */
-    premium?: boolean;
-    /** Display label used in the upgrade modal trigger — defaults to `label`. */
-    premiumFeature?: string;
-}
-
-interface NavSection {
-    title: string;
-    items: NavItem[];
-}
-
-const navSections: NavSection[] = [
-    {
-        title: 'Study',
-        items: [
-            { href: '/dashboard', iconName: 'dashboard-layout', label: 'Dashboard' },
-            // Freemium: free users get a "Premium" badge next to Question Bank
-            // but the link still routes — clicks inside the bank hit the
-            // backend filter (Task 6) which restricts to 10 showcase items.
-            { href: '/questions', iconName: 'question-bank-book', label: 'Question Bank', premium: true, premiumFeature: 'Full PYQ practice' },
-            { href: '/tests', iconName: 'tests-check', label: 'Tests', premium: true, premiumFeature: 'Mock Tests' },
-            { href: '/flashcards', iconName: 'flashcards-cards', label: 'Flashcards', premium: true, premiumFeature: 'Flashcards' },
-            { href: '/simulator', iconName: 'simulator-target', label: 'CMS Simulator', premium: true, premiumFeature: 'Mock Tests' },
-            { href: '/mistake-notebook', iconName: 'book-open', label: 'Mistake Notebook' },
-            { href: '/study-time', iconName: 'clock', label: 'Study Time' },
-        ]
-    },
-    {
-        title: 'AI Tools',
-        items: [
-            { href: '/ai-tutor', iconName: 'ai-tutor-brain', label: 'AI Tutor', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
-            { href: '/generate', iconName: 'ai-questions-creativity', label: 'Question Generator', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
-            // Same name as the page heading and the Header title.
-            { href: '/roadmap', iconName: 'study-roadmap-map', label: 'Study Roadmap', badge: 'AI', premium: true, premiumFeature: 'AI Tutor' },
-        ]
-    },
-    {
-        title: 'Resources',
-        items: [
-            { href: '/resources', iconName: 'resources-folder', label: 'Resources' },
-            { href: '/textbooks', iconName: 'textbooks-open-book', label: 'Textbooks' },
-            { href: '/jobs', iconName: 'briefcase', label: 'Jobs Portal', requireTrack: ['cms'] },
-            { href: '/trends', iconName: 'trends-graph', label: 'Exam Trends' },
-            { href: '/upload', iconName: 'upload-train', label: 'Upload & Train', adminOnly: true },
-        ]
-    },
-    {
-        title: 'Account',
-        items: [
-            // Analytics is open to every signed-in user: no Deep Analytics
-            // gate was ever built (no 402, no locked state on /analytics), so
-            // a lock here only opened the upgrade modal on a free page (AN-08).
-            { href: '/analytics', iconName: 'analytics-growth', label: 'Analytics' },
-            { href: '/leaderboard', iconName: 'leaderboard-trophy', label: 'Leaderboard' },
-            { href: '/bookmarks', iconName: 'bookmarks-ribbon', label: 'Bookmarks' },
-            { href: '/subscription', iconName: 'subscription-gold', label: 'Subscription' },
-            { href: '/feedback', iconName: 'feedback-chat', label: 'Feedback' },
-            { href: '/contact', iconName: 'contact-support', label: 'Contact Us' },
-            { href: '/quests', iconName: 'flame', label: 'Quests' },
-            { href: '/topic-notes', iconName: 'file-text', label: 'Topic Notes' },
-        ]
-    },
-];
+// The student sections and links (Study / AI Tools / Resources / Account),
+// their ids and the exam-track player hrefs live in lib/preferences.ts: the
+// learner may reorder sections and links and hide links (Settings >
+// Customise, stored per user on the server). Hidden links stay reachable in
+// the "More" group below. The Admin group (ADMIN_LINKS) is not customisable.
 
 const TRACK_LABEL: Record<string, string> = {
     cms: 'UPSC CMS',
@@ -115,12 +52,19 @@ const TRACK_LABEL: Record<string, string> = {
     ini_cet: 'INI-CET',
 };
 
-/** Map generic /questions href → exam-specific dedicated player URL.
- *  Phase 9: each exam with image-rich recalls gets its own player route. */
-const EXAM_TRACK_PLAYER_HREF: Record<string, string> = {
-    neet_pg: '/questions/neet-pg/practice',
-    ini_cet: '/questions/inicet/practice',
-};
+/** Keep the current page's link visible: on a 900px-tall screen the
+ *  Account and Admin groups sit below the fold, so on /trends or /admin
+ *  nothing highlighted was in view. Adjusts only the nav's own scroll
+ *  (scrollIntoView could also scroll the page). A link inside the closed
+ *  "More" group has no box and is left alone. */
+function revealActiveLink(nav: HTMLElement): void {
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!active || active.getClientRects().length === 0) return;
+    const navBox = nav.getBoundingClientRect();
+    const linkBox = active.getBoundingClientRect();
+    if (linkBox.bottom > navBox.bottom) nav.scrollTop += linkBox.bottom - navBox.bottom + 12;
+    else if (linkBox.top < navBox.top) nav.scrollTop -= navBox.top - linkBox.top + 12;
+}
 
 /** Admin tools. A link is active on its own route and its sub-routes
  *  (except the /admin dashboard, which would otherwise match every tool). */
@@ -142,8 +86,11 @@ export default function Sidebar() {
     const { user, logout, loading: authLoading } = useAuth();
     const { activeTrack, hydrated } = useExamTrack();
     const { show: showPaywall } = usePaywall();
+    const { prefs } = useUiPreferences();
     const router = useRouter();
     const [open, setOpen] = useState(false);
+    // The "More" group (hidden links) starts closed.
+    const [moreOpen, setMoreOpen] = useState(false);
     const navRef = useRef<HTMLElement | null>(null);
     const SIDEBAR_SCROLL_KEY = 'crackcms_sidebar_scroll_top';
     // Desktop visibility is now owned by SidebarContext so route-level
@@ -179,17 +126,7 @@ export default function Sidebar() {
             const top = Number(saved);
             if (!Number.isNaN(top)) nav.scrollTop = top;
         }
-        // Keep the current page's link visible: on a 900px-tall screen the
-        // Account and Admin groups sit below the fold, so on /trends or
-        // /admin nothing highlighted was in view. Adjusts only the nav's own
-        // scroll (scrollIntoView could also scroll the page).
-        const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
-        if (active) {
-            const navBox = nav.getBoundingClientRect();
-            const linkBox = active.getBoundingClientRect();
-            if (linkBox.bottom > navBox.bottom) nav.scrollTop += linkBox.bottom - navBox.bottom + 12;
-            else if (linkBox.top < navBox.top) nav.scrollTop -= navBox.top - linkBox.top + 12;
-        }
+        revealActiveLink(nav);
         // Close drawer on route change so it doesn't stay open.
         setOpen(false);
     }, [pathname]);
@@ -230,6 +167,35 @@ export default function Sidebar() {
     const effectiveTrack = hydrated ? activeTrack : 'cms';
     const trackLabel = TRACK_LABEL[effectiveTrack] || effectiveTrack;
 
+    // The learner's order; hidden links go to "More". Admin-only and
+    // exam-track links are filtered as before, in both places, and a section
+    // left without links is not shown.
+    const layout = useMemo(() => sidebarLayout(prefs.sidebar), [prefs.sidebar]);
+    const viewer = { isAdmin: !!isAdmin, track: effectiveTrack };
+    const sections = layout.sections
+        .map((section) => ({ ...section, items: section.items.filter((item) => navItemAvailable(item, viewer)) }))
+        .filter((section) => section.items.length > 0);
+    const moreItems = layout.more.filter((item) => navItemAvailable(item, viewer));
+
+    const isItemActive = (item: NavItemDef) => {
+        // Resolve /questions for tracks with a dedicated player (NEET PG +
+        // INI-CET) so users land on the new player instead of the
+        // (UPSC-CMS-style) bank.
+        const resolvedHref = resolveNavHref(item.href, effectiveTrack);
+        return pathname === resolvedHref
+            || pathname?.startsWith(resolvedHref + '/')
+            || (resolvedHref === '/questions' && (pathname === '/questions' || pathname?.startsWith('/questions/')));
+    };
+    // On a page whose link is hidden, open "More" so the current page shows.
+    const moreHasActive = moreItems.some(isItemActive);
+    useEffect(() => {
+        if (moreHasActive) setMoreOpen(true);
+    }, [moreHasActive]);
+    // Once "More" is open, bring that link into view (it had no box while closed).
+    useEffect(() => {
+        if (moreOpen && moreHasActive && navRef.current) revealActiveLink(navRef.current);
+    }, [moreOpen, moreHasActive]);
+
     useEffect(() => {
         if (typeof document === 'undefined') return;
         document.body.style.overflow = open ? 'hidden' : '';
@@ -237,6 +203,69 @@ export default function Sidebar() {
             document.body.style.overflow = '';
         };
     }, [open]);
+
+    const renderNavLink = (item: NavItemDef) => {
+        const resolvedHref = resolveNavHref(item.href, effectiveTrack);
+        const isActive = isItemActive(item);
+        // Freemium (Task 10): free users see a small
+        // "Premium" pill next to the label, but the link
+        // is still clickable — visibility of premium
+        // features is part of the conversion funnel.
+        // The page itself enforces the gate; the
+        // api.ts interceptor opens the UpgradeModal.
+        const showLock = !isPremium && item.premium === true;
+        const handleClick = () => {
+            saveSidebarScroll();
+            setOpen(false);
+            if (showLock) {
+                // Free user clicking a premium link — open
+                // the upgrade modal explicitly so they get a
+                // nudge before the page itself gates them.
+                showPaywall(item.premiumFeature || item.label);
+            }
+        };
+        return (
+            <Link
+                key={item.id}
+                href={resolvedHref}
+                onClick={handleClick}
+                prefetch={false}
+                className={`sidebar-link ${isActive ? 'active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
+                // Tooltip for the icon-only tablet rail and the lock icon.
+                title={showLock ? `${item.label} (Premium)` : item.label}
+                aria-label={showLock ? `${item.label} (Premium)` : undefined}
+            >
+                <CustomIcon
+                    name={item.iconName}
+                    label={item.label}
+                    className="shrink-0"
+                    size={18}
+                    variant={isActive ? 'active' : 'default'}
+                />
+                <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
+                {showLock && (
+                    <>
+                        {/* A lock icon (the PREMIUM pill truncated labels to
+                            "Question Ba..."); a dot in the 72px tablet rail. */}
+                        <span className="sidebar-label shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true">
+                            <Lock className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="sidebar-rail-lock" aria-hidden="true" />
+                    </>
+                )}
+                {item.badge && !showLock && (
+                    <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
+                        {item.badge}
+                    </span>
+                )}
+                {/* No chevron next to the lock or the AI badge: either
+                    one plus the chevron clipped "Question Generator"
+                    to "Question Genera..." on its own page. */}
+                {isActive && !showLock && !item.badge && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
+            </Link>
+        );
+    };
 
     return (
         <>
@@ -312,85 +341,52 @@ export default function Sidebar() {
                     style={{ scrollbarWidth: 'thin' }}
                 >
                     <div className="space-y-4 pb-2">
-                        {navSections.map((section) => (
-                            <div key={section.title}>
+                        {sections.map((section) => (
+                            <div key={section.id}>
                                 <div className="section-title sidebar-section-title mb-1.5">{section.title}</div>
                                 <div className="space-y-0.5">
-                                    {section.items
-                                        .filter(item => !item.adminOnly || isAdmin)
-                                        .filter(item => !item.requireTrack || item.requireTrack.includes(effectiveTrack))
-                                        .map((item) => {
-                                            // Resolve /questions for tracks with a dedicated
-                                            // player (NEET PG + INI-CET) so users land on the
-                                            // new player instead of the (UPSC-CMS-style) bank.
-                                            const resolvedHref = item.href === '/questions' && EXAM_TRACK_PLAYER_HREF[effectiveTrack]
-                                                ? EXAM_TRACK_PLAYER_HREF[effectiveTrack]
-                                                : item.href;
-                                            const isActive = pathname === resolvedHref
-                                                || pathname?.startsWith(resolvedHref + '/')
-                                                || (resolvedHref === '/questions' && (pathname === '/questions' || pathname?.startsWith('/questions/')));
-                                            // Freemium (Task 10): free users see a small
-                                            // "Premium" pill next to the label, but the link
-                                            // is still clickable — visibility of premium
-                                            // features is part of the conversion funnel.
-                                            // The page itself enforces the gate; the
-                                            // api.ts interceptor opens the UpgradeModal.
-                                            const showLock = !isPremium && item.premium === true;
-                                            const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-                                                saveSidebarScroll();
-                                                setOpen(false);
-                                                if (showLock) {
-                                                    // Free user clicking a premium link — open
-                                                    // the upgrade modal explicitly so they get a
-                                                    // nudge before the page itself gates them.
-                                                    showPaywall(item.premiumFeature || item.label);
-                                                }
-                                            };
-                                            return (
-                                                <Link
-                                                    key={item.href}
-                                                    href={resolvedHref}
-                                                    onClick={handleClick}
-                                                    prefetch={false}
-                                                    className={`sidebar-link ${isActive ? 'active' : ''}`}
-                                                    aria-current={isActive ? 'page' : undefined}
-                                                    // Tooltip for the icon-only tablet rail and the lock icon.
-                                                    title={showLock ? `${item.label} (Premium)` : item.label}
-                                                    aria-label={showLock ? `${item.label} (Premium)` : undefined}
-                                                >
-                                                    <CustomIcon
-                                                        name={item.iconName}
-                                                        label={item.label}
-                                                        className="shrink-0"
-                                                        size={18}
-                                                        variant={isActive ? 'active' : 'default'}
-                                                    />
-                                                    <span className="sidebar-label text-sm flex-1 truncate">{item.label}</span>
-                                                    {showLock && (
-                                                        <>
-                                                            {/* A lock icon (the PREMIUM pill truncated labels to
-                                                                "Question Ba..."); a dot in the 72px tablet rail. */}
-                                                            <span className="sidebar-label shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true">
-                                                                <Lock className="h-3.5 w-3.5" />
-                                                            </span>
-                                                            <span className="sidebar-rail-lock" aria-hidden="true" />
-                                                        </>
-                                                    )}
-                                                    {item.badge && !showLock && (
-                                                        <span className="sidebar-label text-[9px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/15 text-primary">
-                                                            {item.badge}
-                                                        </span>
-                                                    )}
-                                                    {/* No chevron next to the lock or the AI badge: either
-                                                        one plus the chevron clipped "Question Generator"
-                                                        to "Question Genera..." on its own page. */}
-                                                    {isActive && !showLock && !item.badge && <ChevronRight className="sidebar-label w-3.5 h-3.5 shrink-0 opacity-70" />}
-                                                </Link>
-                                            );
-                                        })}
+                                    {section.items.map(renderNavLink)}
                                 </div>
                             </div>
                         ))}
+
+                        {/* More: the links the learner hid (Settings > Customise).
+                            Same links, locks and exam-track rules as above. */}
+                        {moreItems.length > 0 && (
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => setMoreOpen((value) => !value)}
+                                    aria-expanded={moreOpen}
+                                    aria-controls="sidebar-more-links"
+                                    title={`More (${moreItems.length} hidden ${moreItems.length === 1 ? 'link' : 'links'})`}
+                                    className="sidebar-link w-full"
+                                >
+                                    <Ellipsis className="w-5 h-5 shrink-0" aria-hidden="true" />
+                                    <span className="sidebar-label text-sm flex-1 text-left">More</span>
+                                    <span className="sidebar-label shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground" aria-hidden="true">
+                                        {moreItems.length}
+                                    </span>
+                                    <ChevronDown
+                                        className={`sidebar-label w-3.5 h-3.5 shrink-0 transition-transform ${moreOpen ? 'rotate-180' : ''}`}
+                                        aria-hidden="true"
+                                    />
+                                </button>
+                                <div id="sidebar-more-links" hidden={!moreOpen} className="mt-0.5 space-y-0.5">
+                                    {moreItems.map(renderNavLink)}
+                                    <Link
+                                        href="/settings#customise"
+                                        onClick={() => { saveSidebarScroll(); setOpen(false); }}
+                                        prefetch={false}
+                                        title="Customise the sidebar"
+                                        className="sidebar-link"
+                                    >
+                                        <SlidersHorizontal className="w-5 h-5 shrink-0" aria-hidden="true" />
+                                        <span className="sidebar-label text-sm">Customise sidebar</span>
+                                    </Link>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Admin */}
                         {isAdmin && (

@@ -139,6 +139,15 @@ class CustomUser(AbstractUser):
     )
     last_seen = models.DateTimeField(null=True, blank=True)
     scholarship_granted_price = models.IntegerField(null=True, blank=True)
+    # Layout chosen in Settings > Customise: sidebar section / link order and
+    # hidden links, dashboard widget order and hidden widgets, the page the
+    # app opens on. Only what the user changed is stored ({} = the defaults);
+    # GET / PATCH /api/auth/preferences/ validates every id against the
+    # allow-lists in accounts/preferences.py.
+    ui_preferences = models.JSONField(
+        default=dict, blank=True,
+        help_text='Sidebar / dashboard layout and opening page chosen in Settings (accounts/preferences.py).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

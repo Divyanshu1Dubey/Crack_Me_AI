@@ -46,6 +46,7 @@
 | `scholarship_test_attempts` | `IntegerField` | |
 | `last_seen` | `DateTimeField` | |
 | `scholarship_granted_price` | `IntegerField` | |
+| `ui_preferences` | `JSONField`, default `{}` | Layout chosen in Settings > Customise (sidebar section / link order and hidden links, dashboard widget order and hidden widgets, opening page); only what the user changed; read / written only by `GET / PATCH /api/auth/preferences/` (`accounts/preferences.py`, migration `accounts.0030`) |
 | `created_at` | `DateTimeField(auto_now_add)` | |
 
 **Properties**: `is_admin` → `role=='admin' or is_superuser` (used to bypass token checks).

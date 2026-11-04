@@ -1,5 +1,5 @@
 from django.urls import path
-from . import native_auth, views
+from . import native_auth, preferences, views
 
 urlpatterns = [
     # Which sign-in the backend runs (both modes) and the Django-native
@@ -23,6 +23,7 @@ urlpatterns = [
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.LoginView.as_view(), name='login'),
     path('profile/', views.ProfileView.as_view(), name='profile'),
+    path('preferences/', preferences.UIPreferencesView.as_view(), name='ui_preferences'),
     path('subscribe/', views.SubscribeView.as_view(), name='subscribe'),
     path('subscribe/order/', views.SubscribeOrderView.as_view(), name='subscribe_order'),
     path('subscribe/verify/', views.SubscribeVerifyView.as_view(), name='subscribe_verify'),

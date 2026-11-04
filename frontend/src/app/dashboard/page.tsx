@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
@@ -9,7 +9,7 @@ import { analyticsAPI, questionsAPI } from '@/lib/api';
 import {
     ArrowRight, Award, BookOpen,
     Calendar, CheckCircle, Clock, FileText, Flame,
-    HeartPulse, Brain, Sparkles
+    HeartPulse, Brain, Sparkles, SlidersHorizontal
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -22,6 +22,9 @@ import CustomIcon from '@/components/CustomIcon';
 import { LockedBadge } from '@/components/paywall/LockedBadge';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { upcomingExamDates } from '@/lib/examPatterns';
+import { dashboardBlocks, hiddenDashboardWidgets, type DashboardWidgetId } from '@/lib/preferences';
+import { useUiPreferences } from '@/components/customize/usePreferences';
+import { useLandingRedirect } from '@/components/customize/useLandingRedirect';
 
 interface HeatmapDay {
     date: string;
@@ -59,6 +62,11 @@ export default function DashboardPage() {
     const { user } = useAuth();
     const { ready } = useRequireAuth();
     const { show: showPaywall } = usePaywall();
+    // Widget order and hidden widgets (Settings > Customise).
+    const { prefs } = useUiPreferences();
+    // Opening page (Settings > Customise): a fresh load of /dashboard (every
+    // sign-in lands here) goes on to the page the learner chose.
+    const landing = useLandingRedirect(ready);
 
     const [selectedExam, setSelectedExam] = useState<'UPSC CMS' | 'NEET PG'>('UPSC CMS');
 
@@ -224,7 +232,23 @@ export default function DashboardPage() {
         return { weeks, monthMarkers };
     }, [heatmapByDate, todayDateStr]);
 
-    if (!ready) {
+    // Freemium conversion layer (Task 11): premium + admin users never see
+    // the upgrade row (the conversion nudge is irrelevant to them).
+    const isPremium =
+        user?.is_premium === true ||
+        user?.subscription_info?.is_active === true ||
+        user?.is_admin === true;
+    // The dashboard as blocks in the learner's order (lib/preferences.ts):
+    // full-width widgets, and two-column rows for the main / side widgets.
+    const excludedWidgets = useMemo<DashboardWidgetId[]>(() => (isPremium ? ['upgrade'] : []), [isPremium]);
+    const blocks = useMemo(() => dashboardBlocks(prefs.dashboard, excludedWidgets), [prefs.dashboard, excludedWidgets]);
+    const hiddenWidgetCount = useMemo(
+        () => hiddenDashboardWidgets(prefs.dashboard, excludedWidgets).length,
+        [prefs.dashboard, excludedWidgets],
+    );
+
+    // Also while the opening page is decided or the redirect to it is under way.
+    if (!ready || loading || landing !== 'stay') {
         return (
             <div className="min-h-screen bg-background">
                 <Sidebar />
@@ -242,32 +266,11 @@ export default function DashboardPage() {
         );
     }
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-background">
-                <Sidebar />
-                <div className="main-content">
-                    <Header />
-                    <div className="page-container space-y-5">
-                        <Skeleton className="h-40 rounded-2xl" />
-                        <div className="grid md:grid-cols-12 gap-4">
-                            <Skeleton className="h-130 md:col-span-8 rounded-2xl" />
-                            <Skeleton className="h-130 md:col-span-4 rounded-2xl" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950">
-            <Sidebar />
-            <div className="main-content">
-                <Header />
-                <div className="page-container space-y-6 pb-8">
-                    {/* Announcements Feed */}
-                    {announcements.length > 0 && (
+    // One renderer per widget; the ids are the stable ones stored in the
+    // preferences (DASHBOARD_WIDGETS in lib/preferences.ts).
+    const widgets: Record<DashboardWidgetId, () => ReactNode> = {
+        // Announcements Feed (also under the Header's bell icon)
+        announcements: () => announcements.length > 0 ? (
                         <div className="space-y-3">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground px-1">Platform Announcements</h3>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -286,12 +289,13 @@ export default function DashboardPage() {
                                 ))}
                             </div>
                         </div>
-                    )}
+        ) : null,
 
-                    {/* Hero Welcome Card — branded for both light and dark modes.
-                        In light mode we use a tinted brand surface instead of an
-                        opaque slate-900, so the dark text "Welcome back, Dr. ..."
-                        and the secondary buttons remain legible. */}
+        // Hero Welcome Card — branded for both light and dark modes.
+        // In light mode we use a tinted brand surface instead of an
+        // opaque slate-900, so the dark text "Welcome back, Dr. ..."
+        // and the secondary buttons remain legible.
+        welcome: () => (
                     <Card className="overflow-hidden border-0 shadow-md bg-sky-700 dark:bg-slate-900 text-white relative">
                         <div className="absolute right-0 top-0 h-full w-1/3 opacity-40 mix-blend-screen overflow-hidden hidden md:block">
                             <Image src="/dashboard_hero.png" alt="Medical Hero" fill sizes="(min-width: 768px) 33vw, 0px" className="object-cover object-left" />
@@ -349,18 +353,15 @@ export default function DashboardPage() {
                             </div>
                         </CardContent>
                     </Card>
+        ),
 
-                    {/* Freemium conversion layer (Task 11): premium feature
-                        row for free users. Three call-to-action cards — each
-                        gated by Subscription.is_active; clicking opens the
-                        global UpgradeModal via usePaywall(). Premium + admin
-                        users never see this row (the conversion nudge is
-                        irrelevant to them). */}
-                    {(() => {
-                        const isPremium =
-                            user?.is_premium === true ||
-                            user?.subscription_info?.is_active === true ||
-                            user?.is_admin === true;
+        // Freemium conversion layer (Task 11): premium feature
+        // row for free users. Three call-to-action cards — each
+        // gated by Subscription.is_active; clicking opens the
+        // global UpgradeModal via usePaywall(). Premium + admin
+        // users never see this row (the conversion nudge is
+        // irrelevant to them). It can be moved, never hidden.
+        upgrade: () => {
                         if (isPremium) return null;
                         const lockedFeatures = [
                             {
@@ -407,9 +408,10 @@ export default function DashboardPage() {
                                 ))}
                             </div>
                         );
-                    })()}
+        },
 
-                    {/* KPI Strip */}
+        // KPI Strip
+        stats: () => (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                         {[
                             { iconName: 'tests-check', value: overall.total_tests, label: 'Tests Completed', bg: 'bg-blue-100 dark:bg-blue-900/40' },
@@ -429,8 +431,10 @@ export default function DashboardPage() {
                             </Card>
                         ))}
                     </div>
+        ),
 
-                    {/* AI PREP TOOLKIT (Top section toolkit grid) */}
+        // AI PREP TOOLKIT (Top section toolkit grid)
+        toolkit: () => (
                     <div className="space-y-4 text-left">
                         <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-amber-500" />
@@ -483,15 +487,10 @@ export default function DashboardPage() {
                             ))}
                         </div>
                     </div>
+        ),
 
-                    {/* grid-cols-1 = minmax(0, 1fr): below lg the single column
-                        can never grow wider than the page (wide content used to
-                        stretch it and the cards were clipped on the right). */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        {/* Left Main Column (Occupies most width, balanced layout) */}
-                        <div className="lg:col-span-8 space-y-6">
-                            
-                            {/* Today Focus */}
+        // Today Focus (main column)
+        today: () => (
                             <Card className="shadow-sm border-border">
                                 <CardHeader className="pb-4 text-left">
                                     <CardTitle className="text-base flex items-center gap-2">
@@ -548,8 +547,10 @@ export default function DashboardPage() {
                                     </div>
                                 </CardContent>
                             </Card>
+        ),
 
-                            {/* Heatmap Calendar */}
+        // Heatmap Calendar (main column)
+        calendar: () => (
                             <Card className="shadow-sm border-border">
                                 <CardHeader className="pb-4 text-left">
                                     <CardTitle className="text-base flex items-center gap-2">
@@ -627,13 +628,10 @@ export default function DashboardPage() {
                                     </div>
                                 </CardContent>
                             </Card>
+        ),
 
-                        </div>
-
-                        {/* Right Rail Column */}
-                        <div className="lg:col-span-4 space-y-6">
-                            
-                            {/* Weak Subjects */}
+        // Weak Subjects (side column)
+        'focus-subjects': () => (
                             <Card className="shadow-sm text-left">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
@@ -662,8 +660,10 @@ export default function DashboardPage() {
                                     )}
                                 </CardContent>
                             </Card>
+        ),
 
-                            {/* Campus Momentum (Peer Leaderboard details) */}
+        // Campus Momentum (Peer Leaderboard details, side column)
+        momentum: () => (
                             <Card className="shadow-sm border-border text-left">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-base flex items-center gap-2">
@@ -683,10 +683,10 @@ export default function DashboardPage() {
                                     </Link>
                                 </CardContent>
                             </Card>
-                        </div>
-                    </div>
+        ),
 
-                    {/* QUESTION BANK PROGRESS — Full-width section for balanced layout */}
+        // QUESTION BANK PROGRESS — Full-width section for balanced layout
+        mastery: () => (
                     <Card className="shadow-sm border-border text-left">
                         <CardHeader className="pb-4">
                             <div className="flex justify-between items-center gap-3 flex-wrap">
@@ -809,8 +809,10 @@ export default function DashboardPage() {
                             </div>
                         </CardContent>
                     </Card>
+        ),
 
-                    {/* Streak Footer */}
+        // Streak Footer
+        streak: () => (
                     <Card className="shadow-sm border-border text-left">
                         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
@@ -828,6 +830,80 @@ export default function DashboardPage() {
                             </div>
                         </CardContent>
                     </Card>
+        ),
+    };
+
+    // The welcome card carries the page's h1; keep one when it is hidden.
+    const showsWelcome = blocks.some((block) => block.kind === 'single' && block.id === 'welcome');
+
+    return (
+        <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950">
+            <Sidebar />
+            <div className="main-content">
+                <Header />
+                <div className="page-container space-y-6 pb-8">
+                    {!showsWelcome && <h1 className="sr-only">Dashboard</h1>}
+
+                    {blocks.map((block) => block.kind === 'single' ? (
+                        <Fragment key={block.id}>{widgets[block.id]()}</Fragment>
+                    ) : (
+                        // Main column (8/12) and side column (4/12) from lg. Below
+                        // lg the column wrappers are display: contents, so the
+                        // widgets stack in the learner's order (CSS order). The
+                        // flex column / grid-cols-12 (minmax(0, 1fr)) keep wide
+                        // content from stretching the page (cards used to be
+                        // clipped on the right).
+                        <div
+                            key={`columns-${[...block.main, ...block.side].map((widget) => widget.id).join('-')}`}
+                            className="flex flex-col gap-6 lg:grid lg:grid-cols-12"
+                        >
+                            <div className="contents lg:block lg:col-span-8 lg:space-y-6">
+                                {block.main.map((widget) => (
+                                    <div key={widget.id} className="min-w-0" style={{ order: widget.position }}>
+                                        {widgets[widget.id]()}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="contents lg:block lg:col-span-4 lg:space-y-6">
+                                {block.side.map((widget) => (
+                                    <div key={widget.id} className="min-w-0" style={{ order: widget.position }}>
+                                        {widgets[widget.id]()}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Hidden sections stay one click away (Settings > Customise). */}
+                    {blocks.length === 0 ? (
+                        <Card className="border-dashed shadow-sm">
+                            <CardContent className="p-6 text-center space-y-3">
+                                <p className="text-sm font-semibold text-foreground">Every dashboard section is hidden.</p>
+                                <p className="text-xs text-muted-foreground">Turn the ones you want back on in Settings.</p>
+                                <Button asChild variant="outline" size="sm">
+                                    <Link href="/settings#customise">
+                                        <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+                                        Customise dashboard
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
+                            <span>
+                                {hiddenWidgetCount > 0
+                                    ? `${hiddenWidgetCount} ${hiddenWidgetCount === 1 ? 'section is' : 'sections are'} hidden.`
+                                    : 'Put the sections you use most at the top.'}
+                            </span>
+                            <Link
+                                href="/settings#customise"
+                                className="inline-flex items-center gap-1.5 font-semibold text-primary underline-offset-2 hover:underline"
+                            >
+                                <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
+                                Customise dashboard
+                            </Link>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

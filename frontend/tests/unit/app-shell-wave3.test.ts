@@ -165,7 +165,8 @@ test('Sidebar: Sign Out keeps its destructive colours; no chevron beside the AI 
   const sidebar = read('src/components/Sidebar.tsx');
   assert.match(sidebar, /className="sidebar-link w-full text-destructive hover:text-destructive hover:bg-destructive\/10/);
   assert.match(sidebar, /isActive && !showLock && !item\.badge && <ChevronRight/);
-  assert.match(sidebar, /\{ href: '\/analytics', iconName: 'analytics-growth', label: 'Analytics' \}/);
+  // The link catalog moved to lib/preferences.ts (Settings > Customise); Analytics still has no premium lock (AN-08).
+  assert.match(read('src/lib/preferences.ts'), /\{ id: 'analytics', href: '\/analytics', iconName: 'analytics-growth', label: 'Analytics' \}/);
 });
 
 // ── AppShell layouts (C6) ──────────────────────────────────────────────────

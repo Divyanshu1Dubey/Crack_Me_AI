@@ -13,6 +13,7 @@ import { Settings, User, Bell, Save, CheckCircle, AlertCircle, LogOut, Gift, Lap
 import { isDjangoAuthBuild } from '@/lib/localSession';
 import { USERNAME_HINT, USERNAME_MAX_LENGTH, profileUpdatePayload, usernameProblem } from './username';
 import SignInMethods from './SignInMethods';
+import CustomizeSection from '@/components/customize/CustomizeSection';
 
 const PROFILE_SAVE_FAILED = 'Failed to update profile. Please try again.';
 
@@ -363,6 +364,9 @@ export default function SettingsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Customise: sidebar / dashboard order and visibility, opening page (#customise) */}
+                    <CustomizeSection />
 
                     {/* Sign-in methods (Django-native sign-in: password, Google) */}
                     {isDjangoAuthBuild() && <SignInMethods />}
