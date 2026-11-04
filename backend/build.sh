@@ -40,7 +40,7 @@ python manage.py reconcile_legacy_subscriptions || true
 # the export); re-sync on purpose with `python manage.py load_exam_fixture cms`.
 python manage.py seed_question_bank
 
-# Seed blog posts from frontend static content (idempotent update_or_create)
+# Import static blog posts the database lacks; never overwrites admin edits (see seed_blogs)
 python manage.py seed_blogs || true
 
 # Bootstrap MEDIA_ROOT for recall image persistence.

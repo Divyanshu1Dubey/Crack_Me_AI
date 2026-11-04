@@ -47,8 +47,10 @@ test('robots.txt: real prefixes, no /_next block, one group per user agent', () 
     assert.match(text, /Sitemap: https:\/\/www\.cracklabs\.app\/sitemap\.xml/);
 });
 
-test('sitemap: unique URLs, no login-only or redirecting routes, no thin tag pages', () => {
-    const entries = sitemap();
+test('sitemap: unique URLs, no login-only or redirecting routes, no thin tag pages', async () => {
+    // The blog entries read the blog database; the static posts keep this test hermetic.
+    process.env.BLOG_SOURCE = 'static';
+    const entries = await sitemap();
     const urls = entries.map((e) => e.url);
     assert.equal(new Set(urls).size, urls.length, 'no duplicate URLs');
     const paths = urls.map((u) => new URL(u).pathname);

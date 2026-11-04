@@ -1,0 +1,154 @@
+{
+ "note": "Three posts of the hard-coded BLOG_POSTS the previous seed_blogs carried, verbatim, for tests_blog_seed: a placeholder body under a static slug, a one-paragraph summary under a static slug, and a summary under a slug the public blog never had.",
+ "posts": [
+  {
+   "slug": "neet-pg-vs-upsc-cms",
+   "title": "NEET PG Drop Years Wasted? Why Smart Doctors Choose UPSC CMS",
+   "description": "Struggling with NEET PG drop years? Discover why smart doctors are choosing UPSC CMS for financial independence, work-life balance, and zero toxic duty hours.",
+   "excerpt": "MBBS complete karne ke baad har junior doctor ka ek hi default mind-set hota hai: Mujhe NEET PG phodna hai. Lekin reality check yeh hai ki har saal lagbhag 2.2+ lakh doctors NEET PG ke peeche bhaagte hain.",
+   "cover_image": "/cms-circle-logo.png",
+   "category": "Career",
+   "subcategory": "UPSC CMS vs NEET PG",
+   "tags": [
+    "NEET PG",
+    "UPSC CMS",
+    "Career Advice",
+    "Medical Officer"
+   ],
+   "difficulty": "beginner",
+   "author_id": "crackcms-editorial",
+   "reviewed_by": "crackcms-editorial",
+   "author": "CrackCMS Editorial Team",
+   "author_role": "Clinical Content Editors, CrackCMS",
+   "date_published": "2026-07-30",
+   "date_modified": "2026-07-30",
+   "updated_at": "2026-07-30",
+   "reading_time": "5 min",
+   "word_count": 2100,
+   "primary_cta": {
+    "label": "Explore UPSC CMS Prep Now",
+    "href": "/cms",
+    "event_name": "blog_practice_intent",
+    "event_params": {
+     "source": "neet-pg-vs-upsc-cms",
+     "surface": "inline_cta"
+    }
+   },
+   "related_exam_paths": [
+    "/cms",
+    "/neet-pg"
+   ],
+   "references": [],
+   "revision_log": [
+    {
+     "date": "2026-07-30",
+     "note": "Initial publication"
+    }
+   ],
+   "faqs": [],
+   "toc": [],
+   "body": "Full article content here.",
+   "prelude": "",
+   "outro": "",
+   "pinned": false,
+   "trending": false,
+   "is_published": true
+  },
+  {
+   "slug": "surgery-suturing-techniques-upsc-cms",
+   "title": "Surgical Suturing Techniques for UPSC CMS: Knots, Needles and When to Use What",
+   "description": "Surgical suturing techniques for UPSC CMS \u2014 suture materials, needle types, knot-tying, common patterns (interrupted, continuous, mattress), and wound healing.",
+   "excerpt": "Surgical suturing techniques for UPSC CMS \u2014 suture materials, needle types, knots, patterns, and the wound healing facts tested in exams.",
+   "cover_image": "/blog/og/surgery-suturing-cover.png",
+   "category": "Subject Prep",
+   "subcategory": "Surgery",
+   "tags": [
+    "Surgery",
+    "Suturing",
+    "Wound Healing",
+    "UPSC CMS",
+    "NEET PG"
+   ],
+   "difficulty": "intermediate",
+   "author_id": "crackcms-editorial",
+   "reviewed_by": "crackcms-editorial",
+   "author": "CrackCMS Editorial Team",
+   "author_role": "Clinical Content Editors, CrackCMS",
+   "date_published": "2026-09-20",
+   "date_modified": "2026-09-20",
+   "updated_at": "2026-09-20",
+   "reading_time": "8 min",
+   "word_count": 2400,
+   "primary_cta": {
+    "label": "Practice Surgery PYQs (free)",
+    "href": "/questions?topic=surgery"
+   },
+   "related_exam_paths": [
+    "/cms",
+    "/neet-pg"
+   ],
+   "revision_log": [
+    {
+     "date": "2026-09-20",
+     "note": "Initial publication"
+    }
+   ],
+   "faqs": [],
+   "toc": [],
+   "body": "Surgical suturing techniques, suture materials, needle types, knot-tying, common patterns (interrupted, continuous, mattress), and wound healing facts.",
+   "prelude": "",
+   "outro": "",
+   "pinned": false,
+   "trending": false,
+   "is_published": true
+  },
+  {
+   "slug": "blood-physiology-upsc-cms",
+   "title": "Blood Physiology for UPSC CMS: RBC, WBC, Platelets and Coagulation",
+   "description": "Blood physiology for UPSC CMS \u2014 RBC lifecycle, haemoglobin function, WBC types and functions, platelet role, and the coagulation cascade.",
+   "excerpt": "Blood physiology for UPSC CMS \u2014 RBC indices, WBC differentials, platelet function, and the coagulation cascade with intrinsic/extrinsic pathways.",
+   "cover_image": "/blog/og/blood-physiology-cover.png",
+   "category": "Subject Prep",
+   "subcategory": "Physiology",
+   "tags": [
+    "Physiology",
+    "Blood",
+    "Haematology",
+    "Coagulation",
+    "UPSC CMS"
+   ],
+   "difficulty": "intermediate",
+   "author_id": "crackcms-editorial",
+   "reviewed_by": "crackcms-editorial",
+   "author": "CrackCMS Editorial Team",
+   "author_role": "Clinical Content Editors, CrackCMS",
+   "date_published": "2026-09-20",
+   "date_modified": "2026-09-20",
+   "updated_at": "2026-09-20",
+   "reading_time": "7 min",
+   "word_count": 2100,
+   "primary_cta": {
+    "label": "Practice Physiology PYQs (free)",
+    "href": "/questions?topic=physiology"
+   },
+   "related_exam_paths": [
+    "/cms",
+    "/neet-pg"
+   ],
+   "revision_log": [
+    {
+     "date": "2026-09-20",
+     "note": "Initial publication"
+    }
+   ],
+   "faqs": [],
+   "toc": [],
+   "body": "RBC: 120 days lifespan, spleen removes senescent cells. Hb structure: 2 alpha + 2 beta chains, heme with iron. WBC: neutrophils (55-70%), lymphocytes (20-40%), monocytes (2-8%), eosinophils (1-4%), basophils (<1%). Coagulation: intrinsic (XII-XI-IX-VIII), extrinsic (VII-tissue factor). Both converge at X.",
+   "prelude": "",
+   "outro": "",
+   "pinned": false,
+   "trending": false,
+   "is_published": true
+  }
+ ]
+}

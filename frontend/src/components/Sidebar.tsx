@@ -23,7 +23,7 @@ import { useAuth } from '@/lib/auth';
 import { navigateAfterAuthChange } from '@/lib/authNavigation';
 import { navItemAvailable, resolveNavHref, sidebarLayout, type NavItemDef } from '@/lib/preferences';
 import { useUiPreferences } from '@/components/customize/usePreferences';
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, ChevronDown, BarChart3, Lock, FileUp, Layers, ClipboardCheck, Ellipsis, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ShieldAlert, FileQuestion, Megaphone, Briefcase, LogOut, LogIn, Sparkles, ChevronRight, ChevronDown, BarChart3, Lock, FileUp, Layers, ClipboardCheck, Newspaper, Ellipsis, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import BrandMark from '@/components/BrandMark';
 import CustomIcon from '@/components/CustomIcon';
@@ -74,6 +74,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon; exact?: bool
     { href: '/admin/questions-editor', label: 'Questions Editor', icon: FileQuestion },
     { href: '/admin/review-queue', label: 'Answer-Key Review', icon: ClipboardCheck },
     { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
+    { href: '/admin/blog', label: 'Blog', icon: Newspaper },
     { href: '/admin/jobs', label: 'Manage Jobs', icon: Briefcase },
     { href: '/admin/ingestion', label: 'Ingestion', icon: FileQuestion },
     // Import Center and Recall had no link anywhere in the app.

@@ -5,10 +5,22 @@ import { getAllCmsSubjects } from '@/lib/subjectHubData';
 import { getAllCmsCutoffYears } from '@/lib/cutoffData';
 import { getAllCmsBookSlugs } from '@/lib/bookDeepDiveData';
 import { getAllCmsStrategySlugs } from '@/lib/strategyData';
-import { MIN_INDEXABLE_TAG_POSTS, getAllPosts, getAllCategories, getAllTags } from '@/lib/blog';
+import {
+    MIN_INDEXABLE_TAG_POSTS,
+    authorSlugsOf,
+    categoriesOf,
+    loadBlogCatalog,
+    postLastModified,
+    tagsOf,
+} from '@/lib/blog';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// The blog entries follow the published posts in the database (/admin/blog),
+// like the blog pages (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 300;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const now = new Date();
+    const blogPosts = await loadBlogCatalog();
 
     // Programmatic year-PYQ routes — keep in sync with PyqYearLandingLayout data.
     const yearRoutes = getAllCmsYears().map((year) => ({
@@ -76,7 +88,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: r.priority,
     }));
 
-    // Blog hub + every post + category + author archive + RSS feed
+    // Blog hub + every published post + category + author archive + RSS feed
     const blogRoutes = [
         {
             url: `${siteUrl}/blog`,
@@ -90,13 +102,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: 'daily' as const,
             priority: 0.5,
         },
-        ...getAllPosts().map((p) => ({
+        ...blogPosts.map((p) => ({
             url: `${siteUrl}/blog/${p.slug}`,
-            lastModified: new Date(p.dateModified),
+            lastModified: postLastModified(p, now),
             changeFrequency: 'weekly' as const,
             priority: 0.85,
         })),
-        ...getAllCategories().map((c) => ({
+        ...categoriesOf(blogPosts).map((c) => ({
             url: `${siteUrl}/blog/category/${c.slug}`,
             lastModified: now,
             changeFrequency: 'weekly' as const,
@@ -104,7 +116,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         })),
         // Thin tag archives (fewer than MIN_INDEXABLE_TAG_POSTS posts) are
         // noindex, so they are not submitted.
-        ...getAllTags()
+        ...tagsOf(blogPosts)
             .filter((t) => t.count >= MIN_INDEXABLE_TAG_POSTS)
             .map((t) => ({
                 url: `${siteUrl}/blog/tag/${t.slug}`,
@@ -113,11 +125,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
                 priority: 0.6,
             })),
         // Author archive pages — crawlable author profile nodes
-        ...Array.from(
-            new Set(
-                getAllPosts().flatMap((p) => [p.authorId, p.reviewedBy].filter(Boolean) as string[]),
-            ),
-        ).map((slug) => ({
+        ...authorSlugsOf(blogPosts).map((slug) => ({
             url: `${siteUrl}/blog/author/${slug}`,
             lastModified: now,
             changeFrequency: 'monthly' as const,

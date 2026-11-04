@@ -1,15 +1,19 @@
-import { getAllPosts, postSocialImagePath } from '@/lib/blog';
+import { loadBlogCatalog, postSocialImagePath } from '@/lib/blog';
 import { siteName, siteUrl, defaultOgImage } from '@/lib/seo';
+
+// The published posts in the database (/admin/blog), the same list the blog
+// pages show; regenerated at most every 5 minutes (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 300;
 
 /**
  * RSS 2.0 feed for the CrackCMS blog — served at `/blog/feed.xml`.
  *
  * Generates a hand-formatted XML response so we don't pull in a
- * dependency for such a small file. Cached for an hour via the
+ * dependency for such a small file. Cached for the ISR window via the
  * standard `Cache-Control` header so feed readers don't hammer us.
  */
 export async function GET() {
-    const posts = getAllPosts();
+    const posts = await loadBlogCatalog();
 
     const escapeXml = (s: string) =>
         s
@@ -23,12 +27,14 @@ export async function GET() {
         .map((post) => {
             const url = `${siteUrl}/blog/${post.slug}`;
             const cover = `${siteUrl}${postSocialImagePath(post)}`;
+            const published = new Date(post.datePublished);
+            const pubDate = isNaN(published.getTime()) ? '' : `
+      <pubDate>${published.toUTCString()}</pubDate>`;
             return `
     <item>
       <title>${escapeXml(post.title)}</title>
       <link>${url}</link>
-      <guid isPermaLink="true">${url}</guid>
-      <pubDate>${new Date(post.datePublished).toUTCString()}</pubDate>
+      <guid isPermaLink="true">${url}</guid>${pubDate}
       <dc:creator>${escapeXml(post.author)}</dc:creator>
       <category>${escapeXml(post.category)}</category>
       <description>${escapeXml(post.description)}</description>
@@ -66,7 +72,7 @@ export async function GET() {
     return new Response(xml, {
         headers: {
             'Content-Type': 'application/rss+xml; charset=utf-8',
-            'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+            'Cache-Control': 'public, max-age=300, s-maxage=300',
         },
     });
 }

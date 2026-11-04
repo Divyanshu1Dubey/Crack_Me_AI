@@ -1,11 +1,13 @@
 import { ImageResponse } from 'next/og';
-import { getAllPostSlugs, getPostBySlug } from '@/lib/blog';
+import { loadBlogCatalog, loadBlogPost } from '@/lib/blog';
 
 // Use the Node runtime (default) instead of `edge` — Next.js requires us to
 // pick one, and Node lets `generateStaticParams` co-exist (edge forbids it).
 export const alt = 'CrackCMS Blog post';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+// Follows the post in the database, like the page (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 300;
 
 /**
  * Per-post dynamic Open Graph image (1200×630) using Next.js's
@@ -19,7 +21,7 @@ export default async function PostOgImage({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const post = getPostBySlug(slug);
+    const post = await loadBlogPost(slug);
 
     const title = post?.title ?? 'CrackCMS Blog';
     const category = post?.category ?? 'Exam Strategy';
@@ -121,7 +123,7 @@ export default async function PostOgImage({
     );
 }
 
-// Pre-render all known slugs at build time.
-export function generateStaticParams() {
-    return getAllPostSlugs().map((slug) => ({ slug }));
+// Pre-render every published post's card at build time.
+export async function generateStaticParams() {
+    return (await loadBlogCatalog()).map((post) => ({ slug: post.slug }));
 }

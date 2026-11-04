@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import BlogPost
+from .models import BlogPost, BlogSeedImport
 
 
 @admin.action(description="Publish selected posts")
@@ -27,7 +27,7 @@ class BlogPostAdmin(admin.ModelAdmin):
         "reading_time",
     ]
     list_filter = ["category", "difficulty", "is_published", "pinned", "date_published"]
-    search_fields = ["title", "body", "excerpt", "tags", "author"]
+    search_fields = ["title", "slug", "body", "excerpt", "tags", "author"]
     readonly_fields = ["created_at", "updated"]
     actions = [publish_posts, unpublish_posts]
     list_editable = ["is_published", "pinned"]
@@ -49,3 +49,16 @@ class BlogPostAdmin(admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
+
+
+@admin.register(BlogSeedImport)
+class BlogSeedImportAdmin(admin.ModelAdmin):
+    """Which static posts seed_blogs imported. Deleting a row lets the next
+    deploy re-create that static post if it no longer exists."""
+
+    list_display = ["slug", "content_hash", "imported_at", "updated_at"]
+    search_fields = ["slug"]
+    readonly_fields = ["slug", "content_hash", "imported_at", "updated_at"]
+
+    def has_add_permission(self, request):
+        return False
