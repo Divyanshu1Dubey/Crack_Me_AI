@@ -51,6 +51,8 @@ urlpatterns = [
     # Public image facet counts. Without this explicit route the admin-only
     # `images/` router prefix captured `facets` as an image pk (HTTP 403).
     path('images/facets/', views.QuestionViewSet.as_view({'get': 'images_facets'}), name='question-image-facets'),
+    # Admins: which figures this server can serve (questions.image_health).
+    path('images/health/', views.QuestionImageHealthView.as_view(), name='question-image-health'),
     # Mistake Notebook: served only by /api/analytics/mistake-notebook/...
     # (what the frontend uses). The duplicate routes that used to live here
     # had a writable review state and a weaker add check, so they were

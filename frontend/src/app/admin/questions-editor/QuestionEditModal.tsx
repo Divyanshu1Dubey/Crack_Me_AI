@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { questionsAPI } from '@/lib/api';
 import { editorialAPI, type ExplanationField, type ExplanationSuggestion, type KeyChangeResult, type VerifyResult } from '@/lib/editorialAPI';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
+import { figureSrc } from '@/lib/figureSrc';
 import { Sparkles } from 'lucide-react';
 import { buildQuestionEditPayload, isValidAnswerLetter, mergeGeneratedFields, unpersistedEditFields } from '../_lib/adminHelpers';
 import ExplanationSuggestionPanel from './ExplanationSuggestionPanel';
@@ -367,21 +368,12 @@ export default function QuestionEditModal({ question, images: initialImages, onC
   // callers sometimes see only that relative path — prefer the absolute
   // URL when present.
   function imageSrc(img: QuestionImageLike): string {
-    // Preference order (Bug #2026-07-27 admin editor "broken link" fix):
-    //   1. `serve_url` (added by QuestionImageSerializer) — admin
-    //      uploads use the public Supabase URL directly, recall
-    //      imports use the auth-gated proxy. Either way it's reachable
-    //      in production where `/media/` 404s.
-    //   2. `img.url` — public URL stashed at upload/import time.
-    //   3. `img.file` — raw ImageField URL. Mostly the same as
-    //      `/media/recall_images/...`, kept as a last-ditch fallback.
-    const extended = img as QuestionImageLike & { serve_url?: string };
-    return (
-      extended.serve_url ||
-      img.url ||
-      (typeof img.file === 'string' ? img.file : '') ||
-      ''
-    );
+    // figureSrc (lib/figureSrc.ts): `serve_url` (QuestionImageSerializer:
+    // the image endpoint, or a live public URL), then `url`, then `file`;
+    // an empty, retired-storage (Supabase, shut down 2026-11-03) or
+    // `/media/` address becomes the image endpoint, which production
+    // serves (it does not serve `/media/`).
+    return figureSrc(img as QuestionImageLike & { serve_url?: string });
   }
 
   // Renders a small inline preview of any images referenced from `text`.

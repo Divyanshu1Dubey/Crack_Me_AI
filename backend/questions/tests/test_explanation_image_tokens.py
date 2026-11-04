@@ -181,9 +181,11 @@ class ExplanationFigureTokenTests(TestCase):
 
     @override_settings(SUPABASE_STORAGE_MIRROR_DIR='')
     def test_a_storage_hosted_figure_is_not_redirected_to_without_a_token(self):
-        # Admin uploads live at a public storage URL the view redirects to;
-        # the redirect itself would hand out that URL.
-        storage_url = 'https://abc.supabase.co/storage/v1/object/public/question_images/1/0123456789abcdef.png'
+        # A figure stored at a public URL on another live host is served by a
+        # redirect; the redirect itself would hand out that URL. (Retired
+        # Supabase Storage URLs are never redirected to: see
+        # test_retired_storage_images.)
+        storage_url = 'https://cdn.example.test/question_images/1/0123456789abcdef.png'
         hosted = QuestionImage.objects.create(
             question=self.locked, page_number=0, image_index_in_page=3, role='explanation',
             url=storage_url, uploaded_by_admin=True,

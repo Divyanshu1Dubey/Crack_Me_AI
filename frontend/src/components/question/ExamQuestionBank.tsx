@@ -40,6 +40,8 @@ import DiscussionThread from '@/components/DiscussionThread';
 import StudentCitations from '@/components/evidence/StudentCitations';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
 import ImageViewer, { type ViewerImage } from '@/components/image/ImageViewer';
+import FigureImage from '@/components/question/FigureImage';
+import { figureSrc, sidePaneFigures } from '@/lib/figureSrc';
 import { useDock } from '@/context/DockContext';
 import { useQuestionFocus } from '@/context/QuestionFocusContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -1026,6 +1028,14 @@ function ExamQuestionBankInner({
     const detailExplanation = detail ? (pickExplanation(detail) || '') : '';
     // The open question's answer key ('' when it has none).
     const detailKey = detail ? answerLetter(detail.correct_answer) : '';
+    // The stem's figures: `stem_images` (the backend's role-filtered list), else `images` without
+    // explanation figures for rows that pre-date it. The side pane (and its zoom viewer) shows the
+    // ones the stem does not already show inline (`[[img:N]]` where the author placed it), so a
+    // figure never appears twice.
+    const stemFigures: any[] = !detail ? [] : Array.isArray(detail.stem_images) && detail.stem_images.length > 0
+        ? detail.stem_images
+        : (Array.isArray(detail.images) ? detail.images.filter((img: any) => img.role !== 'explanation') : []);
+    const paneFigures: any[] = sidePaneFigures(stemFigures, detail?.question_text);
     // Why the selected question's detail could not be shown (or null).
     const detailFailure = selectedQuestion && detailError?.id === selectedQuestion
         ? detailFailureKind(detailError.error, isPremium)
@@ -1695,8 +1705,7 @@ function ExamQuestionBankInner({
                                             `resolveImageTokensForMarkdown` below so the
                                             `[[img:N]]` tokens inside the explanation text
                                             continue to resolve. */}
-                                        {((Array.isArray(detail.stem_images) && detail.stem_images.length > 0)
-                                            || (Array.isArray(detail.images) && detail.images.some((img: any) => img.role !== 'explanation'))) ? (
+                                        {paneFigures.length > 0 ? (
                                             <div className="qbank-solve-layout flex flex-col lg:flex-row gap-4 mb-3">
                                                 <div className="qbank-stem-pane lg:basis-3/5 lg:min-w-0">
                                                     <div className="text-base font-medium leading-relaxed">
@@ -1707,39 +1716,21 @@ function ExamQuestionBankInner({
                                                 </div>
                                                 <div className="qbank-image-pane lg:basis-2/5 lg:min-w-0 lg:self-start lg:sticky lg:top-4">
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {(
-                                                            Array.isArray(detail.stem_images) && detail.stem_images.length > 0
-                                                                ? detail.stem_images
-                                                                : detail.images.filter((img: any) => img.role !== 'explanation')
-                                                        ).map((img: any, idx: number) => {
-                                                            const imgSrc = img.url || img.file_url;
-                                                            return imgSrc ? (
-                                                                <button
-                                                                    key={img.id}
-                                                                    type="button"
-                                                                    onClick={() => setViewImageIdx(idx)}
-                                                                    className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in bg-muted/20"
-                                                                >
-                                                                    <img src={imgSrc} alt={img.caption || 'Question image'}
-                                                                        className="w-full h-auto max-h-[55vh] object-contain bg-muted/30" loading="lazy" />
-                                                                    {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
-                                                                </button>
-                                                            ) : null;
-                                                        })}
-                                                        {/* Show a hint chip when the question declares images but none of them have a resolvable URL.
-                                                           Avoids the confusing "broken-image icon + alt text" that previously rendered for image-questions
-                                                           whose media files are still missing from /media (e.g. NEET PG recall imports). */}
-                                                        {(
-                                                            Array.isArray(detail.stem_images) && detail.stem_images.length > 0
-                                                                ? detail.stem_images
-                                                                : detail.images.filter((img: any) => img.role !== 'explanation')
-                                                        ).every((img: any) => !(img.url || img.file_url)) && (
-                                                            <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-4 text-center">
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    🖼️ Image unavailable — see question text below for the full stem.
-                                                                </p>
-                                                            </div>
-                                                        )}
+                                                        {/* figureSrc: the API's address, or the image endpoint (never a retired
+                                                           storage host); FigureImage retries once, then shows a clear placeholder. */}
+                                                        {paneFigures.map((img: any, idx: number) => (
+                                                            <button
+                                                                key={img.id}
+                                                                type="button"
+                                                                onClick={() => setViewImageIdx(idx)}
+                                                                className="block w-full text-left rounded-xl overflow-hidden border border-border/60 hover:border-primary/60 transition-colors cursor-zoom-in bg-muted/20"
+                                                            >
+                                                                <FigureImage src={figureSrc(img)} alt={img.caption || 'Question figure'}
+                                                                    className="w-full h-auto max-h-[55vh] object-contain bg-muted/30" loading="lazy"
+                                                                    placeholderClassName="m-3" />
+                                                                {img.caption && <p className="text-[10px] text-muted-foreground p-1.5">{img.caption}</p>}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2440,14 +2431,15 @@ function ExamQuestionBankInner({
                 pinch-zoom, side-by-side, and fullscreen all work. Previously
                 the carousel used <a target="_blank"> which would leak
                 potentially-short-lived presigned S3 URLs into a new tab. */}
-            {viewImageIdx !== null && Array.isArray(detail?.stem_images) && detail.stem_images.length > 0 && (
+            {viewImageIdx !== null && paneFigures.length > 0 && (
                 <ImageViewer
                     open
                     onClose={() => setViewImageIdx(null)}
                     startIndex={viewImageIdx}
-                    images={(detail.stem_images as ViewerImage[]).map((img: ViewerImage | any) => ({
+                    // The side pane's figures, in its order (its index opens the same figure).
+                    images={(paneFigures as ViewerImage[]).map((img: ViewerImage | any) => ({
                         id: img.id,
-                        file_url: img.file_url || img.url || null,
+                        file_url: figureSrc(img) || null,
                         caption: img.caption,
                         modality: img.modality,
                         modality_subtype: img.modality_subtype,

@@ -444,6 +444,16 @@ def figure_bytes(img, max_px: int = 1024) -> Optional[bytes]:
 
 SERVE_PATH = '/api/questions/images/{id}/serve/'
 
+# Supabase Storage was shut down on 2026-11-03 (the project is gone, its host no longer resolves).
+# Figures stored with such an address are served by the image endpoint from the restored copy
+# (SUPABASE_STORAGE_MIRROR_DIR); a browser is never sent to the old host.
+_RETIRED_STORAGE_URL_RE = re.compile(r'^https?://[^/?#]+\.supabase\.co/storage/', re.IGNORECASE)
+
+
+def is_retired_storage_url(url) -> bool:
+    """True for an address on retired Supabase Storage (never handed to a browser)."""
+    return bool(url) and bool(_RETIRED_STORAGE_URL_RE.match(str(url).strip()))
+
 
 def image_proxy_url(img, request=None) -> str:
     path = SERVE_PATH.format(id=img.id)
@@ -460,6 +470,7 @@ def _student_url(img, role, *, revealed, request, prefer_stored_url) -> str:
     from .image_access import with_image_token
     stored = (getattr(img, 'url', '') or '').strip()
     use_stored = (prefer_stored_url and stored.startswith(('http://', 'https://')) and role != 'explanation'
+                  and not is_retired_storage_url(stored)
                   and not getattr(settings, 'SUPABASE_STORAGE_MIRROR_DIR', ''))
     if use_stored:
         return stored

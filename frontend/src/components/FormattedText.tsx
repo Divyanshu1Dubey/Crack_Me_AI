@@ -1,12 +1,19 @@
 "use client";
 import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { rehypeAllowlist } from '@/lib/markdownSanitize';
 import { decodeMojiB } from '@/lib/textCleanup';
-import { apiUrl } from '@/lib/apiBase';
+import { figureSrc } from '@/lib/figureSrc';
+import FigureImage from '@/components/question/FigureImage';
+
+// Loaded only when a figure is opened.
+const ImageViewer = dynamic(() => import('@/components/image/ImageViewer'), { ssr: false });
+
+type ZoomFigure = { src: string; alt: string };
 
 interface FormattedTextProps {
     text: string;
@@ -14,35 +21,52 @@ interface FormattedTextProps {
 }
 
 /**
- * `<img>` component used by `<FormattedText>` that swaps a broken image
- * for an explanatory placeholder the moment the load fails. Replaces
- * the browser's silent broken-icon behaviour with a meaningful
- * "image unavailable: <alt>" message so the student immediately sees
- * what went wrong (vs. an unexplained blank rectangle or icon).
+ * `<img>` component used by `<FormattedText>`: a failed figure is retried
+ * once, then replaced by a clear "Figure could not be loaded" placeholder
+ * instead of the browser's silent broken-image icon (FigureImage, rendered
+ * through React state so the reconciler stays in the loop). Only the image
+ * attributes are passed on (react-markdown also hands over its `node`).
  *
- * The fallback is rendered via React state — not by mutating the DOM
- * imperatively from inside `onError` — so React's reconciler stays in
- * the loop and re-renders cleanly without undoing our swap.
+ * Tap / Enter opens the figure in the zoom viewer (inline figures are not
+ * repeated in the question bank's zoomable side pane). The trigger is a
+ * `span role="button"` that stops the click, so text rendered inside a
+ * clickable card neither nests a <button> nor triggers the card.
  */
-function ImgWithFallback({ src, alt, ...rest }: any) {
-    const [failed, setFailed] = useState(false);
-    if (failed) {
-        const base = (alt && typeof alt === 'string') ? alt : 'image';
-        return (
-            <span className="missing-image-placeholder italic text-amber-700">
-                [image unavailable: {base}]
-            </span>
-        );
-    }
-    return (
-        <img
-            src={src}
+function ImgWithFallback({ src, alt, title, width, height, onZoom }: {
+    src?: string | Blob; alt?: string; title?: string; width?: number | string; height?: number | string;
+    onZoom?: (figure: ZoomFigure) => void;
+}) {
+    const address = typeof src === 'string' ? src : '';
+    const figure = (
+        <FigureImage
+            src={address}
             alt={alt ?? ''}
+            title={title}
+            width={width}
+            height={height}
             loading="lazy"
             className="question-inline-image"
-            onError={() => setFailed(true)}
-            {...rest}
         />
+    );
+    if (!onZoom || !address) return figure;
+    const open = (event: React.SyntheticEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onZoom({ src: address, alt: alt ?? '' });
+    };
+    return (
+        <span
+            role="button"
+            tabIndex={0}
+            aria-label={alt ? `Enlarge figure: ${alt}` : 'Enlarge figure'}
+            className="inline-block max-w-full cursor-zoom-in rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={open}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') open(event);
+            }}
+        >
+            {figure}
+        </span>
     );
 }
 
@@ -63,6 +87,7 @@ function ImgWithFallback({ src, alt, ...rest }: any) {
  * because the content includes AI-generated and imported text.
  */
 export function FormattedText({ text, className = '', images }: FormattedTextProps & { images?: Array<{ id: number; url?: string | null; file?: string | null; caption?: string | null }> }) {
+    const [zoom, setZoom] = useState<ZoomFigure | null>(null);
     if (!text) return null;
 
     // Collapse horizontal whitespace so CommonMark inline-emphasis rules parse.
@@ -91,11 +116,18 @@ export function FormattedText({ text, className = '', images }: FormattedTextPro
                     // icon. Recurring image-not-rendering audit bug —
                     // closed at the UI layer even when the backend
                     // relink pass can't find the file on disk.
-                    img: ImgWithFallback,
+                    img: (props) => <ImgWithFallback {...props} onZoom={setZoom} />,
                 }}
             >
                 {clean}
             </ReactMarkdown>
+            {zoom && (
+                <ImageViewer
+                    open
+                    onClose={() => setZoom(null)}
+                    images={[{ id: 0, file_url: zoom.src, caption: zoom.alt || null }]}
+                />
+            )}
         </div>
     );
 }
@@ -182,7 +214,7 @@ export function resolveImageTokensForMarkdown(
             const id = parseInt(payload, 10);
             const img = byId.get(id);
             if (!img) return `*[missing image #${id}]*`;
-            const src = (img.url || img.file || '').replace(/"/g, '%22');
+            const src = figureSrc(img).replace(/"/g, '%22');
             const alt = (img.caption || `image #${id}`).replace(/\]/g, '');
             return `![${alt}](${src})`;
         }
@@ -219,10 +251,7 @@ export function resolveImageTokensForMarkdown(
             const stripped = rawUrl.split('?')[0].split('#')[0];
             const base = stripped.split('/').pop() || '';
             const found = byBasename.get(base.toLowerCase());
-            const served = found
-                ? ((found.url && found.url.length > 0 ? found.url : null) ||
-                   apiUrl(`/questions/images/${found.id}/serve/`))
-                : rawUrl;
+            const served = found ? figureSrc(found) : rawUrl;
             const alt = (found?.caption || `Question image ${base}`).replace(/[\[\]"]/g, '');
             return `![${alt}](${served.replace(/"/g, '%22')})`;
         },
@@ -332,7 +361,7 @@ export function FormattedOptionText({
                 const id = parseInt(payload, 10);
                 const img = byId.get(id);
                 if (img) {
-                    pushImg(img.url || img.file || '', img.caption || `image #${id}`);
+                    pushImg(figureSrc(img), img.caption || `image #${id}`);
                 } else {
                     pushImg('', '', `[missing image #${id}]`);
                 }
@@ -355,9 +384,7 @@ export function FormattedOptionText({
             const base = (rawUrl.split('?')[0].split('#')[0].split('/').pop() || '').toLowerCase();
             const found = byBasename.get(base);
             if (found) {
-                const served = (found.url && found.url.length > 0 ? found.url : null) ||
-                               apiUrl(`/questions/images/${found.id}/serve/`);
-                pushImg(served, found.caption || `Question image ${base}`);
+                pushImg(figureSrc(found), found.caption || `Question image ${base}`);
             } else {
                 pushImg(
                     rawUrl,
@@ -376,26 +403,17 @@ export function FormattedOptionText({
 }
 
 /**
- * `<img>` component used by `<FormattedOptionText>` — same fallback
- * shape as `ImgWithFallback` but inlined here so the option-card
- * styling (rounded border, `inline-block`) survives intact.
+ * `<img>` component used by `<FormattedOptionText>` — same retry and
+ * placeholder as `ImgWithFallback`, with the option-card styling (rounded
+ * border, `inline-block`).
  */
 function OptionImgWithFallback({ src, alt }: { src: string; alt: string }) {
-    const [failed, setFailed] = useState(false);
-    if (failed) {
-        return (
-            <span className="missing-image-placeholder italic text-amber-700">
-                [image unavailable: {alt || 'image'}]
-            </span>
-        );
-    }
     return (
-        <img
+        <FigureImage
             src={src}
             alt={alt || ''}
             loading="lazy"
             className="question-inline-image inline-block max-w-full h-auto my-1 rounded border"
-            onError={() => setFailed(true)}
         />
     );
 }

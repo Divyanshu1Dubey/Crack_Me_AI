@@ -9,6 +9,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ImageIcon, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
+import { figureSrc } from '@/lib/figureSrc';
+import FigureImage from '@/components/question/FigureImage';
 
 interface Figure {
   question_id: number;
@@ -72,9 +74,9 @@ export default function RelatedFigures({ query, auto }: { query: string; auto: b
         {figures.map((fig) => (
           <li key={fig.image.id} className="overflow-hidden rounded-lg border border-border bg-card">
             <Link href={practiceHref(fig.exam_type, fig.question_id)} className="block hover:opacity-90">
-              {/* A proxied bank figure of unknown size: a plain img. */}
-              <img src={fig.image.url} alt={fig.image.alt_text || 'Figure from a past question'} loading="lazy"
-                className="h-28 w-full bg-white object-contain" />
+              {/* A proxied bank figure of unknown size: a plain img (retried once, then a placeholder). */}
+              <FigureImage src={figureSrc(fig.image)} alt={fig.image.alt_text || 'Figure from a past question'}
+                loading="lazy" className="h-28 w-full bg-white object-contain" placeholderClassName="m-2" />
               <span className="block p-1.5 text-[11px] leading-snug text-muted-foreground">
                 <span className="font-semibold text-foreground">
                   {EXAM_LABEL[fig.exam_type] ?? fig.exam_type}{fig.year ? ` ${fig.year}` : ''}

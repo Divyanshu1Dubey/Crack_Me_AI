@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .image_access import with_image_token
+from .image_context import is_retired_storage_url
 from .models import QuestionImage
 
 
@@ -40,19 +41,22 @@ class QuestionImageSerializer(serializers.ModelSerializer):
 
     def get_serve_url(self, obj):
         # Preference order:
-        #   1. uploaded_by_admin=True → public Supabase URL (bucket is
-        #      publicly readable; no auth roundtrip needed).
-        #   2. Otherwise → auth-gated proxy URL that reads from local
-        #      disk (works in production where /media/ is DEBUG-only).
-        #   3. Fallback to whatever's in `url` so older rows with a
-        #      manually-set public URL still render.
+        #   1. uploaded_by_admin=True with an absolute public URL on a live
+        #      host → that URL. Not a retired Supabase Storage URL (the host
+        #      was shut down on 2026-11-03; the proxy serves those figures
+        #      from the restored copy), and not a relative /media/ path
+        #      (production does not serve /media/).
+        #   2. Otherwise → the proxy URL, which reads from local disk (the
+        #      file, MEDIA_ROOT or the storage mirror).
         #   The proxy URL carries a signed token (questions.image_access):
         #   the serve endpoint refuses explanation figures without one, and
         #   this serializer only backs the admin-only QuestionImageViewSet
         #   (a request from anyone but staff gets no token).
         request = self.context.get("request") if hasattr(self, "context") else None
-        if getattr(obj, "uploaded_by_admin", False) and (obj.url or ""):
-            return obj.url
+        stored = (obj.url or "").strip()
+        if (getattr(obj, "uploaded_by_admin", False) and stored.startswith(("http://", "https://"))
+                and not is_retired_storage_url(stored)):
+            return stored
         path = f"/api/questions/images/{obj.id}/serve/"
         url = path
         if request is not None:

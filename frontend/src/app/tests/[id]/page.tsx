@@ -21,6 +21,8 @@ import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
 import { decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import ImageViewer from '@/components/image/ImageViewer';
+import FigureImage from '@/components/question/FigureImage';
+import { figureSrc } from '@/lib/figureSrc';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface QuestionImage {
@@ -217,8 +219,8 @@ function FigureGrid({ figures, fallbackAlt, onZoom, showCaptions = false }: {
                         aria-label={`Zoom: ${figureAlt(img, fallbackAlt)}`}
                         className="relative group block w-full rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                        <img
-                            src={img.url || img.file_url || ''}
+                        <FigureImage
+                            src={figureSrc(img)}
                             alt={figureAlt(img, fallbackAlt)}
                             loading="lazy"
                             className="w-full h-auto object-contain bg-white max-h-105"
@@ -1277,7 +1279,7 @@ export default function TakeTestPage() {
                     // The figures this review question shows (question side, then explanation).
                     images={zoomFigures.map(img => ({
                         id: img.id,
-                        file_url: img.url || img.file_url || '',
+                        file_url: figureSrc(img),
                         caption: img.caption,
                         modality: img.modality,
                         modality_subtype: img.modality_subtype,
@@ -1520,9 +1522,9 @@ export default function TakeTestPage() {
                                         onClick={() => setZoomImg(img)}
                                         className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white transition-all hover:shadow-lg hover:border-(--accent-primary) focus:outline-none"
                                     >
-                                        <img
-                                            src={img.url || img.file_url || ''}
-                                            alt={img.caption || `Question image`}
+                                        <FigureImage
+                                            src={figureSrc(img)}
+                                            alt={img.caption || `Question figure`}
                                             loading="lazy"
                                             className="w-full h-auto object-contain bg-white max-h-105"
                                         />
@@ -1663,7 +1665,7 @@ export default function TakeTestPage() {
                 <ImageViewer
                     images={(questions[currentIdx]?.images || []).map(img => ({
                         id: img.id,
-                        file_url: img.url || img.file_url || '',
+                        file_url: figureSrc(img),
                         caption: img.caption,
                         modality: img.modality,
                         modality_subtype: img.modality_subtype,
