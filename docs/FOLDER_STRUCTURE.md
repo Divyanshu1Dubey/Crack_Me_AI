@@ -31,7 +31,7 @@ backend/
 ├── manage.py
 ├── requirements.txt
 ├── build.sh                       # Deploy contract (DigitalOcean / Render)
-├── Procfile                       # release (migrate), web (gunicorn), worker (qcluster)
+├── Procfile                       # release (migrate), web (migrate, then gunicorn), worker (qcluster)
 ├── .env / .env.example            # Environment templates
 ├── db.sqlite3                     # Committed via Git LFS
 ├── fixtures/                      # cms_fixture.json, neet_pg_fixture.json, inicet_fixture.json + images (seed for an empty bank)
