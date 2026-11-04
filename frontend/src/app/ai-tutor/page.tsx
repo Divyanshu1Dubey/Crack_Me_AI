@@ -153,7 +153,7 @@ function SafeMarkdown({ content }: { content: unknown }) {
                     ),
                 }}
             >
-                {safeText}
+                {markdown}
             </ReactMarkdown>
         </SafeMessageBoundary>
     );

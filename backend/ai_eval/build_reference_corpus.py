@@ -391,7 +391,9 @@ def _content_hash(pages) -> str:
 
 
 def _chunk_hash(text: str) -> str:
-    return hashlib.sha1(' '.join(re.sub(r'[^a-z0-9]+', ' ', text.lower()).split()).encode()).hexdigest()
+    # A de-duplication key, not a security use (same digest as before).
+    return hashlib.sha1(' '.join(re.sub(r'[^a-z0-9]+', ' ', text.lower()).split()).encode(),
+                        usedforsecurity=False).hexdigest()
 
 
 # A PDF page with less text than this and at least one image is treated as scanned / image-only.

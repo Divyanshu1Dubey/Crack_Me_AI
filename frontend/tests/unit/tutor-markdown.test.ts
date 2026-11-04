@@ -5,6 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
@@ -66,6 +67,14 @@ test('tags become badges without flattening the sentence', () => {
   assert.match(html, /<em>ischemic necrosis<\/em>/);
   assert.match(html, /<span class="ai-tag ai-tag-pink">📋 PYQ 2019<\/span>/);
   assert.match(html, /<strong class="ai-tag ai-tag-green">📚 Textbook Reference: Robbins 10e, ch\. 12<\/strong>/);
+});
+
+test('the AI Tutor page and the dock render the repaired text, not the raw reply', () => {
+  const page = readFileSync('src/app/ai-tutor/page.tsx', 'utf8');
+  assert.match(page, /const markdown = normalizeTutorMarkdown\(safeText\);[\s\S]*?\{markdown\}\s*<\/ReactMarkdown>/);
+  assert.doesNotMatch(page, /\{safeText\}\s*<\/ReactMarkdown>/);
+  const dock = readFileSync('src/components/FloatingDockReply.tsx', 'utf8');
+  assert.match(dock, /\{normalizeTutorMarkdown\(text\)\}/);
 });
 
 test('unsafe HTML from a model is removed and one tilde stays text', () => {

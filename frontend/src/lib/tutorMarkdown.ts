@@ -31,12 +31,6 @@ function isRow(line: string): boolean {
   return ROW_RE.test(line);
 }
 
-/** `| a | b |` -> cells (without the outer pipes). */
-function cellsOf(line: string): string[] {
-  const inner = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-  return inner.split('|');
-}
-
 /** Rebuild a table that was joined onto one line, using the delimiter row to know the column count. */
 function splitSquashedTable(line: string): string[] | null {
   const match = INLINE_DELIM_RE.exec(line);
