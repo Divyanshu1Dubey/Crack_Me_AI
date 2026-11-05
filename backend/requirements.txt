@@ -63,7 +63,7 @@ sentence-transformers>=2.7.0
 # Railway runs Python 3.12 (backend/.python-version); 2.15.0+cpu has cp312 wheels.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.15.0+cpu; sys_platform == "linux"
-numpy>=1.26
+numpy>=2.5.4
 # Security floors for transitive dependencies: the first versions without
 # known advisories (pip-audit, 2026-11-01). Without them pip keeps older,
 # vulnerable copies that are already installed or cached in a build layer.
