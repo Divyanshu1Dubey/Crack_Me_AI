@@ -35,7 +35,7 @@ google-auth>=2.40,<3
 # Phase 7: Monitoring & structured logging
 sentry-sdk[django]>=2.58.0
 ddtrace>=4.15.6
-python-json-logger>=4.1.0
+python-json-logger>=4.2.0
 # PDF parsing for NEET PG
 PyMuPDF>=1.23.0
 # Admin Import Center parsers (material_importer/parser/: DOCX, PDF, PPTX).
