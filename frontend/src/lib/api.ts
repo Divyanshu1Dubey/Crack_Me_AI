@@ -460,8 +460,9 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data: Record<string, string>) => api.patch('/auth/profile/', data),
   subscribe: () => api.post('/auth/subscribe/order/'),
-  subscribeOrder: (plan?: string, requestId?: string) =>
-    api.post('/auth/subscribe/order/', { plan, request_id: requestId }),
+  // couponCode: a code from /subscription (src/lib/couponsAPI.ts); priced on the server only.
+  subscribeOrder: (plan?: string, requestId?: string, couponCode?: string) =>
+    api.post('/auth/subscribe/order/', { plan, request_id: requestId, coupon_code: couponCode || undefined }),
   subscribeVerify: (data: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) =>
     api.post('/auth/subscribe/verify/', data),
   // Local mock payments only (backend mounts this when PAYMENTS_MODE=mock + DEBUG).

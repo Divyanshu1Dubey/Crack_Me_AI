@@ -5,6 +5,7 @@ from django.utils import timezone
 from .models import (
     AdminAuditLog, AuthSession, CustomUser, PendingSignup, TokenBalance, TokenConfig, TokenTransaction, UserIdentity,
 )
+from .models_coupons import Coupon, CouponRedemption
 from .models_freemium import FreeShowcaseQuestion
 
 
@@ -156,6 +157,31 @@ class PendingSignupAdmin(admin.ModelAdmin):
     search_fields = ['email']
     readonly_fields = ['email', 'username', 'first_name', 'last_name', 'created_at', 'expires_at', 'ip_address']
     exclude = ['password', 'token_hash']
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    """Coupon codes (accounts.coupons). The admin panel's Coupons page is the main editor."""
+
+    list_display = ['code', 'discount_type', 'discount_value', 'max_uses', 'max_uses_per_user', 'valid_until',
+                    'is_active', 'created_at']
+    list_filter = ['is_active', 'discount_type']
+    search_fields = ['code', 'description']
+    raw_id_fields = ['assigned_user', 'created_by']
+
+
+@admin.register(CouponRedemption)
+class CouponRedemptionAdmin(admin.ModelAdmin):
+    """Who used which code: read-only purchase records."""
+
+    list_display = ['coupon', 'user', 'plan', 'original_amount', 'discount_amount', 'final_amount', 'status',
+                    'razorpay_order_id', 'created_at', 'redeemed_at']
+    list_filter = ['status', 'plan']
+    search_fields = ['coupon__code', 'user__username', 'user__email', 'razorpay_order_id']
+    readonly_fields = [f.name for f in CouponRedemption._meta.fields]
 
     def has_add_permission(self, request):
         return False

@@ -217,6 +217,19 @@ Device limit: a new device (an unknown `X-Session-ID`, or a Supabase session wit
 | POST | `/api/auth/subscribe/webhook/` | Razorpay webhook (server-to-server) |
 | GET | `/api/auth/subscribe/status/` | `{ "is_subscribed": true, "subscription": { "id", "plan", "plan_display_name", "status", "is_active", "starts_at", "expires_at", "days_remaining", "amount_paid", "razorpay_order_id", "created_at" } }`; `subscription` is `null` without an active plan. From `Subscription` rows only: a bare `is_subscribed` flag no longer yields a "Legacy Early Bird (Lifetime)" plan. |
 
+### Coupon codes (2026-11-07)
+Logic: `accounts/coupons.py`; models `accounts/models_coupons.py` (`Coupon`, `CouponRedemption`, migration accounts.0031); views `accounts/views_coupons.py`. Prices are computed on the server only, in whole rupees, from `PLAN_FEATURES`. A code applies to `1_month`, `3_months` and `1_year`, never to the scholarship rate.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/coupons/validate/` | **Signed in**, 30 per hour. `{ "code", "plan"? }` → `{ code, discount_type, discount_value, plans: { "<plan>": { plan, original_amount, discount_amount, final_amount } } }`. Refusals answer `400 { code, error }` with `code` one of `coupon_invalid` (unknown or switched off), `coupon_not_started`, `coupon_expired`, `coupon_used_up`, `coupon_already_used`, `coupon_not_for_you` (a personal code) or `coupon_not_for_plan`. The admin note and the limits are never returned. |
+| POST | `/api/auth/subscribe/order/` | Optional `coupon_code`. Same checks as above. A paid code creates the order for the discounted amount (`amount` in paise, plus `coupon_code`, `original_amount`, `discount_amount`) and holds one use for 30 minutes; a student's earlier unpaid hold of the code is released. Verify, webhook or recovery marks the hold `redeemed` (`_record_razorpay_purchase`). A code worth the whole price answers `{ free_activation: true, plan, coupon_code, message, is_subscribed, subscription }` and activates the plan with no Razorpay order (order id `COUPON-<code>-<hex>`, amount 0). |
+| GET / POST | `/api/auth/admin/coupons/` | **Admin.** List with `redeemed`, `checkouts_in_progress`, `discount_given`, `revenue` and `state` (`live`, `off`, `expired`, `scheduled`, `used_up`) / create. Create fields: `code` (empty → generated `CL-XXXXXXXX`), `discount_type` (`percent` 1–100 or `fixed` rupees), `discount_value`, `plans` (empty = all), `max_uses` (null = no limit), `max_uses_per_user` (default 1), `valid_from` / `valid_until` (ISO), `assigned_email` (one account only), `description` (admin note), `is_active`. Validation errors answer `400 { code: "invalid_coupon", errors: { field: message } }`. |
+| PATCH / DELETE | `/api/auth/admin/coupons/<id>/` | **Admin.** Edit (a used code cannot be renamed) / delete (only a code nobody redeemed, `409 coupon_in_use` otherwise; switch it off instead). |
+| GET | `/api/auth/admin/coupons/redemptions/` | **Admin.** Who used which code: `?coupon=<id>&status=redeemed\|reserved\|released`, newest 500, with user id, username and email, plan, the three amounts, the order id and the dates. |
+
+`GET /api/auth/admin/payments/` rows carry `coupon_code`, and `GET /api/auth/subscribe/invoice/<id>/` carries `coupon: { code, original_amount, discount_amount }` or `null`. UI: `/subscription` ("Have a coupon code?"; `?coupon=CODE` links fill it in) and `/admin/coupons` (Admin sidebar → Coupon Codes). Django admin lists both models too.
+
 ---
 
 ## Question endpoints — `/api/questions/`

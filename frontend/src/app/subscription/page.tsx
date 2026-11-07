@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Sidebar from '@/components/Sidebar';
@@ -13,9 +13,13 @@ import {
     Sparkles, MessageSquare, ShieldCheck,
     X, Check, AlertTriangle, Brain, RefreshCw,
     Calendar, Timer, CreditCard, Receipt, History,
-    Bell, ChevronDown
+    Bell, ChevronDown, Ticket
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+    couponErrorMessage, couponFromSearch, couponsAPI, describeDiscount, normalizeCouponCode,
+    type CouponQuote,
+} from '@/lib/couponsAPI';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +68,18 @@ interface SubscriptionRow {
 
 // Served by POST /auth/scholarship/start/ -- never includes the answer.
 type ScholarshipQuestion = ScholarshipChallengeQuestion;
+
+// accounts.views._serialize_subscription (order / verify responses).
+interface SubscriptionPayload {
+    plan: string;
+    plan_display_name: string;
+    status: string;
+    is_active: boolean;
+    starts_at: string | null;
+    expires_at: string | null;
+    days_remaining: number;
+    amount_paid: number;
+}
 
 // Scholarship price after a perfect score: Rs 79 on the first attempt, Rs 99
 // on the second (accounts.views.VerifyScholarshipView).
@@ -119,6 +135,14 @@ export default function SubscriptionPage() {
     // the in-flight modal reuse it so the backend re-issues the same Razorpay
     // order instead of charging twice.
     const [inFlightRequestId, setInFlightRequestId] = useState<string | null>(null);
+
+    // Coupon code (2026-11-07): checked by the server (couponsAPI.validate), sent with the order, priced
+    // on the server only. `?coupon=CODE` links fill it in.
+    const [couponInput, setCouponInput] = useState('');
+    const [couponQuote, setCouponQuote] = useState<CouponQuote | null>(null);
+    const [couponChecking, setCouponChecking] = useState(false);
+    const [couponError, setCouponError] = useState<string | null>(null);
+    const couponFromLinkTried = useRef(false);
 
     // Subscription state
     const subscriptionInfo = user?.subscription_info;
@@ -237,6 +261,7 @@ export default function SubscriptionPage() {
     <tr><td class="k">Status</td><td><span class="pill ${statusClass}">${escape(sub?.status)}</span></td></tr>
     <tr><td class="k">Purchased</td><td>${escape(purchaseDate)}</td></tr>
     <tr><td class="k">Expires</td><td>${escape(expiry)}</td></tr>
+    ${inv.coupon ? `<tr><td class="k">Coupon</td><td>${escape(inv.coupon.code)}: ₹${escape(Number(inv.coupon.original_amount).toLocaleString('en-IN'))} − ₹${escape(Number(inv.coupon.discount_amount).toLocaleString('en-IN'))}</td></tr>` : ''}
     <tr><td class="k">Amount paid</td><td>₹${escape(amountFmt)}</td></tr>
     <tr><td class="k">Razorpay order</td><td><code style="font-size:12px;">${orderId}</code></td></tr>
     <tr><td class="k">Razorpay payment</td><td><code style="font-size:12px;">${paymentId}</code></td></tr>
@@ -358,7 +383,68 @@ export default function SubscriptionPage() {
         setGeneratingAnalysis(false);
     };
 
+    // ── Coupon code ──────────────────────────────────────────────────────
+    const applyCoupon = async (raw?: string) => {
+        const code = normalizeCouponCode(raw ?? couponInput);
+        if (!code) return;
+        setCouponChecking(true);
+        setCouponError(null);
+        try {
+            const res = await couponsAPI.validate(code);
+            setCouponQuote(res.data);
+            setCouponInput(res.data.code);
+        } catch (err) {
+            setCouponQuote(null);
+            setCouponInput(code);
+            setCouponError(couponErrorMessage(err));
+        } finally {
+            setCouponChecking(false);
+        }
+    };
+
+    const removeCoupon = () => {
+        setCouponQuote(null);
+        setCouponInput('');
+        setCouponError(null);
+    };
+
+    // A `?coupon=CODE` link (shared by an admin) checks the code once the account is loaded.
+    useEffect(() => {
+        if (!user || couponFromLinkTried.current || typeof window === 'undefined') return;
+        couponFromLinkTried.current = true;
+        const code = couponFromSearch(window.location.search);
+        if (code) void applyCoupon(code);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
+
+    // A code worth the whole price activates the plan in the order response: show it at once.
+    const markSubscribed = (sub: SubscriptionPayload | null | undefined) => {
+        if (!sub || !sub.is_active) return;
+        setUser((current) => current ? {
+            ...current,
+            is_subscribed: true,
+            is_premium: true,
+            ai_tutor_used_today: 0,
+            ai_tutor_daily_cap: null,
+            showcase_questions_remaining: null,
+            subscription_info: {
+                plan: sub.plan,
+                plan_display_name: sub.plan_display_name,
+                status: sub.status,
+                is_active: sub.is_active,
+                starts_at: sub.starts_at,
+                expires_at: sub.expires_at,
+                days_remaining: sub.days_remaining,
+                amount_paid: sub.amount_paid,
+            },
+        } : current);
+    };
+
     const handleSubscribe = async (plan: string) => {
+        // The applied coupon, when it covers this plan (never the scholarship rate).
+        const couponForPlan = plan === 'scholarship_1_month' ? undefined : couponQuote?.plans?.[plan as PurchasablePlanId];
+        const couponCode = couponForPlan ? couponQuote?.code : undefined;
+        const freeWithCoupon = couponForPlan?.final_amount === 0;
         // B19 fix — idempotency key generated client-side and reused across
         // rapid clicks of the same plan within the same modal session.
         const requestId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
@@ -374,7 +460,7 @@ export default function SubscriptionPage() {
         // Local development: PAYMENTS_MODE=mock on the backend + this flag on
         // the frontend replace Razorpay's checkout with a local simulation.
         const mockPayments = (process.env.NEXT_PUBLIC_PAYMENTS_MODE || '').trim().toLowerCase() === 'mock';
-        const scriptLoaded = mockPayments ? true : await new Promise((resolve) => {
+        const scriptLoaded = (mockPayments || freeWithCoupon) ? true : await new Promise((resolve) => {
             const script = document.createElement('script');
             script.src = 'https://checkout.razorpay.com/v1/checkout.js';
             script.onload = () => resolve(true);
@@ -391,7 +477,18 @@ export default function SubscriptionPage() {
 
         try {
             // Create order with plan type + idempotency key
-            const orderRes = await authAPI.subscribeOrder(plan, requestId);
+            const orderRes = await authAPI.subscribeOrder(plan, requestId, couponCode);
+            if (orderRes.data?.free_activation) {
+                // The coupon paid the whole price: the plan is already active, no checkout.
+                markSubscribed(orderRes.data.subscription);
+                await refreshProfile();
+                setSuccessMessage(`🎉 ${orderRes.data.message || 'Your plan is active.'}`);
+                setCouponQuote(null);
+                setCouponInput('');
+                setSubscribing(false);
+                setInFlightRequestId(null);
+                return;
+            }
             const { order_id, amount, key_id } = orderRes.data;
 
             const options = {
@@ -491,7 +588,12 @@ export default function SubscriptionPage() {
             const rzp = new (window as unknown as { Razorpay: new (options: unknown) => { open: () => void } }).Razorpay(options);
             rzp.open();
         } catch (err: unknown) {
-            const error = err as { response?: { data?: { error?: string } } };
+            const error = err as { response?: { data?: { error?: string; code?: string } } };
+            if ((error.response?.data?.code || '').startsWith('coupon_')) {
+                // The code stopped applying (used up, expired, switched off) between the check and the order.
+                setCouponQuote(null);
+                setCouponError(couponErrorMessage(err));
+            }
             setErrorMessage(error.response?.data?.error || "Failed to initiate payment. Please try again later.");
             setSubscribing(false);
             setVerifying(false);
@@ -957,11 +1059,64 @@ export default function SubscriptionPage() {
                         </div>
                     )}
 
+                    {/* Coupon code (priced on the server; never the scholarship rate) */}
+                    {!isCurrentLifetime && (
+                        <div className="rounded-2xl border border-border bg-card p-4 md:p-5 space-y-2" aria-live="polite">
+                            <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                <div className="flex items-center gap-2 text-sm font-bold text-foreground shrink-0">
+                                    <Ticket className="w-4 h-4 text-primary" aria-hidden="true" />
+                                    Have a coupon code?
+                                </div>
+                                {couponQuote ? (
+                                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                                        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-bold">
+                                            <Check className="w-3.5 h-3.5 mr-1 inline" aria-hidden="true" />
+                                            {couponQuote.code} · {describeDiscount(couponQuote.discount_type, couponQuote.discount_value)}
+                                        </Badge>
+                                        <span className="text-xs text-muted-foreground">
+                                            Applies to {PREMIUM_PLANS.filter((p) => couponQuote.plans[p.id]).map((p) => p.name).join(', ')}. The new prices are shown below.
+                                        </span>
+                                        <Button type="button" variant="ghost" size="sm" onClick={removeCoupon} className="text-xs">
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <form
+                                        className="flex flex-1 gap-2"
+                                        onSubmit={(e) => { e.preventDefault(); void applyCoupon(); }}
+                                    >
+                                        <input
+                                            value={couponInput}
+                                            onChange={(e) => { setCouponInput(e.target.value); setCouponError(null); }}
+                                            placeholder="Enter coupon code"
+                                            aria-label="Coupon code"
+                                            maxLength={40}
+                                            autoComplete="off"
+                                            className="flex-1 min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-sm uppercase tracking-wide placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                        />
+                                        <Button type="submit" disabled={couponChecking || !couponInput.trim()} className="rounded-xl">
+                                            {couponChecking ? 'Checking…' : 'Apply'}
+                                        </Button>
+                                    </form>
+                                )}
+                            </div>
+                            {couponError && (
+                                <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">{couponError}</p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Subscription Cards Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {plans.map((plan) => {
                             const isRecommended = plan.id === '1_year';
-                            const hasScholarshipDiscount = plan.scholarshipPromo && user?.scholarship_test_passed;
+                            // An applied coupon for this plan; on the 1-month card it wins over the
+                            // scholarship rate only when it is cheaper (handleSubscribe sends it).
+                            const couponForPlan = couponQuote?.plans?.[plan.id];
+                            const scholarshipPrice = user?.scholarship_granted_price || SCHOLARSHIP_PRICE_INR;
+                            const scholarshipOffer = plan.scholarshipPromo && user?.scholarship_test_passed;
+                            const useCoupon = !!couponForPlan && (!scholarshipOffer || couponForPlan.final_amount < scholarshipPrice);
+                            const hasScholarshipDiscount = scholarshipOffer && !useCoupon;
                             const isCurrentPlan = isSubscribed && currentPlanId === plan.id;
                             const savings = getUpgradeSavings(plan.price);
                             const buyDisabled = subscribing || verifying || !!inFlightRequestId;
@@ -982,7 +1137,12 @@ export default function SubscriptionPage() {
                                     </div>
 
                                     <div className="flex items-baseline gap-2 mb-6 text-left">
-                                        {hasScholarshipDiscount ? (
+                                        {useCoupon && couponForPlan ? (
+                                            <>
+                                                <span className="text-4xl font-black text-emerald-500">₹{couponForPlan.final_amount.toLocaleString('en-IN')}</span>
+                                                <span className="text-sm line-through text-muted-foreground">₹{plan.price.toLocaleString('en-IN')}</span>
+                                            </>
+                                        ) : hasScholarshipDiscount ? (
                                             <>
                                                 <span className="text-4xl font-black text-emerald-500">₹{user?.scholarship_granted_price || 79}</span>
                                                 <span className="text-sm line-through text-muted-foreground">₹{plan.price}</span>
@@ -1057,7 +1217,11 @@ export default function SubscriptionPage() {
                                                     <span className="flex items-center justify-center gap-2">
                                                         <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Payment...
                                                     </span>
-                                                ) : subscribing ? 'Opening Payment...' : (hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta)}
+                                                ) : subscribing ? 'Opening Payment...' : (
+                                                    useCoupon && couponForPlan
+                                                        ? (couponForPlan.final_amount === 0 ? 'Activate with Coupon' : `Pay ₹${couponForPlan.final_amount.toLocaleString('en-IN')} with Coupon`)
+                                                        : hasScholarshipDiscount ? `Claim ₹${user?.scholarship_granted_price || 79} Rate` : plan.cta
+                                                )}
                                             </button>
                                             {plan.id === '1_month' && !hasScholarshipDiscount && ((user?.scholarship_test_attempts || 0) < 2) && (
                                                 <p className="text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 py-1 rounded-lg">
