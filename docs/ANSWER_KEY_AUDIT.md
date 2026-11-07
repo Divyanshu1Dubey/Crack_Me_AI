@@ -156,6 +156,20 @@ Measured with the commands above; every number is reproducible from them.
     from `Medura_Train/PYQ/2022paper2.txt` (they score 3, the stored key C) with the worked score added to
     the explanation (`explanation_origin` `mixed`). The stem hash changed: its source-key signals are
     re-read on the next `recover_source_keys` run.
+* Hidden questions (2026-11-07, migration `questions.0046`, `content_repairs.HIDES_2026_11_07`). The owner's
+  rule: a question is never hidden or deleted unless it is a duplicate or wrong; a question that says "shown in
+  the image" gets its figure, it is not hidden. Hidden after the owner's approval:
+  - three duplicates (#12605 of #12321; #22456 of #6477 and #22631 of #2210, both without their data table);
+  - two seed demo questions whose image never existed (#26454, #26451);
+  - two NEET PG questions whose source book omits the data they ask about (#15370, #15618).
+  Each is hidden only while it still holds the content it was judged on, a duplicate only while its kept copy
+  is live with the same key, after a revision snapshot; nothing is deleted.
+* Figure audit (2026-11-07): 540 active or held-back questions said a figure is shown but had none. 511
+  figures were extracted from their source PDFs, each checked against the question's own options and by eye,
+  and are attached by the owner's command (`prod_attach_figures.py`; the bytes go through `ops_media_transfer`).
+  The 14 CMS 2026 figure questions wait for the official UPSC paper (the solution PDFs only describe the
+  figures). Bank-wide, 589 groups of active duplicates remain (533 extra copies with the same key, 72 whose
+  copies disagree on the key): an owner decision, because hiding them changes the bank counts the site shows.
 
 ## 6. Production rollout (`cracklabs`)
 
