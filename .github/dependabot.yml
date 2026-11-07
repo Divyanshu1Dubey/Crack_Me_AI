@@ -10,6 +10,19 @@ updates:
     groups:
       backend:
         patterns: ["*"]
+    ignore:
+      # Stay on the Django 5.2 LTS (security releases until April 2028); 6.x is an upgrade of its own.
+      - dependency-name: "django"
+        update-types: ["version-update:semver-major"]
+      # moviepy 2.2.1 (video_engine) requires Pillow < 12, so Pillow 12+ and pdfplumber 0.11.10+
+      # (which requires Pillow >= 12.2) cannot be installed: #68 failed with ResolutionImpossible.
+      - dependency-name: "pillow"
+        versions: [">=12"]
+      - dependency-name: "pdfplumber"
+        versions: [">=0.11.10"]
+      # pip resolves together 2.x with the rest of requirements.txt; a 3.x floor would not install.
+      - dependency-name: "together"
+        versions: [">=3"]
     labels:
       - dependencies
       - python
@@ -25,6 +38,19 @@ updates:
     ignore:
       # 1.x renames / removes icons the app imports: the build failed on #61. Upgrade by hand.
       - dependency-name: "lucide-react"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint does not support TypeScript 7 and a unit test uses the compiler API:
+      # #67 failed lint and unit tests.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Upgrade these by hand, with a check: the Next.js middleware imports @supabase/ssr (a load
+      # failure there is an error on every page), Datadog 7 changes the RUM and logs SDKs, and
+      # @types/node follows the Node version the site runs on.
+      - dependency-name: "@supabase/ssr"
+        versions: [">=0.11.0"]
+      - dependency-name: "@datadog/browser-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     labels:
       - dependencies
