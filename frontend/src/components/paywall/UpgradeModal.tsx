@@ -13,9 +13,15 @@ import { useEffect } from 'react';
 
 import { paywallView, paywallDismissed, upgradeClick } from '@/lib/analytics';
 import { usePaywall } from '@/lib/paywall/paywallContext';
+import { LARGE_BATCH_FEATURE } from '@/components/QuestionComposer/limits';
+import { PREMIUM_PLANS } from '@/app/subscription/plans';
+
+const YEAR_PLAN = PREMIUM_PLANS.find((plan) => plan.id === '1_year');
 
 export function UpgradeModal() {
   const { state, dismiss } = usePaywall();
+  // 20-MCQ generator batches come with unlimited AI, i.e. the 1-year plan only.
+  const yearPlanOnly = state.feature === LARGE_BATCH_FEATURE && !!YEAR_PLAN;
 
   useEffect(() => {
     if (state.open) {
@@ -66,16 +72,19 @@ export function UpgradeModal() {
           <Dialog.Description className="text-sm text-slate-300 mb-5 leading-relaxed">
             {state.remaining === 0 ? (
               <>You&rsquo;ve reached today&rsquo;s free limit for <strong>{state.feature}</strong>. Subscribe to remove the daily limit.</>
+            ) : yearPlanOnly ? (
+              <>Batches of up to 20 MCQs come with the <strong>1-year plan</strong>, together with unlimited AI. Other plans generate up to 10 per batch.</>
             ) : (
-              <>Get <strong>{state.feature}</strong> and the rest of the CrackCMS library — all PYQ years with explanations and all mock tests.</>
+              <>Get <strong>{state.feature}</strong> and the rest of the CrackCMS library — every answer and explanation in the question banks and all mock tests.</>
             )}
           </Dialog.Description>
 
+          {/* What every paid plan really unlocks (accounts.utils.is_premium, /subscription). */}
           <ul className="space-y-1.5 text-sm text-slate-200 mb-6">
             <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> AI Tutor credits on every plan, unlimited on the 1-year plan</li>
-            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> All mock tests with negative marking</li>
-            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Full PYQ bank with detailed explanations</li>
-            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Textbook references and page screenshots</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> All mock tests and year-wise simulations with negative marking</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Every answer and explanation in the CMS, NEET PG and INI-CET banks</li>
+            <li className="flex items-start gap-2"><span className="text-amber-400" aria-hidden="true">✓</span> Every discussion thread and the answers in your Mistake Notebook</li>
           </ul>
 
           <div className="flex flex-col gap-2">
@@ -85,7 +94,9 @@ export function UpgradeModal() {
               className="w-full text-center rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600
                 text-slate-900 font-semibold py-3 transition-colors"
             >
-              Start Now — From just ₹129/month →
+              {yearPlanOnly && YEAR_PLAN
+                ? `Get the 1-year plan — ₹${YEAR_PLAN.priceInr.toLocaleString('en-IN')}/year →`
+                : 'Start Now — From just ₹129/month →'}
             </Link>
             <Dialog.Close asChild>
               <button

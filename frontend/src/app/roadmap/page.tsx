@@ -15,6 +15,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AiMarkdown } from '@/components/ai/AiMarkdown';
+import { plainInline, splitMarkdownSections } from '@/lib/aiMarkdown';
+
+/**
+ * Body text of the AI study plan / high-yield cards (rendered as markdown by AiMarkdown). Table cells
+ * keep a readable width, so a wide schedule scrolls sideways inside its box on phones instead of
+ * squeezing every column to a word.
+ */
+const AI_TEXT_CLASS =
+    'min-w-0 break-words text-sm leading-relaxed text-foreground [&_td]:min-w-28 [&_th]:min-w-28 [&_td]:align-top';
 
 // Parse AI response into structured topics
 interface ParsedTopic {
@@ -50,7 +60,7 @@ function parseHighYieldContent(content: string): ParsedSection[] {
             if (currentSection && currentSection.topics.length > 0) {
                 sections.push(currentSection);
             }
-            const title = sectionMatch[1].replace(/:/g, '').trim();
+            const title = plainInline(sectionMatch[1].replace(/:/g, ''));
             const stars = sectionMatch[2] ? sectionMatch[2].length : 3;
             currentSection = {
                 title: title,
@@ -86,8 +96,9 @@ function parseHighYieldContent(content: string): ParsedSection[] {
                 tag = `PYQ ${pyqMatch[1]}`;
             }
 
-            // Extract topic name - remove numbering, asterisks, tags, stars
-            name = trimmed
+            // Extract topic name - remove numbering, tags, stars, then any
+            // markdown left (*italics*, `code`, <br>) so none shows as text
+            name = plainInline(trimmed
                 .replace(/^\d+\.\s*/, '')           // Remove "1. "
                 .replace(/^[-*•]\s*/, '')           // Remove "- " or "* "
                 .replace(/\*\*/g, '')               // Remove **
@@ -95,13 +106,12 @@ function parseHighYieldContent(content: string): ParsedSection[] {
                 .replace(/\[PYQ\s*\d{4}\]/gi, '')   // Remove [PYQ 2024]
                 .replace(/\(★+\)/g, '')             // Remove (★★★)
                 .replace(/★+/g, '')                 // Remove loose stars
-                .replace(/-\s*Textbook.*/i, '')     // Remove textbook reference
-                .trim();
+                .replace(/\s*[-–—]\s*Textbook.*/i, '')); // Remove textbook reference
 
-            // Extract textbook reference
-            const textbookMatch = trimmed.match(/Textbook\s*Reference:\s*(.+)/i);
+            // Extract textbook reference ("**Textbook Reference:** Harrison" kept its "**")
+            const textbookMatch = trimmed.match(/Textbook(?:\s*Reference)?\s*:\s*(.+)/i);
             if (textbookMatch) {
-                textbook = textbookMatch[1].trim();
+                textbook = plainInline(textbookMatch[1]) || undefined;
             }
 
             if (name && name.length > 2) {
@@ -218,7 +228,7 @@ export default function RoadmapPage() {
                 weak_topics: weakTopics,
                 days_remaining: daysRemaining,
             });
-            setStudyPlan(res.data.study_plan);
+            setStudyPlan(typeof res.data?.study_plan === 'string' ? res.data.study_plan : '');
         } catch (err) {
             // Shown as an error, never parsed or rendered as if it were the plan.
             setPlanError(aiErrorMessage(err, 'generate a study plan'));
@@ -231,7 +241,7 @@ export default function RoadmapPage() {
         setHighYieldError(null);
         try {
             const res = await aiAPI.getHighYieldTopics();
-            setHighYield(res.data.predictions);
+            setHighYield(typeof res.data?.predictions === 'string' ? res.data.predictions : '');
         } catch (err) {
             setHighYieldError(aiErrorMessage(err, 'analyze PYQ trends'));
         }
@@ -290,34 +300,18 @@ export default function RoadmapPage() {
         },
     ];
 
-    // Parse study plan into sections
-    const parsedStudyPlan = useMemo(() => {
-        if (!studyPlan) return [];
-        const sections: { title: string; items: string[]; priority?: number }[] = [];
-        const lines = studyPlan.split('\n');
-        let currentSection: { title: string; items: string[]; priority?: number } | null = null;
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-
-            // Headers: ## Title or **Title** or Week X:
-            if (trimmed.match(/^#{1,3}\s+/) || trimmed.match(/^\*\*[^*]+\*\*$/) || trimmed.match(/^Week\s+\d+/i)) {
-                if (currentSection) sections.push(currentSection);
-                currentSection = {
-                    title: trimmed.replace(/^#+\s*/, '').replace(/\*+/g, '').trim(),
-                    items: [],
-                    priority: trimmed.includes('High') || trimmed.includes('Priority') ? 4 : 3
-                };
-            } else if (trimmed.match(/^[-*•]\s+/) && currentSection) {
-                currentSection.items.push(trimmed.replace(/^[-*•]\s+/, ''));
-            } else if (currentSection && trimmed.length > 10) {
-                currentSection.items.push(trimmed);
-            }
-        }
-        if (currentSection) sections.push(currentSection);
-        return sections;
-    }, [studyPlan]);
+    // The study plan is markdown (tables with <br> in cells, bold, lists): one
+    // card per heading, each body rendered as markdown. It used to be split
+    // line by line into checklist items, which showed table rows, "**" and
+    // "<br>" as plain text.
+    const studyPlanSections = useMemo(() => splitMarkdownSections(studyPlan), [studyPlan]);
+    // Text before the first high-yield section (e.g. the offline notice of a
+    // list ranked from the question bank); only when the answer has sections,
+    // so an answer without headings is not shown twice.
+    const highYieldIntro = useMemo(() => {
+        const split = splitMarkdownSections(highYield);
+        return split.sections.length ? split.intro : '';
+    }, [highYield]);
 
     if (!ready) {
         return (
@@ -507,43 +501,43 @@ export default function RoadmapPage() {
                                 </Card>
                             )}
 
-                            {/* Study Plan Result - Parsed */}
-                            {parsedStudyPlan.length > 0 && (
+                            {/* Study Plan Result: a card per markdown section; tables,
+                                bold and <br> render as such (AiMarkdown). Full-width
+                                cards so a schedule table has room. */}
+                            {studyPlan.trim().length > 0 && (
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2">
-                                        <Brain className="w-5 h-5 text-primary" />
-                                        <h2 className="text-lg font-semibold text-foreground">Your Personalized Study Plan</h2>
+                                    <div className="flex items-start gap-2">
+                                        <Brain className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <h2 className="text-lg font-semibold text-foreground">Your Personalized Study Plan</h2>
+                                            {studyPlanSections.title && (
+                                                <p className="text-sm text-muted-foreground break-words">{studyPlanSections.title}</p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        {parsedStudyPlan.map((section, idx) => (
-                                            <Card key={idx} className="border-l-4 border-l-primary">
-                                                <CardHeader className="pb-2">
-                                                    <CardTitle className="text-sm flex items-center gap-2">
-                                                        <BookMarked className="w-4 h-4 text-primary" />
-                                                        {section.title}
-                                                    </CardTitle>
-                                                </CardHeader>
-                                                <CardContent className="space-y-2">
-                                                    {section.items.map((item, i) => (
-                                                        <div key={i} className="flex items-start gap-2 text-sm">
-                                                            <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                                                            <span className="text-muted-foreground">{item}</span>
-                                                        </div>
-                                                    ))}
+                                    {studyPlanSections.intro && (
+                                        <Card>
+                                            <CardContent className="pt-6">
+                                                <AiMarkdown text={studyPlanSections.intro} className={AI_TEXT_CLASS} />
+                                            </CardContent>
+                                        </Card>
+                                    )}
+                                    {studyPlanSections.sections.map((section, idx) => (
+                                        <Card key={idx} className="border-l-4 border-l-primary">
+                                            <CardHeader className={section.body ? 'pb-2' : undefined}>
+                                                <CardTitle className="text-sm leading-snug flex items-start gap-2">
+                                                    <BookMarked className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                                    <span className="min-w-0 break-words">{section.title}</span>
+                                                </CardTitle>
+                                            </CardHeader>
+                                            {section.body && (
+                                                <CardContent>
+                                                    <AiMarkdown text={section.body} className={AI_TEXT_CLASS} />
                                                 </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
+                                            )}
+                                        </Card>
+                                    ))}
                                 </div>
-                            )}
-
-                            {/* Fallback raw display */}
-                            {studyPlan && parsedStudyPlan.length === 0 && (
-                                <Card>
-                                    <CardContent className="pt-6">
-                                        <pre className="whitespace-pre-wrap text-sm text-muted-foreground">{studyPlan}</pre>
-                                    </CardContent>
-                                </Card>
                             )}
                         </div>
                     )}
@@ -585,6 +579,12 @@ export default function RoadmapPage() {
                                             {parsedHighYield.reduce((acc, s) => acc + s.topics.length, 0)} Topics Identified
                                         </Badge>
                                     </div>
+
+                                    {highYieldIntro && (
+                                        <div className="rounded-lg border bg-muted/30 p-3">
+                                            <AiMarkdown text={highYieldIntro} className={AI_TEXT_CLASS} />
+                                        </div>
+                                    )}
 
                                     {parsedHighYield.map((section, sIdx) => {
                                         const colors = sectionColors[section.icon] || sectionColors.default;
@@ -663,11 +663,12 @@ export default function RoadmapPage() {
                                 </div>
                             )}
 
-                            {/* Fallback for raw content if parsing fails */}
-                            {highYield && parsedHighYield.length === 0 && (
+                            {/* An answer without the starred topic lines: shown as
+                                formatted markdown (it used to be dumped as raw text). */}
+                            {highYield.trim().length > 0 && parsedHighYield.length === 0 && (
                                 <Card>
                                     <CardContent className="pt-6">
-                                        <pre className="whitespace-pre-wrap text-sm text-muted-foreground">{highYield}</pre>
+                                        <AiMarkdown text={highYield} className={AI_TEXT_CLASS} />
                                     </CardContent>
                                 </Card>
                             )}

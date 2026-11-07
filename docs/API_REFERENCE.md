@@ -693,7 +693,7 @@ Failure contract: when no provider answers, the view gives back what it charged 
 | POST | `/api/ai/mnemonic/` | `{ "topic": "cranial nerves" }` | Generate mnemonic |
 | POST | `/api/ai/analyze/` | `{ "question_id": 35 }` | Analyze question structure |
 | POST | `/api/ai/explain-answer/` | `{ "question_id": 35, "selected_answer": "C" }` | Rich JSON explanation |
-| POST | `/api/ai/generate-questions/` | `{ "topic": "..." , "count": 5, "difficulty": "medium" }` | AI MCQ generator |
+| POST | `/api/ai/generate-questions/` | `{ "subject": "...", "topic": "...", "count": 5, "difficulty": "easy\|medium\|hard" }` | AI MCQ generator: 10 tokens per batch (refunded when the AI fails or returns no valid question). `count` is 1–10 for everyone and up to 20 when the caller's AI is unlimited (1-year, legacy and admin-granted plans; admins and staff). A larger `count` from anyone else is `402 { "code": "upgrade_required", "feature": "Generate up to 20 MCQs at once", "message", "max_count": 10, "charged": false }`, answered before any token is consumed. A count below 1 becomes 1; an unlimited caller's count above 20 becomes 20. `200 { "questions", "count", "cost" }` |
 | POST | `/api/ai/study-plan/` | `{ "weak_topic_ids": [1,2,3] }` | Personalized plan |
 | GET | `/api/ai/high-yield/` | `?exam_track=1` | High-yield topics list |
 
@@ -931,7 +931,7 @@ curl https://crackcms-vsthc.ondigitalocean.app/api/questions/ \
 | `account_link_required` | 401 | The email belongs to an admin/staff row (or a row linked to another identity) that this Supabase identity may not link to automatically; an operator links it with `manage.py link_supabase_identity`. The frontend signs out with "This account must be verified by an administrator". |
 | `device_inactive` | 401 | This device's Supabase session was logged out (Settings or admin) or replaced by a newer sign-in on that browser; refused whatever `X-Session-ID` is sent. `api.ts` retries a request sent with an older session's token once with the current token; otherwise it drops the device id and signs out. |
 | `device_limit_reached` | 401 | A new device beyond the plan's cap (2 free / 4 subscribed). `api.ts` keeps the session and opens `/settings?deviceLimit=1` (not while on `/settings` or `/subscription`). |
-| `upgrade_required` | 402 | Paywall; carries `feature` (`PYQ answers`, `Mock Tests`, `AI Tutor`, ...) and `message`. Opens the upgrade modal. |
+| `upgrade_required` | 402 | Paywall; carries `feature` (`PYQ answers`, `Mock Tests`, `AI Tutor`, `Generate up to 20 MCQs at once`, ...) and `message`. Opens the upgrade modal (for the 20-MCQ batch it names the 1-year plan). The generator's answer also carries `max_count: 10` and `charged: false`. |
 | `insufficient_tokens` | 429 | AI token balance below the action's cost (in `error`, with `available` / `required`). |
 | `auth_verification_busy` | 429 | The access token could not be checked with Supabase right now (verification capacity or the per-IP budget, [`AUTHENTICATION.md`](./AUTHENTICATION.md) §12); `Retry-After: 1`. `api.ts` retries once. |
 | `already_subscribed` | 409 | Scholarship start / verify by a caller with an active plan (staff excepted). |

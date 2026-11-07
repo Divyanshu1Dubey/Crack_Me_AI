@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import { FormattedText } from "@/components/FormattedText";
+import AiMarkdown from "@/components/ai/AiMarkdown";
 import { aiRateLimited, readAiField } from "@/components/question/practiceData";
 import StudentCitations from "@/components/evidence/StudentCitations";
 
@@ -202,31 +203,31 @@ export default function RevealExplanation({ questionId, fallbackExplanation, ope
       {concept || pending.includes("concept") ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Concept</p>
-          {concept ? <p>{concept}</p> : generating}
+          {concept ? <AiMarkdown text={concept} /> : generating}
         </div>
       ) : null}
       {ai || pending.includes("why_correct") ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Why this is correct</p>
-          {ai ? <p className="whitespace-pre-wrap">{ai}</p> : generating}
+          {ai ? <AiMarkdown text={ai} /> : generating}
         </div>
       ) : null}
       {whyNot ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Why the distractors fail</p>
-          <pre className="whitespace-pre-wrap font-sans text-sm">{whyNot}</pre>
+          <AiMarkdown text={whyNot} className="text-sm" />
         </div>
       ) : null}
       {clinical || pending.includes("clinical_significance") ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Clinical pearl</p>
-          {clinical ? <p>{clinical}</p> : generating}
+          {clinical ? <AiMarkdown text={clinical} /> : generating}
         </div>
       ) : null}
       {memory || pending.includes("memory_trick") ? (
         <div>
           <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Memory trick</p>
-          {memory ? <p>{memory}</p> : generating}
+          {memory ? <AiMarkdown text={memory} /> : generating}
         </div>
       ) : null}
       {importance != null ? (

@@ -75,6 +75,9 @@ test('UpgradeModal makes no unbacked premium claims', () => {
     /Cancel anytime/i,          // passes are one-time payments, nothing to cancel
     /Unlimited AI Tutor/,       // unlimited AI is the 1-year plan only
     /unlimited access/i,
+    /page screenshots/i,        // 2026-11-07: none on the question bank's PYQs
+    /Textbook references/i,
+    /detailed explanations/i,   // about half the questions have an explanation
   ]) {
     assert.doesNotMatch(copy, claim, String(claim));
   }

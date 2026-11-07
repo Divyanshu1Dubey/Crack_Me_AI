@@ -2,6 +2,10 @@
  * QuestionCard — single MCQ card with options, inline explanation, and
  * the deep AI explanation loader. Owns no state; the parent
  * `useGenerate` hook drives every interaction.
+ *
+ * The stem and explanation are AI-written markdown (bold, italics, line
+ * breaks), rendered by AiMarkdown; options are short, shown as plain text
+ * without markdown markers.
  */
 'use client';
 
@@ -10,9 +14,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, Loader2, Brain } from 'lucide-react';
+import { AiMarkdown } from '@/components/ai/AiMarkdown';
+import { plainInline } from '@/lib/aiMarkdown';
 import type { GeneratedQuestion, AIExplanation } from './types';
 import { ExplanationPanel } from './ExplanationPanel';
 import { EXPLANATION_TOKEN_COST } from './constants';
+import { useGenerationLimit } from './useGenerationLimit';
 
 interface QuestionCardProps {
   index: number;
@@ -42,6 +49,8 @@ export function QuestionCard({
   onRequestExplanation,
 }: QuestionCardProps) {
   const correct = question.correct_answer;
+  // Unlimited-AI plans are not charged for the deep explanation either.
+  const { unlimitedAi } = useGenerationLimit();
 
   const optionClass = (optKey: string): string => {
     if (!selectedAnswer) {
@@ -64,10 +73,10 @@ export function QuestionCard({
             {index + 1}
           </span>
           <div className="flex-1 min-w-0">
-            <p className="font-medium leading-relaxed">{question.question_text}</p>
+            <AiMarkdown text={question.question_text} className="min-w-0 break-words font-medium leading-relaxed" />
             <div className="flex gap-1.5 mt-2 flex-wrap">
-              <Badge variant="secondary">{question.subject}</Badge>
-              {question.topic && <Badge variant="outline">{question.topic}</Badge>}
+              <Badge variant="secondary">{plainInline(question.subject)}</Badge>
+              {question.topic && <Badge variant="outline">{plainInline(question.topic)}</Badge>}
               <Badge variant="outline" className="text-[10px] uppercase">
                 {question.difficulty}
               </Badge>
@@ -77,7 +86,8 @@ export function QuestionCard({
 
         <div className="space-y-2 ml-0 md:ml-12">
           {OPTION_KEYS.map((opt) => {
-            const optValue = question[`option_${opt.toLowerCase()}` as keyof GeneratedQuestion] as string;
+            const rawOption = question[`option_${opt.toLowerCase()}` as keyof GeneratedQuestion];
+            const optValue = typeof rawOption === 'string' ? plainInline(rawOption) : '';
             if (!optValue) return null;
             return (
               <div
@@ -92,7 +102,7 @@ export function QuestionCard({
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border shrink-0">
                   {opt}
                 </span>
-                <span className="text-sm flex-1">{optValue}</span>
+                <span className="text-sm flex-1 min-w-0 break-words">{optValue}</span>
                 {selectedAnswer && opt === correct && (
                   <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
                 )}
@@ -109,9 +119,10 @@ export function QuestionCard({
             <div className="text-xs font-bold uppercase tracking-wide text-primary mb-1">
               Why this answer
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {question.explanation}
-            </p>
+            <AiMarkdown
+              text={question.explanation}
+              className="min-w-0 break-words text-sm leading-relaxed text-muted-foreground"
+            />
           </div>
         )}
 
@@ -127,7 +138,9 @@ export function QuestionCard({
             >
               <Brain className="h-3.5 w-3.5" />
               {aiExplanation?.error ? 'Retry AI deep explanation' : 'Get AI deep explanation'}
-              <span className="text-muted-foreground">· {EXPLANATION_TOKEN_COST} tokens</span>
+              <span className="text-muted-foreground">
+                · {unlimitedAi ? 'included in your plan' : `${EXPLANATION_TOKEN_COST} tokens`}
+              </span>
             </Button>
           </div>
         )}

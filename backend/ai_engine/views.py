@@ -1772,12 +1772,54 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
 
     Cost: 10 tokens per generation (any count), refunded when the AI fails or
     returns no valid question. Raw model output is never returned.
+
+    Batch size: up to ``STANDARD_MAX_COUNT`` (10) questions for everyone and
+    up to ``UNLIMITED_MAX_COUNT`` (20) when the caller's AI is unlimited
+    (``_ai_is_unlimited``: admins / staff and the 1-year, legacy and
+    admin-granted plans). A larger batch from anyone else is the 402
+    ``upgrade_required`` paywall envelope (as everywhere else), answered before
+    any token is consumed.
+    A count below 1 becomes 1; an unlimited caller's count above 20 becomes 20.
     """
 
     GENERATION_COST = 10
+    STANDARD_MAX_COUNT = 10
+    UNLIMITED_MAX_COUNT = 20
+    LARGE_BATCH_FEATURE = 'Generate up to 20 MCQs at once'
 
     def get_permissions(self):
         return _get_permission()
+
+    @staticmethod
+    def _ai_is_unlimited(user) -> bool:
+        """The consume_ai_token bypass (the token wallet's ``unlimited_ai``):
+        admins, superusers and staff, or an active plan with unlimited AI."""
+        if _is_unmetered_staff(user):
+            return True
+        try:
+            from accounts.models import Subscription
+            sub = Subscription.get_active_subscription(user)
+            return bool(sub and sub.is_active and sub.unlimited_ai)
+        except Exception:
+            logger.exception('GenerateQuestions: subscription lookup failed; applying the standard batch size')
+            return False
+
+    def _large_batch_response(self) -> Response:
+        """402 ``upgrade_required`` for a batch above the caller's plan. Nothing is charged."""
+        return Response(
+            {
+                'code': 'upgrade_required',
+                'feature': self.LARGE_BATCH_FEATURE,
+                'message': (
+                    f'Generating more than {self.STANDARD_MAX_COUNT} MCQs at once is part of the '
+                    f'1-year plan. Choose {self.STANDARD_MAX_COUNT} or fewer, or upgrade to generate '
+                    f'up to {self.UNLIMITED_MAX_COUNT} per batch. You were not charged.'
+                ),
+                'max_count': self.STANDARD_MAX_COUNT,
+                'charged': False,
+            },
+            status=status.HTTP_402_PAYMENT_REQUIRED,
+        )
 
     def post(self, request):
         subject, err = _required_text(request, 'subject', 'Subject', max_chars=MAX_LABEL_CHARS)
@@ -1788,9 +1830,16 @@ class GenerateQuestionsView(AITutorThrottleMixin, APIView):
         if difficulty not in ('easy', 'medium', 'hard'):
             difficulty = 'medium'
         try:
-            count = max(1, min(int(request.data.get('count', 5)), 20))
+            requested = int(request.data.get('count', 5))
         except (TypeError, ValueError):
             return Response({'error': 'count must be an integer'}, status=400)
+        if requested > self.STANDARD_MAX_COUNT:
+            # Checked before offline mode and before any token is consumed.
+            if not self._ai_is_unlimited(request.user):
+                return self._large_batch_response()
+            count = min(requested, self.UNLIMITED_MAX_COUNT)
+        else:
+            count = max(1, requested)
 
         if ai_offline_mode():
             return _ai_unavailable_response(

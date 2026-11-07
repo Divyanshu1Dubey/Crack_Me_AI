@@ -4,6 +4,10 @@
  * textbook reference, high-yield points, clinical pearls, exam tips,
  * PYQ frequency, similar PYQs).
  *
+ * The text fields are AI-written markdown (`**bold**`, line breaks in a
+ * mnemonic), rendered by AiMarkdown; short labels (tags, the textbook
+ * reference) are shown as plain text without markdown markers.
+ *
  * Centralised here so future layouts (a "study mode" card, an Anki
  * exporter, a print view) can all reuse the same visual contract.
  */
@@ -13,6 +17,8 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Sparkles, BookMarked, Brain } from 'lucide-react';
+import { AiMarkdown } from '@/components/ai/AiMarkdown';
+import { plainInline } from '@/lib/aiMarkdown';
 import type { AIExplanation, AccentTone } from './types';
 import { ACCENT_CLASSES } from './constants';
 
@@ -20,7 +26,13 @@ interface ExplanationPanelProps {
   explanation: AIExplanation;
 }
 
+/** Wrapper class for markdown inside the explanation blocks. */
+const BLOCK_TEXT = 'min-w-0 break-words';
+
 export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
+  const book = plainInline(explanation.textbook_reference?.book);
+  const chapter = plainInline(explanation.textbook_reference?.chapter);
+  const page = plainInline(explanation.textbook_reference?.page);
   return (
     <div className="space-y-3 pt-2 border-t">
       <div className="flex items-center gap-2 pt-2">
@@ -48,31 +60,35 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
 
       {/* Tags row */}
       <div className="flex flex-wrap gap-1.5">
-        {explanation.category && <Badge variant="secondary">{explanation.category}</Badge>}
+        {explanation.category && <Badge variant="secondary">{plainInline(explanation.category)}</Badge>}
         {explanation.question_type && (
-          <Badge variant="outline">{explanation.question_type}</Badge>
+          <Badge variant="outline">{plainInline(explanation.question_type)}</Badge>
         )}
         {explanation.core_concept && (
-          <Badge variant="outline" className="border-primary/30 text-primary">
-            {explanation.core_concept}
+          <Badge variant="outline" className="border-primary/30 text-primary whitespace-normal text-left">
+            {plainInline(explanation.core_concept)}
           </Badge>
         )}
       </div>
 
       {explanation.why_correct && (
         <ExplanationBlock title="Why the correct answer is right" accent="emerald">
-          {explanation.why_correct}
+          {explanation.error ? (
+            <p>{explanation.why_correct}</p>
+          ) : (
+            <AiMarkdown text={explanation.why_correct} className={BLOCK_TEXT} />
+          )}
         </ExplanationBlock>
       )}
 
       {explanation.why_wrong && Object.keys(explanation.why_wrong).length > 0 && (
         <ExplanationBlock title="Why the other options are wrong" accent="red">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {Object.entries(explanation.why_wrong).map(([k, v]) => (
-              <p key={k}>
-                <span className="font-semibold">{k}:</span>{' '}
-                <span className="text-muted-foreground">{String(v)}</span>
-              </p>
+              <div key={k} className="flex gap-1.5">
+                <span className="font-semibold shrink-0">{k}:</span>
+                <AiMarkdown text={v} className={`${BLOCK_TEXT} flex-1 text-muted-foreground`} />
+              </div>
             ))}
           </div>
         </ExplanationBlock>
@@ -84,25 +100,25 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
           accent="amber"
           icon={<Sparkles className="h-3.5 w-3.5" />}
         >
-          <span className="font-medium">{explanation.mnemonic}</span>
+          <AiMarkdown text={explanation.mnemonic} className={`${BLOCK_TEXT} font-medium`} />
         </ExplanationBlock>
       )}
 
-      {explanation.textbook_reference?.book && (
+      {book && (
         <ExplanationBlock
           title="Textbook reference"
           accent="violet"
           icon={<BookMarked className="h-3.5 w-3.5" />}
         >
-          <p className="font-semibold">{explanation.textbook_reference.book}</p>
-          {explanation.textbook_reference.chapter && (
+          <p className="font-semibold">{book}</p>
+          {chapter && (
             <p className="text-xs text-muted-foreground">
-              Chapter: {explanation.textbook_reference.chapter}
+              Chapter: {chapter}
             </p>
           )}
-          {explanation.textbook_reference.page && (
+          {page && (
             <p className="text-xs text-muted-foreground">
-              Page: {explanation.textbook_reference.page}
+              Page: {page}
             </p>
           )}
         </ExplanationBlock>
@@ -112,7 +128,9 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
         <ExplanationBlock title="High-yield points" accent="pink">
           <ul className="list-disc pl-5 space-y-0.5">
             {explanation.high_yield_points.map((p, i) => (
-              <li key={i}>{p}</li>
+              <li key={i}>
+                <AiMarkdown text={p} className={BLOCK_TEXT} />
+              </li>
             ))}
           </ul>
         </ExplanationBlock>
@@ -121,12 +139,12 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {explanation.clinical_pearl && (
           <ExplanationBlock title="Clinical pearl" accent="emerald">
-            {explanation.clinical_pearl}
+            <AiMarkdown text={explanation.clinical_pearl} className={BLOCK_TEXT} />
           </ExplanationBlock>
         )}
         {explanation.exam_tip && (
           <ExplanationBlock title="Exam tip" accent="amber">
-            {explanation.exam_tip}
+            <AiMarkdown text={explanation.exam_tip} className={BLOCK_TEXT} />
           </ExplanationBlock>
         )}
       </div>
@@ -138,7 +156,7 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
               <span className="font-semibold text-pink-600 dark:text-pink-400">
                 PYQ frequency:{' '}
               </span>
-              {explanation.pyq_frequency}
+              {plainInline(explanation.pyq_frequency)}
             </div>
           )}
           {explanation.similar_pyq && (
@@ -146,7 +164,7 @@ export function ExplanationPanel({ explanation }: ExplanationPanelProps) {
               <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                 Similar PYQs:{' '}
               </span>
-              {explanation.similar_pyq}
+              {plainInline(explanation.similar_pyq)}
             </div>
           )}
         </div>
@@ -169,7 +187,7 @@ export function ExplanationBlock({ title, accent, icon, children }: ExplanationB
         {icon}
         <span>{title}</span>
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

@@ -19,7 +19,9 @@ import ReactMarkdown from 'react-markdown';
 import { Send, CheckCircle, Eye, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Brain, Sparkles, BookMarked, Target, Lightbulb, GraduationCap, Zap, BookOpen, ArrowRight, Flag, MessageSquare, Play, ImageIcon, ZoomIn, Lock } from 'lucide-react';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { FormattedText } from '@/components/FormattedText';
-import { decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
+import { AiMarkdown } from '@/components/ai/AiMarkdown';
+import { plainInline } from '@/lib/aiMarkdown';
+import { coerceToText, decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import ImageViewer from '@/components/image/ImageViewer';
 import FigureImage from '@/components/question/FigureImage';
 import { figureSrc } from '@/lib/figureSrc';
@@ -174,6 +176,22 @@ const AI_UNAVAILABLE_NOTICE = 'AI is unavailable right now. Please try again in 
 // student may see (`answer_locked` rows get [] and null).
 
 const IMAGE_TOKEN_RE = /\[\[img:(\d+)\]\]/g;
+
+/** The AI analysis' why_correct as markdown: a fenced or JSON-wrapped reply is unwrapped first. */
+function whyCorrectMarkdown(raw: unknown): string {
+    let t = coerceToText(raw).trim();
+    if (t.startsWith('```')) t = t.replace(/^```\w*\n?/, '');
+    if (t.endsWith('```')) t = t.slice(0, -3);
+    t = t.trim();
+    if (t.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(t);
+            if (parsed?.why_correct) return coerceToText(parsed.why_correct);
+        } catch { /* not JSON */ }
+    }
+    if (t.toLowerCase().startsWith('json')) t = t.slice(4).trim();
+    return t;
+}
 
 /** Ids of the [[img:N]] tokens in `text` (figures FormattedText shows inline). */
 function inlineImageIds(text: string | null | undefined): Set<number> {
@@ -1100,7 +1118,10 @@ export default function TakeTestPage() {
                                         <div className="mnemonic-icon">💡</div>
                                         <div className="flex-1">
                                             <h5 className="text-sm font-bold mb-2" style={{ color: '#f59e0b' }}>🧠 Memory Trick — Never Forget This!</h5>
-                                            <p className="text-sm font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>{aiExp.mnemonic}</p>
+                                            {/* AI fields are markdown (bold letters, line breaks): AiMarkdown, not raw text. */}
+                                            <div className="text-sm font-medium leading-relaxed min-w-0 break-words" style={{ color: 'var(--text-primary)' }}>
+                                                <AiMarkdown text={aiExp.mnemonic} />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1112,7 +1133,7 @@ export default function TakeTestPage() {
                                     <div className="px-5 py-3 flex items-center gap-2" style={{ background: 'rgba(6,182,212,0.05)', borderBottom: '1px solid var(--glass-border)' }}>
                                         <Target className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
                                         <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--accent-primary)' }}>Core Concept</span>
-                                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{aiExp.core_concept}</span>
+                                        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{plainInline(aiExp.core_concept)}</span>
                                     </div>
                                 )}
                                 {aiExp.why_correct && (
@@ -1120,7 +1141,9 @@ export default function TakeTestPage() {
                                         <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#10b981' }}>
                                             <CheckCircle className="w-3.5 h-3.5" /> Why {correctAns} is Correct
                                         </h5>
-                                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{(() => { let t = (aiExp.why_correct || '').trim(); if (t.startsWith('```')) t = t.replace(/^```\w*\n?/, ''); if (t.endsWith('```')) t = t.slice(0, -3); t = t.trim(); if (t.startsWith('{')) { try { const p = JSON.parse(t); if (p.why_correct) return p.why_correct; } catch {} } if (t.toLowerCase().startsWith('json')) t = t.slice(4).trim(); return t; })()}</p>
+                                        <div className="text-sm leading-relaxed min-w-0 break-words" style={{ color: 'var(--text-secondary)' }}>
+                                            <AiMarkdown text={whyCorrectMarkdown(aiExp.why_correct)} />
+                                        </div>
                                     </div>
                                 )}
                                 {aiExp.why_wrong && Object.keys(aiExp.why_wrong).length > 0 && (
@@ -1129,7 +1152,9 @@ export default function TakeTestPage() {
                                         {Object.entries(aiExp.why_wrong).map(([k, v]) => (
                                             <div key={k} className="flex gap-2.5 text-sm p-2.5 rounded-lg" style={{ background: 'rgba(239,68,68,0.04)' }}>
                                                 <span className="font-bold shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>{k}</span>
-                                                <span style={{ color: 'var(--text-secondary)' }}>{String(v)}</span>
+                                                <div className="min-w-0 flex-1 break-words" style={{ color: 'var(--text-secondary)' }}>
+                                                    <AiMarkdown text={v} />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -1142,7 +1167,9 @@ export default function TakeTestPage() {
                                     <div className="explanation-card-accent indigo"></div>
                                     <div className="p-5 pl-6">
                                         <h4 className="explanation-card-title indigo"><BookOpen className="w-4 h-4" /> 📖 Topic Deep Dive — Learn the Bigger Picture</h4>
-                                        <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>{aiExp.topic_deep_dive}</p>
+                                        <div className="text-sm leading-relaxed mt-2 min-w-0 break-words" style={{ color: 'var(--text-secondary)', lineHeight: '1.75' }}>
+                                            <AiMarkdown text={aiExp.topic_deep_dive} />
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1158,7 +1185,7 @@ export default function TakeTestPage() {
                                             {aiExp.high_yield_points.map((p: string, i: number) => (
                                                 <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                                     <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
-                                                    <span>{p}</span>
+                                                    <div className="min-w-0 flex-1 break-words"><AiMarkdown text={p} /></div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -1171,8 +1198,8 @@ export default function TakeTestPage() {
                                         </h5>
                                         <ul className="space-y-2">
                                             {aiExp.key_differentiators.map((d: string, i: number) => (
-                                                <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
-                                                    {d}
+                                                <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg break-words" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
+                                                    <AiMarkdown text={d} />
                                                 </li>
                                             ))}
                                         </ul>
@@ -1187,9 +1214,9 @@ export default function TakeTestPage() {
                                         <BookMarked className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
                                         <div>
                                             <h6 className="text-xs font-bold mb-1" style={{ color: '#8b5cf6' }}>📚 Textbook</h6>
-                                            <p className="text-xs font-semibold">{aiExp.textbook_reference.book}</p>
-                                            {aiExp.textbook_reference.chapter && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Ch: {aiExp.textbook_reference.chapter}</p>}
-                                            {aiExp.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {aiExp.textbook_reference.page}</p>}
+                                            <p className="text-xs font-semibold">{plainInline(aiExp.textbook_reference.book)}</p>
+                                            {aiExp.textbook_reference.chapter && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Ch: {plainInline(aiExp.textbook_reference.chapter)}</p>}
+                                            {aiExp.textbook_reference.page && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Pg: {plainInline(aiExp.textbook_reference.page)}</p>}
                                         </div>
                                     </div>
                                 )}
@@ -1198,7 +1225,9 @@ export default function TakeTestPage() {
                                         <Sparkles className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
                                         <div>
                                             <h6 className="text-xs font-bold mb-1" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExp.clinical_pearl}</p>
+                                            <div className="text-xs leading-relaxed min-w-0 break-words" style={{ color: 'var(--text-secondary)' }}>
+                                                <AiMarkdown text={aiExp.clinical_pearl} />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -1207,7 +1236,9 @@ export default function TakeTestPage() {
                                         <GraduationCap className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
                                         <div>
                                             <h6 className="text-xs font-bold mb-1" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
-                                            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExp.exam_tip}</p>
+                                            <div className="text-xs leading-relaxed min-w-0 break-words" style={{ color: 'var(--text-secondary)' }}>
+                                                <AiMarkdown text={aiExp.exam_tip} />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -1220,7 +1251,9 @@ export default function TakeTestPage() {
                                     <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
                                         <Lightbulb className="w-3.5 h-3.5" /> 📝 Quick Revision — Read Before Exam
                                     </h5>
-                                    <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>{aiExp.quick_revision}</p>
+                                    <div className="text-sm leading-relaxed font-medium min-w-0 break-words" style={{ color: 'var(--text-primary)', lineHeight: '1.7' }}>
+                                        <AiMarkdown text={aiExp.quick_revision} />
+                                    </div>
                                 </div>
                             )}
 
@@ -1230,7 +1263,7 @@ export default function TakeTestPage() {
                                     <h5 className="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style={{ color: '#6366f1' }}>🔗 Related Concepts (Often Asked Together)</h5>
                                     <div className="flex flex-wrap gap-2">
                                         {aiExp.around_concepts.map((c: string, i: number) => (
-                                            <span key={i} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.15)' }}>{c}</span>
+                                            <span key={i} className="text-xs px-3 py-1.5 rounded-full font-medium" style={{ background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.15)' }}>{plainInline(c)}</span>
                                         ))}
                                     </div>
                                 </div>
@@ -1242,8 +1275,8 @@ export default function TakeTestPage() {
                                     <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#ec4899' }}>
                                         <Target className="w-3.5 h-3.5" /> 📊 PYQ Intelligence
                                     </h5>
-                                    {aiExp.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {decodeMojiB(aiExp.pyq_frequency)}</p>}
-                                    {aiExp.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {decodeMojiB(aiExp.similar_pyq)}</p>}
+                                    {aiExp.pyq_frequency && <p className="text-sm mb-1.5" style={{ color: 'var(--text-secondary)' }}>📈 <strong style={{ color: '#ec4899' }}>Frequency:</strong> {plainInline(decodeMojiB(aiExp.pyq_frequency))}</p>}
+                                    {aiExp.similar_pyq && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>📋 <strong style={{ color: '#818cf8' }}>Similar Questions:</strong> {plainInline(decodeMojiB(aiExp.similar_pyq))}</p>}
                                 </div>
                             )}
 

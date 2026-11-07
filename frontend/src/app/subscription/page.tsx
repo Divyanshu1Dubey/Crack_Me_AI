@@ -735,6 +735,7 @@ export default function SubscriptionPage() {
             features: [
                 ...sharedPremiumFeatures,
                 'Unlimited AI: no token limit on the AI Tutor or AI explanations',
+                'AI Question Generator: up to 20 MCQs per batch (10 on other plans)',
             ],
             badge: 'Best Value',
             cta: 'Unlock 1 Year Access',

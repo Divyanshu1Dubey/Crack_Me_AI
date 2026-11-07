@@ -42,6 +42,7 @@ import {
     Lock, SlidersHorizontal,
 } from 'lucide-react';
 import DiscussionThread from '@/components/DiscussionThread';
+import AiMarkdown from '@/components/ai/AiMarkdown';
 import { useQuestionBankPreferences } from '@/components/customize/useQuestionBankPreferences';
 import type { StudyMode } from '@/lib/preferences';
 import StudentCitations from '@/components/evidence/StudentCitations';
@@ -1946,7 +1947,7 @@ function ExamQuestionBankInner({
                                                     <div className="mnemonic-icon">💡</div>
                                                     <div>
                                                         <h5 className="text-sm font-bold mb-1" style={{ color: '#f59e0b' }}>🧠 Memory Trick</h5>
-                                                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{String(detail.mnemonic)}</p>
+                                                        <AiMarkdown text={detail.mnemonic} className="text-sm leading-relaxed" />
                                                     </div>
                                                 </div>
                                             </div>
@@ -2079,7 +2080,7 @@ function ExamQuestionBankInner({
                                                             <div className="mnemonic-icon">💡</div>
                                                             <div className="flex-1">
                                                                 <h5 className="text-sm font-bold mb-1.5" style={{ color: '#f59e0b' }}>🧠 Memory Trick — Never Forget This!</h5>
-                                                                <p className="text-sm font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>{aiExplanation.mnemonic}</p>
+                                                                <AiMarkdown text={aiExplanation.mnemonic} className="text-sm font-medium leading-relaxed" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2162,7 +2163,7 @@ function ExamQuestionBankInner({
                                                                                     {aiExplanation.high_yield_points.map((point: string, i: number) => (
                                                                                         <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                                                                             <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
-                                                                                            <span>{point}</span>
+                                                                                            <AiMarkdown text={point} className="min-w-0 flex-1 text-xs" />
                                                                                         </li>
                                                                                     ))}
                                                                                 </ul>
@@ -2176,7 +2177,7 @@ function ExamQuestionBankInner({
                                                                                 <ul className="space-y-2">
                                                                                     {aiExplanation.key_differentiators.map((d: string, i: number) => (
                                                                                         <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
-                                                                                            {d}
+                                                                                            <AiMarkdown text={d} className="text-xs" />
                                                                                         </li>
                                                                                     ))}
                                                                                 </ul>
@@ -2192,7 +2193,7 @@ function ExamQuestionBankInner({
                                                                                 <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
                                                                                 <div>
                                                                                     <h6 className="text-xs font-bold mb-0.5" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.clinical_pearl}</p>
+                                                                                    <AiMarkdown text={aiExplanation.clinical_pearl} className="text-xs leading-relaxed" />
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -2201,7 +2202,7 @@ function ExamQuestionBankInner({
                                                                                 <GraduationCap className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
                                                                                 <div>
                                                                                     <h6 className="text-xs font-bold mb-0.5" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
-                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.exam_tip}</p>
+                                                                                    <AiMarkdown text={aiExplanation.exam_tip} className="text-xs leading-relaxed" />
                                                                                 </div>
                                                                             </div>
                                                                         )}

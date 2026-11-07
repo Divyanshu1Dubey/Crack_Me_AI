@@ -105,7 +105,7 @@ export function UsageBanner({ cap: capOverride, usedToday: usedOverride }: Usage
           ) : (
             <>
               <strong>{usedToday}/{cap}</strong> AI chats used today
-              <span className="hidden sm:inline"> · Unlock all features from just ₹129/month →</span>
+              <span className="hidden sm:inline"> · Unlock every answer and all mock tests from ₹129/month →</span>
             </>
           )}
         </p>

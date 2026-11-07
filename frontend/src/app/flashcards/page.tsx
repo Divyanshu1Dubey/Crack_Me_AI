@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import api, { flashcardsAPI, aiAPI } from '@/lib/api';
+import AiMarkdown from '@/components/ai/AiMarkdown';
+import { stripMarkdown } from '@/components/FormattedText';
 import {
     Layers, Plus, RotateCcw, CheckCircle, Clock,
     ChevronLeft, ChevronRight, Brain, Trash2, X,
@@ -521,9 +523,12 @@ export default function FlashcardsPage() {
                                         <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wider">
                                             {flipped ? 'Answer' : 'Question'} — tap to flip
                                         </p>
-                                        <p className="text-lg leading-relaxed whitespace-pre-wrap">
-                                            {flipped ? currentCard.back : currentCard.front}
-                                        </p>
+                                        {flipped ? (
+                                            // The back may hold an AI mnemonic (markdown): render it, never raw ** / tables.
+                                            <AiMarkdown text={currentCard.back} className="text-lg leading-relaxed text-left" />
+                                        ) : (
+                                            <p className="text-lg leading-relaxed whitespace-pre-wrap">{currentCard.front}</p>
+                                        )}
                                         {!flipped && (
                                             <p className="text-sm text-muted-foreground mt-6">
                                                 <RotateCcw className="w-4 h-4 inline mr-1" /> Click to reveal answer
@@ -655,7 +660,7 @@ export default function FlashcardsPage() {
                                                         </div>
                                                     </div>
                                                     <p className="text-sm font-medium line-clamp-2 mb-1">{card.front}</p>
-                                                    <p className="text-xs text-muted-foreground line-clamp-2">{card.back}</p>
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">{stripMarkdown(card.back || '')}</p>
 
                                                     {/* Personal Note Display/Edit */}
                                                     {isEditing ? (
