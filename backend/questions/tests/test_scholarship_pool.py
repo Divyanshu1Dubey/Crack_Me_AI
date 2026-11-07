@@ -126,6 +126,9 @@ class ScholarshipPoolTests(TestCase):
     def test_only_admins_change_the_pool(self):
         self.assertIn(self._patch(None, self.clean[0], True).status_code, (401, 403))
         self.assertEqual(self._patch(self.student, self.clean[0], True).status_code, 403)
+        # The owner's pool wrapper checks the deployment this way before --apply: an anonymous GET of the
+        # route is refused (an older deployment has no route and answers 404).
+        self.assertIn(_client().get(f'/api/questions/{self.clean[0].pk}/scholarship/').status_code, (401, 403, 405))
         self.clean[0].refresh_from_db()
         self.assertFalse(self.clean[0].is_scholarship_eligible)
 
