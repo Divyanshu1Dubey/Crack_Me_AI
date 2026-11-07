@@ -146,6 +146,7 @@ export default function AdminQuestionsEditorPage() {
   const [difficulty, setDifficulty] = useState<string>('');
   const [isControversial, setIsControversial] = useState(false);
   const [isImageBased, setIsImageBased] = useState(false);
+  const [inScholarshipPool, setInScholarshipPool] = useState(false);
 
   const fetchTaxonomy = async () => {
     try {
@@ -215,7 +216,8 @@ export default function AdminQuestionsEditorPage() {
   // to one exam and one year with no other filter, so a drag renumbers
   // questions of a single paper instead of an arbitrary mix of papers/years.
   const listFilters: QuestionEditorFilters = {
-    needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, search,
+    needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased,
+    inScholarshipPool, search,
   };
   const reorderEnabled = isReorderMode(listFilters);
 
@@ -273,7 +275,7 @@ export default function AdminQuestionsEditorPage() {
   useEffect(() => {
     if (authLoading) return;
     fetchQuestions();
-  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, authLoading, isAuthenticated, isAdmin]);
+  }, [page, needsReview, isDropped, examType, year, subjectId, topicId, difficulty, isControversial, isImageBased, inScholarshipPool, authLoading, isAuthenticated, isAdmin]);
 
   // Client-side admin gate. Backend enforces permissions; this just keeps
   // non-admins from seeing destructive affordances.
@@ -308,6 +310,7 @@ export default function AdminQuestionsEditorPage() {
     setIsDropped(false);
     setIsControversial(false);
     setIsImageBased(false);
+    setInScholarshipPool(false);
     setSearch('');
     resetPage();
   };
@@ -335,6 +338,7 @@ export default function AdminQuestionsEditorPage() {
     (isDropped ? 1 : 0) +
     (isControversial ? 1 : 0) +
     (isImageBased ? 1 : 0) +
+    (inScholarshipPool ? 1 : 0) +
     (search ? 1 : 0);
 
   const handleUpdate = async (id: number, field: string, value: any) => {
@@ -688,6 +692,15 @@ export default function AdminQuestionsEditorPage() {
                 onChange={(e) => { setIsImageBased(e.target.checked); resetPage(); }}
               />
               Image-based
+            </label>
+            <label className="flex items-center gap-1 text-sm text-gray-900 dark:text-slate-100">
+              <input
+                type="checkbox"
+                className="accent-indigo-600"
+                checked={inScholarshipPool}
+                onChange={(e) => { setInScholarshipPool(e.target.checked); resetPage(); }}
+              />
+              Scholarship pool
             </label>
           </div>
 

@@ -764,7 +764,11 @@ class QuestionAdminListSerializer(QuestionListSerializer):
             # Contract C10: the editor's drag-renumber refuses removed
             # (inactive) rows, so admin rows say whether they are active.
             'is_active',
+            # Admin rows only: the editor's scholarship toggle starts from the real value. Never in
+            # a student payload (it would name the scholarship-challenge questions).
+            'is_scholarship_eligible',
         ]
+        read_only_fields = ['is_scholarship_eligible']
 
 
 class QuestionDetailSerializer(serializers.ModelSerializer):

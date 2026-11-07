@@ -320,6 +320,8 @@ export interface QuestionEditorFilters {
   difficulty?: string;
   isControversial?: boolean;
   isImageBased?: boolean;
+  /** Only the scholarship challenge's questions (an admin-only filter on the backend). */
+  inScholarshipPool?: boolean;
   search?: string;
 }
 
@@ -333,7 +335,7 @@ export function isReorderMode(filters: QuestionEditorFilters): boolean {
   const f = filters || {};
   return (
     !!f.examType && !!f.year && !f.search && !f.subjectId && !f.topicId && !f.difficulty &&
-    !f.needsReview && !f.isDropped && !f.isControversial && !f.isImageBased
+    !f.needsReview && !f.isDropped && !f.isControversial && !f.isImageBased && !f.inScholarshipPool
   );
 }
 
@@ -369,9 +371,23 @@ export function questionEditorListParams(
   if (f.difficulty) params.difficulty = f.difficulty;
   if (f.isControversial) params.is_controversial = 'true';
   if (f.isImageBased) params.is_image_based = 'true';
+  if (f.inScholarshipPool) params.is_scholarship_eligible = 'true';
   if (f.search) params.search = f.search;
   if (reorder) params.is_active = 'true';
   return params;
+}
+
+// ── Scholarship challenge toggle (questions editor) ────────────────────────
+
+/**
+ * Message for a failed PATCH /questions/<id>/scholarship/: the server's reason when it refused the
+ * question (400 scholarship_refused: a figure, the free showcase, no key ...), else a generic one.
+ */
+export function scholarshipToggleError(err: unknown): string {
+  const data = (err as { response?: { data?: { detail?: unknown; error?: unknown } } } | null)?.response?.data;
+  if (data && typeof data.detail === 'string' && data.detail.trim()) return data.detail;
+  if (data && typeof data.error === 'string' && data.error.trim()) return data.error;
+  return 'The scholarship setting could not be saved. Please try again.';
 }
 
 // ── Drag-to-reorder display numbers (questions editor) ─────────────────────

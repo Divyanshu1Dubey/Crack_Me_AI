@@ -674,6 +674,10 @@ export const questionsAPI = {
   updateFeedbackStatus: (id: number, data: Record<string, unknown>) => api.patch(`/questions/feedback/${id}/status/`, data),
   verify: (id: number, verified_note?: string) => api.patch(`/questions/${id}/verify/`, { verified_note }),
   unverify: (id: number) => api.patch(`/questions/${id}/unverify/`),
+  // Admin: put a question into the scholarship challenge or take it out
+  // (400 scholarship_refused names why a question cannot join).
+  setScholarship: (id: number, eligible: boolean) =>
+    api.patch<{ id: number; is_scholarship_eligible: boolean; pool_size: number }>(`/questions/${id}/scholarship/`, { eligible }),
   duplicate: (id: number) => api.post(`/questions/${id}/duplicate/`),
   archive: (id: number) => api.patch(`/questions/${id}/archive/`),
   unarchive: (id: number) => api.patch(`/questions/${id}/unarchive/`),

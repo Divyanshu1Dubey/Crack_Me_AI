@@ -532,9 +532,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
     # behaviour rejects valid labels like 'NEET PG (recall)' when the
     # client passes 'NEET PG'. Prefix-match fallback is implemented in
     # get_queryset() instead.
+    # ``is_scholarship_eligible`` is filtered in get_queryset, for admins only: as a public filter,
+    # ``?is_scholarship_eligible=true`` listed every scholarship-challenge question to anyone (2026-11-07).
     filterset_fields = [
         'year', 'subject', 'topic', 'difficulty', 'exam_type',
-        'is_image_based', 'is_verified_by_admin', 'is_scholarship_eligible',
+        'is_image_based', 'is_verified_by_admin',
         'needs_review', 'is_controversial', 'display_number', 'is_active',
         'page_number',
     ]
@@ -705,6 +707,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
         exam_source_param = self.request.query_params.get('exam_source')
         if exam_source_param:
             queryset = queryset.filter(exam_source_filter_q(exam_source_param))
+        # The scholarship-challenge pool is listed to admins only; anyone else's
+        # ?is_scholarship_eligible= is ignored (it named the challenge questions).
+        pool_param = (self.request.query_params.get('is_scholarship_eligible') or '').strip().lower()
+        if is_admin and pool_param in ('true', '1', 'false', '0'):
+            queryset = queryset.filter(is_scholarship_eligible=pool_param in ('true', '1'))
         admin_actions = {
             'create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate',
             'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload',
@@ -713,7 +720,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions',
             'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision',
             'link_related', 'set_concept_id', 'update_reference', 'format_fix',
-            'generate_explanation',
+            'generate_explanation', 'set_scholarship',
         }
         if self.action in admin_actions:
             return queryset
@@ -980,7 +987,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         # from the bank, merge duplicates and rewrite correct answers
         # (resolve-dispute). Admin actions are listed explicitly; any other
         # action now honours its decorator; the remainder stays public.
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix', 'merge_duplicates', 'remove_from_bank', 'unremove_from_bank', 'resolve_dispute', 'generate_explanation', 'recall_sources', 'duplicate_clusters']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload', 'verify', 'unverify', 'duplicate', 'archive', 'unarchive', 'import_preview', 'bulk_metadata', 'bulk_delete', 'extraction_upload', 'extraction_jobs', 'extraction_retry', 'extraction_items', 'extraction_item_update', 'extraction_item_autotag', 'extraction_item_approve', 'extraction_item_reject', 'extraction_item_publish', 'ai_override', 'ai_lock', 'force_regenerate', 'generate_video', 'ai_prompt_versions', 'ai_prompt_activate', 'ai_timeline', 'revisions', 'revisions_diff', 'undo_last_revision', 'link_related', 'set_concept_id', 'update_reference', 'format_fix', 'merge_duplicates', 'remove_from_bank', 'unremove_from_bank', 'resolve_dispute', 'generate_explanation', 'recall_sources', 'duplicate_clusters', 'set_scholarship']:
             return [IsControlTowerAdmin()]
         if self.action in ['bookmark', 'my_bookmarks', 'attempt', 'submit_feedback']:
             return [permissions.IsAuthenticated()]
@@ -2871,6 +2878,31 @@ class QuestionViewSet(viewsets.ModelViewSet):
             question.verified_note = note
         question.save(update_fields=['is_verified_by_admin', 'verified_by', 'verified_at', 'verified_note'])
         return Response({'message': 'Question verified by admin', 'id': question.id, 'is_verified_by_admin': True})
+
+    @action(detail=True, methods=['patch'], url_path='scholarship', permission_classes=[IsControlTowerAdmin])
+    def set_scholarship(self, request, pk=None):
+        """Put the question into the scholarship challenge or take it out (admin questions editor).
+
+        ``PATCH {"eligible": true | false}``. Adding refuses a question the challenge cannot show
+        fairly -- it shows the text and four options only, and needs 5/5
+        (``questions.scholarship_pool.pool_refusal``): 400 ``{code: 'scholarship_refused', reason,
+        detail}``. Taking out always works. Only ``is_scholarship_eligible`` is written; the key is
+        untouched. ``pool_size`` is what the challenge draws from (it needs at least 5).
+        """
+        from . import scholarship_pool
+
+        question = self.get_object()
+        eligible = request.data.get('eligible')
+        if not isinstance(eligible, bool):
+            return Response({'error': 'eligible must be true or false'}, status=status.HTTP_400_BAD_REQUEST)
+        if eligible:
+            reason = scholarship_pool.pool_refusal(question)
+            if reason:
+                return Response({'code': 'scholarship_refused', 'reason': reason,
+                                 'detail': scholarship_pool.REFUSALS[reason]}, status=status.HTTP_400_BAD_REQUEST)
+        scholarship_pool.set_eligible([question.pk], eligible)
+        return Response({'id': question.pk, 'is_scholarship_eligible': eligible,
+                         'pool_size': scholarship_pool.eligible_count()})
 
     @action(detail=True, methods=['patch'], url_path='unverify')
     def unverify(self, request, pk=None):
