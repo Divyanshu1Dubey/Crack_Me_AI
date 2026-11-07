@@ -291,6 +291,34 @@ def _derive_subtitles_url(video_url: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, subtitles_path, parsed.query, parsed.fragment))
 
 
+# Explanation videos stored on the Supabase storage retired on 2026-11-03 cannot be played (their files
+# survive only in the storage backup until a new video store is set up), so no payload links them.
+RETIRED_VIDEO_ERROR = 'The video file is on the retired Supabase storage and cannot be played.'
+
+
+def playable_video_url(url) -> str:
+    """The stored video URL, or '' when it points at the retired Supabase storage."""
+    from .image_context import is_retired_storage_url
+
+    url = (url or '').strip()
+    return '' if is_retired_storage_url(url) else url
+
+
+def hide_retired_video(data) -> None:
+    """A serialized question whose video is on the retired storage: blank the player links (the UI shows
+    a video only with a URL) and report the video as failed, with the reason, where the payload has it."""
+    stored = data.get('video_url')
+    if not stored or playable_video_url(stored):
+        return
+    for field in ('video_url', 'video_thumbnail', 'video_subtitles_url'):
+        if field in data:
+            data[field] = ''
+    if 'video_status' in data:
+        data['video_status'] = 'failed'
+    if 'video_error' in data:
+        data['video_error'] = RETIRED_VIDEO_ERROR
+
+
 class AnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Announcement
@@ -390,6 +418,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
         `merge_loader_fallback_subjects` for the underlying DB cleanup.
         """
         data = super().to_representation(instance)
+        hide_retired_video(data)
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])
@@ -817,6 +846,7 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
         the loader literal. See the same change in QuestionListSerializer.
         """
         data = super().to_representation(instance)
+        hide_retired_video(data)
         for field in _TEXT_FIELDS:
             if field in data and isinstance(data[field], str):
                 data[field] = _clean_text(data[field])

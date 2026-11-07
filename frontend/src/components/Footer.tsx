@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { siteName, siteUrl } from '@/lib/seo';
-import { Mail, MapPin, MessageCircle, Phone, Github, Twitter, Linkedin } from 'lucide-react';
+import { Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
+import { GithubIcon, LinkedinIcon, TwitterIcon } from '@/components/icons/BrandIcons';
 import { jsonLdString } from '@/lib/metadata';
 import { CMS_PYQ_COUNT, NEET_PG_QUESTION_COUNT } from '@/lib/bankStats';
 
@@ -187,13 +188,13 @@ export default function Footer() {
 
                             <div className="mt-5 flex gap-2">
                                 <a href="https://github.com/Divyanshu1Dubey/Crack_Me_AI" aria-label="GitHub" rel="noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-colors">
-                                    <Github className="h-4 w-4" />
+                                    <GithubIcon className="h-4 w-4" />
                                 </a>
                                 <a href="https://twitter.com/cracklabs" aria-label="Twitter" rel="noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-colors">
-                                    <Twitter className="h-4 w-4" />
+                                    <TwitterIcon className="h-4 w-4" />
                                 </a>
                                 <a href="https://linkedin.com/company/cracklabs" aria-label="LinkedIn" rel="noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:border-primary transition-colors">
-                                    <Linkedin className="h-4 w-4" />
+                                    <LinkedinIcon className="h-4 w-4" />
                                 </a>
                                 <a href={whatsappLink} aria-label="WhatsApp" rel="noopener noreferrer" target="_blank" className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-emerald-600 hover:border-emerald-600 transition-colors">
                                     <MessageCircle className="h-4 w-4" />

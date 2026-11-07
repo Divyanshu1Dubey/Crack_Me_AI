@@ -298,7 +298,7 @@
 | `ai_generated_at` | `DateTimeField` | |
 | `ai_model` | `CharField(100)` | model used |
 | `ai_version` | `CharField(50)` | prompt/system version |
-| `video_url` | `URLField(500)` | Supabase storage URL for MP4 |
+| `video_url` | `URLField(500)` | Supabase storage URL for MP4. Supabase storage is retired (2026-11-03): such a URL is never sent to clients; the question payloads and the test review report the video as `failed` with no links (`questions.serializers.hide_retired_video`). The 21 files survive in the storage backup (`educational_videos/`, 247 MB) until a new video store is set up; video generation also needs one. |
 | `video_thumbnail` | `URLField(500)` | thumbnail URL |
 | `video_status` | `CharField(20)` | `pending` / `processing` / `completed` / `failed`, db_index |
 | `video_duration` | `IntegerField` | duration in seconds |

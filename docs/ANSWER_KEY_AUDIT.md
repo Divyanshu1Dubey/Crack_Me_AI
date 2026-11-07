@@ -143,6 +143,19 @@ Measured with the commands above; every number is reproducible from them.
   through `change_answer_key`, source `management_command`; 33 conflicts with the stored key kept), 85 to
   deactivate for manual review. A repair changes the content hash: repair first, then recover and import
   the signals again.
+* Reviewed one-off repairs (2026-11-07): `questions/content_repairs.py`, applied once per database by
+  migration `questions.0045`. A repair names one question, the key it must still hold and the defect text
+  it must still contain (an admin's later edit wins; a second run changes nothing), stores a
+  `QuestionRevisionSnapshot` first (the editor shows it and can undo it) and never changes a key.
+  - #2058, #2065, #2103, #2113 (CMS 2025 Paper I): the key had been corrected (`key_changed` B->C, A->C,
+    B->D, A->D) but the locked explanation still argued for the old key. The explanations were rewritten
+    for the current keys, which standard teaching supports (pellagra and maize; osteoarthritis spares the
+    ankle and involves C5-C6; CHIPES radiopaque poisons; the RBSK "Deficiencies" group). The new text is
+    AI-written: `explanation_origin` `ai`, `explanation_status` `ai_generated` until an admin reviews it.
+  - #22462 (CMS 2022 Paper II Q118): the five Apgar observations were missing from the stem; restored
+    from `Medura_Train/PYQ/2022paper2.txt` (they score 3, the stored key C) with the worked score added to
+    the explanation (`explanation_origin` `mixed`). The stem hash changed: its source-key signals are
+    re-read on the next `recover_source_keys` run.
 
 ## 6. Production rollout (`cracklabs`)
 

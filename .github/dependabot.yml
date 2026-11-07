@@ -20,9 +20,10 @@ updates:
         versions: [">=12"]
       - dependency-name: "pdfplumber"
         versions: [">=0.11.10"]
-      # pip resolves together 2.x with the rest of requirements.txt; a 3.x floor would not install.
+      # together 2.42+ (and 3.x) require filelock<4, but requirements.txt has filelock>=4: pip installs
+      # together 2.36, and a newer floor cannot install (#68 and #70 failed with ResolutionImpossible).
       - dependency-name: "together"
-        versions: [">=3"]
+        versions: [">=2.37"]
     labels:
       - dependencies
       - python
@@ -36,7 +37,8 @@ updates:
       frontend:
         patterns: ["*"]
     ignore:
-      # 1.x renames / removes icons the app imports: the build failed on #61. Upgrade by hand.
+      # On 1.x since 2026-11-07 (1.x dropped the brand icons; ours are in components/icons/BrandIcons.tsx).
+      # A new major can drop more icons the app imports: upgrade it by hand.
       - dependency-name: "lucide-react"
         update-types: ["version-update:semver-major"]
       # typescript-eslint does not support TypeScript 7 and a unit test uses the compiler API:
