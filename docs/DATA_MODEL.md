@@ -277,8 +277,8 @@
 | `times_asked` | `IntegerField` | how many times this concept appeared |
 | `is_active` | `BooleanField` | hide from students |
 | `uuid` | `UUIDField` | unique, immutable |
-| `display_number` | `IntegerField` | number shown to students (scoped by year/paper) |
-| `is_dropped` | `BooleanField` | dropped/disputed question excluded from scoring |
+| `display_number` | `IntegerField` | number shown to students (scoped by year/paper); for UPSC CMS 2018-2025 the question's number in the official paper (1-120, `questions.0047`) |
+| `is_dropped` | `BooleanField` | dropped/disputed question excluded from scoring; with `is_active=True` on CMS 2018-2025: a question UPSC dropped from the official key (the duplicate tools set it with `is_active=False` for a removed copy) |
 | `admin_edited` | `BooleanField` | protect from seed-script overwrites |
 | `needs_review` | `BooleanField` | partially digitized or disputed PYQs |
 | `is_scholarship_eligible` | `BooleanField` | eligible for scholarship test |

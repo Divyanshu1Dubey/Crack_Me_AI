@@ -92,6 +92,14 @@ python manage.py audit_answer_keys [--exam neet_pg] [--ids 1,2] [--stale-only] [
 verdict keeps its first timestamp, so importing a file again does not reopen decided questions.
 Every key / stem / option change re-audits the question (`key_audit.services.on_question_changed`).
 
+**UPSC CMS 2018–2025 official keys (2026-11-07).** `questions.0047` made the bank match the official papers and
+UPSC answer keys (`docs/audit/CMS_OFFICIAL_2018_2025.md`); its key changes are `AnswerKeyChange` rows with
+`source='official_key'` and `official_key` evidence (PDF, sha256, key page, cell). The release step
+`python manage.py record_official_cms_keys --apply` then records UPSC's key as an `official_key` review for every
+active question of those papers (found by year, paper and `display_number`; none for a question UPSC dropped), so
+they are `verified` / `official_key_match`, and an admin change away from the official key becomes
+`needs_review` / `official_key_disagrees`. It records only what is missing; a dry run reports the counts.
+
 ## 4. Review queue
 
 Page: `/admin/review-queue` (admin role). API under `/api/key-audit/` (`IsControlTowerAdmin`, throttle

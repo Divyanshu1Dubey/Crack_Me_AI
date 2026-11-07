@@ -1,0 +1,355 @@
+"""UPSC CMS 2018-2025 made to match the official papers and answer keys (2026-11-07).
+
+Source: "UPSC CMS 2009-2025 with Answer Key.pdf" (the owner's copy of the official question papers and UPSC
+answer keys, Series A). ``questions/data/cms_official_2018_2025.json`` holds the official key of every question
+of the 16 papers and the reviewed operations that make the bank match them: every bank question of those years
+was matched to its official question by text, every key that disagreed was checked on a crop of the key page,
+and every question added was typed from the scanned paper.
+
+Each operation was written for a row as it was found (stem hash, key, active flag, paper). A row is touched only
+while it still matches, so an admin's later edit wins and a second run changes nothing. Before a row changes its
+previous state is stored as a ``QuestionRevisionSnapshot`` (the editor can show and undo it); nothing is deleted.
+
+Operations, in this order:
+
+* ``hide``    a second copy of an official question (``keep``: the copy kept) or a question that is not in
+              the official paper: ``is_active=False``.
+* ``repair``  text damaged on import (lost options, text between '<' and '>' stripped) set to the official text.
+* ``restore`` a hidden question that is the only copy of an official question: active again, its key set.
+* ``add``     an official question the bank lacked: created with the official text and key; the subject is the
+              paper's section (Paper 1: General Medicine 1-96, Paediatrics 97-120; Paper 2: General Surgery 1-40,
+              Obstetrics & Gynaecology 41-80, Community Medicine 81-120).
+* ``place``   ``paper`` and ``display_number`` (the number in the official paper).
+* ``key``     the official key, recorded like ``questions.editorial.change_answer_key``: an ``AnswerKeyChange``
+              with the official key as evidence, the old key kept there, an explanation written for the old key
+              marked stale (students are not shown it; it is generated again for the new key).
+* ``dropped`` UPSC dropped the question (no answer was scored): ``is_dropped=True``; it stays active.
+* ``mojibake`` UTF-8 text that was read as cp437 ("ΓåÆ" for "→", "┬░" for "°") decoded back; hashes recorded
+              for the old text (explanation, reviews, evidence) move to the new text, which says the same.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from collections import Counter, defaultdict
+from pathlib import Path
+
+from django.db import transaction
+from django.utils import timezone
+
+from questions.content_hashes import stem_hash, valid_key
+# QuestionViewSet._serialize_revision_state (content_repairs' tests keep the two in step)
+from questions.content_repairs import REVISION_FIELDS
+
+DATA = Path(__file__).resolve().parent / 'data' / 'cms_official_2018_2025.json'
+OP_ORDER = ('hide', 'repair', 'restore', 'format', 'add', 'place', 'subject', 'key', 'dropped', 'mojibake')
+TEXT_FIELDS = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'explanation', 'concept_explanation',
+               'mnemonic', 'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d', 'ai_explanation',
+               'ai_answer', 'ai_mnemonic', 'ai_clinical_pearl', 'reference_text', 'learning_technique', 'shortcut_tip')
+STEM_FIELDS = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d')
+EXPLANATION_FIELDS = ('explanation', 'concept_explanation', 'mnemonic')
+
+
+def load_data() -> dict:
+    return json.loads(DATA.read_text(encoding='utf-8'))
+
+
+# The 2018 Paper II runs Preventive & Social Medicine (1-40), Obstetrics & Gynaecology (41-80), Surgery (81-120).
+SECTION_ORDER = {(2018, 2): ('Community Medicine', 'Obstetrics & Gynaecology', 'General Surgery')}
+
+
+def subject_name(paper: int, n: int, year: int | None = None) -> str:
+    if (year, paper) in SECTION_ORDER:
+        return SECTION_ORDER[(year, paper)][min((n - 1) // 40, 2)]
+    if paper == 1:
+        return 'General Medicine' if n <= 96 else 'Paediatrics'
+    return 'General Surgery' if n <= 40 else 'Obstetrics & Gynaecology' if n <= 80 else 'Community Medicine'
+
+
+# ── mojibake ─────────────────────────────────────────────────────────────────────────────────────────────────────
+_CP437 = {bytes([b]).decode('cp437'): b for b in range(0x80, 0x100)}
+
+
+def repair_mojibake(text):
+    """Decode every run of cp437 characters that spells a valid UTF-8 sequence ('ΓåÆ' -> '→', '├ù' -> '×').
+    A character outside such a run (real Greek, accents, '°' followed by text) is left as it is."""
+    if not text or not isinstance(text, str):
+        return text
+    out, i = [], 0
+    while i < len(text):
+        lead = _CP437.get(text[i])
+        if lead is not None and 0xC2 <= lead <= 0xF4:
+            size = 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+            seq = text[i:i + size]
+            if len(seq) == size and all(c in _CP437 and 0x80 <= _CP437[c] <= 0xBF for c in seq[1:]):
+                try:
+                    out.append(bytes(_CP437[c] for c in seq).decode('utf-8'))
+                    i += size
+                    continue
+                except UnicodeDecodeError:
+                    pass
+        out.append(text[i])
+        i += 1
+    return ''.join(out)
+
+
+def explanation_hash(question) -> str:
+    parts = [(getattr(question, name, '') or '').strip() for name in EXPLANATION_FIELDS]
+    return hashlib.sha256('\x1f'.join(parts).encode('utf-8')).hexdigest()
+
+
+def revision_state(question) -> dict:
+    return {name: getattr(question, name, None) for name in REVISION_FIELDS}
+
+
+# ── checks ───────────────────────────────────────────────────────────────────────────────────────────────────────
+def row_refusal(question, guard: dict) -> str:
+    """Why the row no longer is the row the plan was written for ('' when it is)."""
+    if question is None:
+        return 'missing'
+    if stem_hash(question) != guard['stem_hash']:
+        return 'stem or options changed'
+    if 'key' in guard and valid_key(question.correct_answer) != guard['key']:
+        return 'key changed'
+    if 'active' in guard and question.is_active != guard['active']:
+        return 'active flag changed'
+    if 'cur_paper' in guard and question.paper != guard['cur_paper']:
+        return 'paper changed'
+    return ''
+
+
+def _canon_stem(text: str) -> str:
+    return ' '.join(''.join(ch if ch.isalnum() else ' ' for ch in (text or '').casefold()).split())
+
+
+def evidence_for(data: dict, op: dict, new_key: str) -> list[dict]:
+    year, paper = op['off'][:4], op['off'][-1]
+    return [{
+        'kind': 'official_key',
+        'source_title': data['source']['title'],
+        'source_sha256': data['source']['sha256'],
+        'year': int(year),
+        'tier': 1,
+        'page_start': op['key_page'],
+        'page_end': op['key_page'],
+        'page_label': f"UPSC answer key, CMS {year} Paper {'I' if paper == '1' else 'II'}, Series A",
+        'quote': f"{op['n']}. {op.get('official', new_key)}",
+        'supports_option': new_key,
+    }]
+
+
+class _Models:
+    def __init__(self, question, snapshot, key_change, subject, audit=None, extra_hash_models=()):
+        self.Question, self.Snapshot, self.KeyChange, self.Subject = question, snapshot, key_change, subject
+        self.Audit = audit
+        # (model, field) pairs that store a questions.content_hashes.stem_hash of a question
+        self.extra_hash_models = tuple(extra_hash_models)
+
+
+def apply_plan(*, question_model, snapshot_model, key_change_model, subject_model, audit_model=None,
+               extra_hash_models=(), data=None, now=None) -> Counter:
+    """Apply the plan; returns a Counter of outcomes ('<op> applied', '<op> skipped: <why>')."""
+    data = data or load_data()
+    m = _Models(question_model, snapshot_model, key_change_model, subject_model, audit_model, extra_hash_models)
+    now = now or timezone.now()
+    results = Counter()
+    ops = sorted(data['ops'], key=lambda o: OP_ORDER.index(o['op']))
+
+    # 1. every touched row is checked once, against the state the plan was written for
+    guards, row_ops = {}, defaultdict(list)
+    for op in ops:
+        if op.get('id') is not None:
+            guards.setdefault(op['id'], op)
+            row_ops[op['id']].append(op['op'])
+    rows = m.Question.objects.in_bulk(list(guards))
+    usable = {}
+    for qid, guard in guards.items():
+        why = row_refusal(rows.get(qid), guard)
+        if why:
+            for name in row_ops[qid]:
+                results[f'{name} skipped: {why}'] += 1
+        else:
+            usable[qid] = rows[qid]
+    snapshotted = set()
+
+    def snapshot(question, reason):
+        if question.pk in snapshotted:
+            return
+        m.Snapshot.objects.create(question_id=question.pk, changed_by=None, reason=reason[:200],
+                                  snapshot=revision_state(question))
+        snapshotted.add(question.pk)
+
+    added_keys = {(op['off'], op['n']): op['to'] for op in ops if op['op'] == 'key' and op.get('id') is None}
+    subjects = {}
+    added = set()  # (paper, number) of the questions this run added
+
+    for op in ops:
+        kind, qid = op['op'], op.get('id')
+        if qid is not None and qid not in usable:
+            continue
+        q = usable.get(qid)
+        if kind == 'hide' and op.get('keep') in guards and op['keep'] not in usable:
+            results['hide skipped: kept copy changed since the plan'] += 1
+            continue
+        try:
+            with transaction.atomic():
+                outcome = _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added)
+        except Exception as exc:  # noqa: BLE001 - one bad row must not fail the deploy
+            outcome = f'skipped: error {type(exc).__name__}'
+        results[f'{kind} {outcome}'] += 1
+    return results
+
+
+def _subject(m, subjects, name):
+    if name not in subjects:
+        subjects[name] = m.Subject.objects.filter(name=name).first()
+    return subjects[name]
+
+
+def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> str:
+    kind = op['op']
+    label = f"CMS official reconciliation 2026-11-07 ({op.get('off', 'bank')} Q{op.get('n', '-')})"
+    if kind == 'hide':
+        if not q.is_active:
+            return 'skipped: already hidden'
+        if op.get('keep'):
+            keep = m.Question.objects.filter(pk=op['keep']).first()
+            if keep is None or not keep.is_active:
+                return 'skipped: kept copy not active'
+        snapshot(q, f"{label}: hidden, {op['reason']}")
+        m.Question.objects.filter(pk=q.pk).update(is_active=False, updated_at=now)
+        q.is_active = False
+        return 'applied'
+    if kind in ('repair', 'restore'):
+        snapshot(q, f"{label}: {'restored' if kind == 'restore' else 'text repaired'}"
+                    f"{' - ' + op['reason'] if op.get('reason') else ''}")
+        updates = dict(op.get('fields') or op.get('text') or {})
+        if kind == 'restore':
+            updates.update(is_active=True, is_dropped=False)
+        for field, value in updates.items():
+            setattr(q, field, value)
+        m.Question.objects.filter(pk=q.pk).update(updated_at=now, **updates)
+        return 'applied'
+    if kind == 'add':
+        year, paper, n = op['year'], op['paper'], op['n']
+        text = op['text']
+        canon = _canon_stem(text['question_text'])[:120]
+        for other in m.Question.objects.filter(exam_type='cms', year=year).only('id', 'question_text'):
+            if _canon_stem(other.question_text)[:120] == canon:
+                return 'skipped: already in the bank'
+        name = op.get('subject') or subject_name(paper, n, year)
+        subject = _subject(m, subjects, name)
+        if subject is None:
+            return f'skipped: no subject {name}'
+        key = added_keys.get((op['off'], n), '')
+        m.Question.objects.create(
+            exam_type='cms', exam_source='UPSC CMS', year=year, paper=paper, display_number=n,
+            subject=subject, correct_answer=key, is_active=True,
+            source=f"UPSC CMS {year} Paper {'I' if paper == 1 else 'II'} (official paper, Series A) Q{n}",
+            **{field: text[field] for field in STEM_FIELDS})
+        added.add((op['off'], n))
+        return 'applied'
+    if kind == 'place':
+        if q.paper == op['to_paper'] and q.display_number == op['to_n']:
+            return 'skipped: already numbered so'
+        snapshot(q, f'{label}: numbered as in the official paper')
+        m.Question.objects.filter(pk=q.pk).update(paper=op['to_paper'], display_number=op['to_n'], updated_at=now)
+        q.paper, q.display_number = op['to_paper'], op['to_n']
+        return 'applied'
+    if kind == 'subject':
+        subject = _subject(m, subjects, op['to_subject'])
+        if subject is None:
+            return f"skipped: no subject {op['to_subject']}"
+        if q.subject_id == subject.pk:
+            return 'skipped: already in that subject'
+        # the topic belongs to the old subject: the topic of the same name in the new one, else none
+        topic_id = None
+        if q.topic_id:
+            old_topic = m.Question._meta.get_field('topic').related_model.objects.filter(pk=q.topic_id).first()
+            if old_topic is not None:
+                same = old_topic.__class__.objects.filter(subject_id=subject.pk, name=old_topic.name).first()
+                topic_id = same.pk if same else None
+        snapshot(q, f"{label}: subject {op['to_subject']} (the paper's section)")
+        m.Question.objects.filter(pk=q.pk).update(subject_id=subject.pk, topic_id=topic_id, updated_at=now)
+        return 'applied'
+    if kind == 'key':
+        if op.get('id') is None:  # set when the question was added
+            return 'applied' if (op['off'], op['n']) in added else 'skipped: question not added in this run'
+        old, new = valid_key(q.correct_answer), op['to']
+        if old == new:
+            return 'skipped: already the official key'
+        snapshot(q, f"{label}: official key {new}")
+        # an explanation argues for the old key, unless it was written for the official one all along
+        had_explanation = (bool((q.explanation or '').strip() or (q.ai_explanation or '').strip())
+                           and (getattr(q, 'explanation_for_key', '') or '') != new)
+        audit = m.Audit.objects.filter(question_id=q.pk).first() if m.Audit is not None else None
+        m.KeyChange.objects.create(
+            question_id=q.pk, old_key=old, new_key=new, changed_by=None, source='official_key',
+            reason=(f"Official UPSC answer key: CMS {op['off'][:4]} Paper {'I' if op['off'][-1] == '1' else 'II'} "
+                    f"(Series A) Q{op['n']} is {op.get('official', new)}"),
+            evidence=evidence_for(data, op, new), explanation_action='kept_stale' if had_explanation else '',
+            audit_status_before=getattr(audit, 'status', '') or '', audit_id=getattr(audit, 'pk', None))
+        updates = {'correct_answer': new, 'is_disputed': False, 'needs_review': False,
+                   'answer_key_status': 'unaudited', 'updated_at': now}
+        if had_explanation:
+            # the same reason questions.editorial.change_answer_key records (the column holds 40 characters)
+            updates.update(explanation_status='stale', explanation_status_reason=f'Key changed from {old} to {new}')
+        m.Question.objects.filter(pk=q.pk).update(**updates)
+        q.correct_answer = new
+        return 'applied'
+    if kind == 'dropped':
+        if q.is_dropped:
+            return 'skipped: already dropped'
+        snapshot(q, f'{label}: dropped by UPSC')
+        m.Question.objects.filter(pk=q.pk).update(is_dropped=True, updated_at=now)
+        return 'applied'
+    if kind == 'format':
+        q = m.Question.objects.get(pk=q.pk)
+        if q.question_text == op['fields']['question_text']:
+            return 'skipped: already formatted'
+        return _rewrite(m, q, dict(op['fields']), snapshot, f"{label}: {op['reason']}", now)
+    if kind == 'mojibake':
+        q = m.Question.objects.get(pk=q.pk)  # current values (earlier operations may have run)
+        updates = {}
+        for field in TEXT_FIELDS:
+            value = getattr(q, field, None)
+            fixed = repair_mojibake(value)
+            if isinstance(value, str) and fixed != value:
+                updates[field] = fixed
+        if not updates:
+            return 'skipped: nothing to repair'
+        return _rewrite(m, q, updates, snapshot, f'{label}: characters repaired (mojibake)', now)
+    return 'skipped: unknown operation'
+
+
+def _rewrite(m, q, updates, snapshot, reason, now) -> str:
+    """A formatting-only text change (same words): the hashes recorded for the old text move to the new text, so
+    the explanation, its review and the audit's reviews stay attached to the question."""
+    old_stem, old_expl = stem_hash(q), explanation_hash(q)
+    snapshot(q, reason)
+    for field, value in updates.items():
+        setattr(q, field, value)
+    new_stem, new_expl = stem_hash(q), explanation_hash(q)
+    if q.explanation_stem_hash == old_stem:
+        updates['explanation_stem_hash'] = new_stem
+    if getattr(q, 'explanation_hash', '') == old_expl:
+        updates['explanation_hash'] = new_expl
+    if getattr(q, 'explanation_reviewed_hash', '') == old_expl:
+        updates['explanation_reviewed_hash'] = new_expl
+    m.Question.objects.filter(pk=q.pk).update(updated_at=now, **updates)
+    if new_stem != old_stem:
+        _carry_stem_hash(m, q.pk, old_stem, new_stem)
+    return 'applied'
+
+
+def _carry_stem_hash(m, qid, old, new):
+    """Reviews / evidence recorded for the text before the repair stay valid: the words are the same."""
+    if m.Audit is not None:
+        for audit in m.Audit.objects.filter(question_id=qid):
+            reviews = audit.reviews or []
+            if any(isinstance(r, dict) and r.get('stem_hash') == old for r in reviews):
+                audit.reviews = [dict(r, stem_hash=new) if isinstance(r, dict) and r.get('stem_hash') == old else r
+                                 for r in reviews]
+                audit.save(update_fields=['reviews'])
+    for model, field in m.extra_hash_models:
+        model.objects.filter(question_id=qid, **{field: old}).update(**{field: new})
