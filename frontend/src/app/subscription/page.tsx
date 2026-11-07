@@ -7,6 +7,7 @@ import Header from '@/components/Header';
 import { authAPI, getApiErrorCode, type ScholarshipChallengeQuestion } from '@/lib/api';
 import { PREMIUM_PLANS, SCHOLARSHIP_PRICE_INR, type PurchasablePlanId } from './plans';
 import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
+import { CMS_PYQ_YEARS } from '@/lib/bankStats';
 import {
     Crown, BookOpen, FileText, Clock,
     Sparkles, MessageSquare, ShieldCheck,
@@ -671,7 +672,7 @@ export default function SubscriptionPage() {
         },
         {
             icon: <Clock className="w-6 h-6 text-purple-400" />,
-            title: "Full 2018-2025 PYQ QBank",
+            title: `Full ${CMS_PYQ_YEARS} PYQ QBank`,
             desc: "Complete year-wise and subject-wise previous year question papers. Review corrected solutions with performance analysis."
         },
         {

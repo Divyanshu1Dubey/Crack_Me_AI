@@ -965,7 +965,7 @@ class SupabaseJWTAuthentication(DeviceLimitMixin, authentication.BaseAuthenticat
                 f"Welcome to CrackLabs — the premier preparation hub for MBBS, UPSC CMS, and State CMS exams.\n\n"
                 f"We are excited to support you on your journey to becoming a certified medical officer or specialist. "
                 f"Here is what you get access to:\n"
-                f"- 1,440+ Year-wise & Subject-wise CMS PYQ Bank (2018-2025)\n"
+                f"- 2,100+ Year-wise & Subject-wise CMS PYQ Bank (2018-2026)\n"
                 f"- Spaced Repetition flashcards based on SM-2\n"
                 f"- An AI Tutor to break down complex medical guidelines\n"
                 f"- Dynamic leaderboard to compete with medical peers across the country\n\n"

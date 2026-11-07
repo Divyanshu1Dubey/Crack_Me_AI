@@ -26,7 +26,7 @@ CrackCMS (by CrackLabs AI) is an online preparation platform for Indian medical 
 
 | Bank | Size | Notes |
 |---|---|---|
-| UPSC CMS | 1,800+ previous-year questions | Papers from 2018–2025 |
+| UPSC CMS | 2,100+ previous-year questions | Papers from 2018–2026 |
 | NEET PG | 4,000+ questions | Mostly exam recalls |
 | INI-CET | about 100 recall questions | |
 | FMGE, USMLE | no dedicated bank | Practise with the NEET PG bank |
