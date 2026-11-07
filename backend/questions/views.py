@@ -4159,6 +4159,17 @@ def _supabase_storage_mirror_path(url: str):
     return candidate if os.path.isfile(candidate) else None
 
 
+def _restore_mirror_copy(url: str):
+    """The restored copy of a Supabase-addressed figure written now from ``ops_media_transfer``
+    (``questions.media_restore``), or None. Image endpoint only: other readers of the mirror
+    (``image_context.local_file_path``) never write files."""
+    match = _SUPABASE_PUBLIC_URL_RE.match((url or '').split('?', 1)[0])
+    if not match:
+        return None
+    from .media_restore import restore_staged_file
+    return restore_staged_file('mirror', match.group(1))
+
+
 def _image_serve_allowed(request, img) -> bool:
     """Stem figures: always. Explanation figures (runtime role): with a
     valid signed token for this image id, or when the caller's own
@@ -4264,22 +4275,31 @@ class QuestionImageServeView(APIView):
         #      (SUPABASE_STORAGE_MIRROR_DIR); without a copy it answers 404
         #      `image_missing` (Supabase Storage was shut down on 2026-11-03, a
         #      redirect there cannot load). Any other host: a 302 redirect.
+        # A file missing on this server's disk but staged in ops_media_transfer
+        # (scripts/railway/upload_media_to_db.py) is written on first request
+        # (questions.media_restore, 2026-11-07), not at the next restart.
+        from .media_restore import restore_staged_file
+
         serve_path = None
+        file_missing = False
         if img.file:
             try:
                 serve_path = img.file.path
             except (ValueError, NotImplementedError):
                 serve_path = None
+            if serve_path and not os.path.isfile(serve_path):
+                serve_path = restore_staged_file("media", img.file.name)
+                file_missing = serve_path is None
         if not serve_path and img.url and img.url.startswith("/media/"):
             from django.conf import settings as _dj_settings
-            rel = img.url[len("/media/"):]
+            rel = img.url.split("?", 1)[0][len("/media/"):]
             media_root = os.path.realpath(_dj_settings.MEDIA_ROOT)
             candidate = os.path.realpath(os.path.join(media_root, rel))
             # Never leave MEDIA_ROOT (a stored "/media/../.." URL).
-            if candidate.startswith(media_root + os.sep) and os.path.isfile(candidate):
-                serve_path = candidate
+            if candidate.startswith(media_root + os.sep):
+                serve_path = candidate if os.path.isfile(candidate) else restore_staged_file("media", rel)
         if not serve_path and img.url and img.url.startswith(("http://", "https://")):
-            serve_path = _supabase_storage_mirror_path(img.url)
+            serve_path = _supabase_storage_mirror_path(img.url) or _restore_mirror_copy(img.url)
             if not serve_path:
                 from .image_context import is_retired_storage_url
                 if is_retired_storage_url(img.url):
@@ -4298,6 +4318,16 @@ class QuestionImageServeView(APIView):
                     )
                 from django.http import HttpResponseRedirect
                 return _harden_image_response(HttpResponseRedirect(img.url))
+        if not serve_path and file_missing:
+            logger.warning("QuestionImage #%s file missing on disk", image_id)
+            return Response(
+                {
+                    "error": "image file missing on server",
+                    "image_id": image_id,
+                    "hint": "re-upload via admin or importer",
+                },
+                status=503,
+            )
         if not serve_path:
             raise Http404("Question image not found")
 

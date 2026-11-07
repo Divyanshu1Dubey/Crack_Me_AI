@@ -149,6 +149,13 @@ Keep `SUPABASE_STORAGE_MIRROR_DIR` set: every old admin upload is still stored w
 is served from that copy (the browser always gets the image endpoint). Once images show in production,
 free the space: `python manage.py restore_media_transfer --drop` (or `DROP TABLE ops_media_transfer;`).
 
+`--only-referenced` stages what the database points at, including `/media/...` addresses in
+`QuestionImage.url` (2026-11-07: those were not staged, so the 126 figures of the July 2026 material imports,
+`/media/imported/...`, never reached the volume). `--rel-prefix imported/` limits a run to one folder and
+`--dry-run` only counts. The image endpoint writes a staged file on its first request
+(`questions/media_restore.py`, same checks as the command), so a file staged after the last start serves
+without a restart, whichever start command the service uses.
+
 Without Supabase, new admin image uploads are stored on the volume too (`questions/image_upload.py`).
 
 Not covered yet: the 21 explanation **videos** still point at Supabase Storage URLs and the frontend plays
