@@ -69,9 +69,12 @@ values, and Railpack's default start command is the `web` line of `backend/Procf
 the Procfile `release` line. Until 2026-11-04 that `web` line was gunicorn alone: the 2026-11-03 deploys
 needed `accounts.0028` / `0029` applied by hand, and the 2026-11-04 deploy went live without its 7
 migrations, so every signed-in request and `/api/questions/` answered 500 (missing columns) while
-`/api/health/` answered 200, and the blog was empty (`seed_blogs` had not run). Both start commands now run
-`migrate --no-input` before gunicorn, so a deploy can no longer serve a database without its migrations,
-but the seeds and the media steps still need the config file. After a deploy check:
+`/api/health/` answered 200, and the blog was empty (`seed_blogs` had not run). Since 2026-11-07 the
+Procfile `web` line is `bash start_web.sh`, so both start paths run the same script: `migrate --no-input`
+before gunicorn (a deploy can no longer serve a database without its migrations), the media steps and the
+django-q worker (per-question AI sections, renewal reminders, the stale-ingestion sweeper; without it those
+jobs waited in the queue for ever). Only `release.sh`'s idempotent seeds still need the config file. After a
+deploy check:
 
 * the top of the build log names `backend/railway.json`; the deploy log shows `release.sh complete` and
   `start_web.sh: media steps complete`;
