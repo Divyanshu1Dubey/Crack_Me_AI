@@ -36,7 +36,8 @@ updates:
       frontend:
         patterns: ["*"]
     ignore:
-      # 1.x renames / removes icons the app imports: the build failed on #61. Upgrade by hand.
+      # On 1.x since 2026-11-07 (1.x dropped the brand icons; ours are in components/icons/BrandIcons.tsx).
+      # A new major can drop more icons the app imports: upgrade it by hand.
       - dependency-name: "lucide-react"
         update-types: ["version-update:semver-major"]
       # typescript-eslint does not support TypeScript 7 and a unit test uses the compiler API:

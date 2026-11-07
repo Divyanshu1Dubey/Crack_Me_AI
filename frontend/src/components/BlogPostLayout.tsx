@@ -9,9 +9,9 @@ import {
     ListTree,
     MessageCircle,
     Share2,
-    Twitter,
     User,
 } from 'lucide-react';
+import { TwitterIcon } from '@/components/icons/BrandIcons';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrackedLink } from '@/components/TrackedLink';
@@ -294,7 +294,7 @@ export function BlogPostLayout({ post }: BlogPostLayoutProps) {
                                         data-blog-share="twitter"
                                         aria-label="Share on Twitter"
                                     >
-                                        <Twitter aria-hidden="true" /> Twitter / X
+                                        <TwitterIcon aria-hidden="true" /> Twitter / X
                                     </a>
                                     <a
                                         href={whatsappShare}
