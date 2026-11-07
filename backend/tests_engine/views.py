@@ -270,7 +270,7 @@ def _review_media(question, *, visible, request, memo):
     runtime roles for one response.
     """
     from questions.image_context import active_images, runtime_role, serialize_image_for_student
-    from questions.serializers import _derive_subtitles_url
+    from questions.serializers import _derive_subtitles_url, playable_video_url
 
     stem_images, explanation_images = [], []
     for img in active_images(question):
@@ -286,8 +286,11 @@ def _review_media(question, *, visible, request, memo):
     media.update(dict.fromkeys(REVIEW_VIDEO_FIELDS))
     if visible:
         media['video_status'] = question.video_status or None
-        video_url = (question.video_url or '').strip()
-        if video_url and question.video_status == 'completed':
+        stored = (question.video_url or '').strip()
+        video_url = playable_video_url(stored)
+        if stored and not video_url:
+            media['video_status'] = 'failed'  # on the retired storage (questions.serializers.hide_retired_video)
+        elif video_url and question.video_status == 'completed':
             media.update({
                 'video_url': video_url,
                 'video_thumbnail': (question.video_thumbnail or '').strip() or None,
