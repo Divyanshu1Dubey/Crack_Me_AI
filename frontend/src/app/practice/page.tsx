@@ -25,6 +25,15 @@
  * The pick is graded from the `practice/attempt/` response (`correct_answer`,
  * explanation) when it carries one, else from the question detail.
  *
+ * The toolbar's Reveal (like the timed mode's time-out) shows the current
+ * question's answer and explanation from what the server already sent, and
+ * then takes no pick for that question, so a revealed answer is never
+ * recorded as an attempt.
+ *
+ * Settings > Customise (useQuestionBankPreferences) hides the toolbar tools
+ * and side panels a student switched off; navigation, the options, Reveal and
+ * the explanation always show.
+ *
  * Colours come from the theme tokens (bg-card, text-foreground, …) so the
  * page reads correctly in both light and dark themes.
  */
@@ -39,6 +48,7 @@ import QuestionTimer from "@/components/question/QuestionTimer";
 import PracticeExamTimer from "@/components/question/PracticeExamTimer";
 import RevealExplanation from "@/components/question/RevealExplanation";
 import RelatedPanel from "@/components/question/RelatedPYQs";
+import { useQuestionBankPreferences } from "@/components/customize/useQuestionBankPreferences";
 import {
     answerLetter, errorStatus, examYearChip, isPremiumUser, openInQueue, pickExplanation,
     placeInQueue, retryTimeSpent, upgradeRequiredFeature,
@@ -110,6 +120,8 @@ function PracticeInner() {
     // logged-out visitors to /login?next=... instead of loading a queue
     // the API will refuse.
     const { ready } = useRequireAuth();
+    // Tools the student switched off in Settings > Customise (all shown while loading).
+    const { shows } = useQuestionBankPreferences();
 
     const [mode, setMode] = useState(initialMode);
     const [count, setCount] = useState<number>(30);
@@ -503,7 +515,8 @@ function PracticeInner() {
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
                         {opts.map((o) => {
                             const isCorrect = answerKey === o.k;
-                            const isElim = eliminated.includes(o.k);
+                            // Struck-out options only while the strike tool shows (it is the way back).
+                            const isElim = shows("strike") && eliminated.includes(o.k);
                             const wasPicked = picked === o.k;
                             // Without an answer key the pick can't be marked wrong.
                             const pickedCls = !answerKey
@@ -514,10 +527,11 @@ function PracticeInner() {
                                 <button
                                     key={o.k}
                                     onClick={() => submit(o.k)}
-                                    disabled={busy || !!picked || q.id !== qid}
+                                    // A revealed answer (Reveal, the timed mode's time-out) takes no pick.
+                                    disabled={busy || !!picked || revealed || q.id !== qid}
                                     className={`flex w-full items-start gap-3 rounded border p-3 text-left
                                                 ${isElim ? "opacity-40 line-through" : ""}
-                                                ${picked ? pickedCls : "border-border hover:bg-muted/60"}`}
+                                                ${picked || revealed ? pickedCls : "border-border hover:bg-muted/60"}`}
                                 >
                                     <span className="rounded bg-muted px-2 py-0.5 text-sm font-bold">{o.k}</span>
                                     <FormattedOptionText text={o.v} images={qImages} />
@@ -526,7 +540,7 @@ function PracticeInner() {
                         })}
                     </div>
 
-                    {revealed && picked && !answerKey ? (
+                    {revealed && !answerKey ? (
                         <p className="mt-3 rounded border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
                             No answer key is available for this question yet.
                         </p>
@@ -547,25 +561,36 @@ function PracticeInner() {
                             onPrev={() => setIdx(Math.max(0, idx - 1))}
                             onNext={() => setIdx(Math.min(total - 1, idx + 1))}
                             onJump={(i) => setIdx(i)}
+                            revealed={revealed}
+                            onReveal={() => setRevealed(true)}
+                            shows={shows}
                             onEliminationChange={setEliminated}
                             onStateChange={onState}
                         />
                     </div>
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <section>
-                            <h3 className="mb-2 text-sm font-semibold text-foreground">Provenance</h3>
-                            <ProvenanceList questionId={q.id} />
-                        </section>
-                        <section>
-                            <h3 className="mb-2 text-sm font-semibold text-foreground">Related PYQs</h3>
-                            <RelatedPanel questionId={q.id} kind="related_pyqs" />
-                        </section>
-                        <section>
-                            <h3 className="mb-2 text-sm font-semibold text-foreground">Related topics</h3>
-                            <RelatedPanel questionId={q.id} kind="related_topics" />
-                        </section>
-                    </div>
+                    {shows("provenance") || shows("related-pyqs") || shows("related-topics") ? (
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            {shows("provenance") ? (
+                                <section>
+                                    <h3 className="mb-2 text-sm font-semibold text-foreground">Provenance</h3>
+                                    <ProvenanceList questionId={q.id} />
+                                </section>
+                            ) : null}
+                            {shows("related-pyqs") ? (
+                                <section>
+                                    <h3 className="mb-2 text-sm font-semibold text-foreground">Related PYQs</h3>
+                                    <RelatedPanel questionId={q.id} kind="related_pyqs" />
+                                </section>
+                            ) : null}
+                            {shows("related-topics") ? (
+                                <section>
+                                    <h3 className="mb-2 text-sm font-semibold text-foreground">Related topics</h3>
+                                    <RelatedPanel questionId={q.id} kind="related_topics" />
+                                </section>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </article>
             ) : loading ? (
                 <p className="flex items-center gap-2 text-muted-foreground">

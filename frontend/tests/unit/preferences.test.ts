@@ -7,6 +7,9 @@
  *  - visibility: hidden links go to the sidebar's "More" group (nothing disappears), hidden widgets
  *    are left out, the free plan's upgrade row is never hidden; defaults when nothing is saved;
  *  - the dashboard's two-column rows; the opening page and its exam-track href;
+ *  - the question bank: every tool shows and practice mode by default, "Flag Issue" is never
+ *    hidden, the answer flow is no tool, only what differs from the default is stored, and the
+ *    question bank / practice pages read the choices (the toolbar's Reveal is the page's reveal);
  *  - the ids match the backend allow-lists (backend/accounts/preferences.py), in the same order;
  *  - the store: defaults when signed out, this browser's copy first and the server's answer next,
  *    one PATCH per burst of changes, back to the saved layout when a save fails, reset.
@@ -23,27 +26,40 @@ import {
     DASHBOARD_ALWAYS_SHOWN_IDS,
     DASHBOARD_WIDGETS,
     DASHBOARD_WIDGET_IDS,
+    DEFAULT_STUDY_MODE,
     LANDING_PAGE_IDS,
+    QUESTION_BANK_ALWAYS_SHOWN_IDS,
+    QUESTION_BANK_TOOLS,
+    QUESTION_BANK_TOOL_GROUPS,
+    QUESTION_BANK_TOOL_IDS,
     RESET_PATCH,
     SIDEBAR_ITEM_IDS,
     SIDEBAR_SECTIONS,
     SIDEBAR_SECTION_IDS,
+    STUDY_MODE_IDS,
+    STUDY_MODE_LABELS,
     applyOrder,
     applyPreferencesPatch,
     compactDashboard,
+    compactQuestionBank,
     compactSidebar,
     dashboardBlocks,
     hiddenDashboardWidgets,
+    isStudyMode,
     landingHref,
     landingPageOf,
     moveId,
     navItemAvailable,
+    questionBankHidden,
+    questionBankToolIds,
     resolveNavHref,
     sanitizePreferences,
     sectionItemOrder,
     sidebarItem,
     sidebarItemOrder,
     sidebarLayout,
+    studyModeOf,
+    toolAlwaysShown,
     visibleDashboardWidgets,
     withoutHidden,
     type DashboardBlock,
@@ -230,6 +246,57 @@ test('the opening page: dashboard by default, a known page, its href for the exa
     }
 });
 
+// ── Question bank ──────────────────────────────────────────────────────────
+
+test('question bank: every tool shows and the bank opens in practice mode by default', () => {
+    for (const prefs of [undefined, null, {}]) {
+        assert.deepEqual([...questionBankHidden(prefs)], []);
+        assert.equal(studyModeOf(prefs), 'practice');
+    }
+    assert.equal(DEFAULT_STUDY_MODE, 'practice');
+    assert.deepEqual([...STUDY_MODE_IDS], ['practice', 'exam']);
+    assert.equal(STUDY_MODE_LABELS.practice, 'Practice Mode'); // the names of the bank's own switch
+    assert.equal(STUDY_MODE_LABELS.exam, 'Exam Mode');
+    assert.equal(studyModeOf({ study_mode: 'exam' }), 'exam');
+    assert.equal(studyModeOf({ study_mode: 'timed' as never }), 'practice');
+    assert.equal(isStudyMode('exam'), true);
+    assert.equal(isStudyMode('Exam'), false);
+    assert.equal(isStudyMode(undefined), false);
+});
+
+test('question bank: hidden tools are left out, Flag Issue never is', () => {
+    assert.deepEqual([...QUESTION_BANK_ALWAYS_SHOWN_IDS], ['report']);
+    assert.equal(toolAlwaysShown('report'), true);
+    assert.equal(toolAlwaysShown('strike'), false);
+    const hidden = questionBankHidden({ hidden: ['strike', 'report', 'retired-tool', 'discussion'] });
+    assert.deepEqual([...hidden].sort(), ['discussion', 'strike']);
+    assert.ok(!hidden.has('report'));
+});
+
+test('compactQuestionBank stores only what differs from the default', () => {
+    assert.equal(compactQuestionBank([], 'practice'), null);
+    assert.equal(compactQuestionBank(new Set(), 'practice'), null);
+    assert.equal(compactQuestionBank(['report'], 'practice'), null); // Flag Issue is never stored as hidden
+    assert.equal(compactQuestionBank([], 'timed'), null); // an unknown mode is the default
+    assert.deepEqual(compactQuestionBank([], 'exam'), { study_mode: 'exam' });
+    // Catalog order, unknown ids dropped.
+    assert.deepEqual(compactQuestionBank(['strike', 'gone', 'ai-analysis'], 'exam'), {
+        hidden: ['ai-analysis', 'strike'], study_mode: 'exam',
+    });
+});
+
+test('the question-bank catalog: a definition per tool, two groups, the answer flow is no tool', () => {
+    assert.equal(new Set(QUESTION_BANK_TOOL_IDS).size, QUESTION_BANK_TOOL_IDS.length);
+    assert.deepEqual(Object.keys(QUESTION_BANK_TOOLS).sort(), [...QUESTION_BANK_TOOL_IDS].sort());
+    assert.deepEqual(QUESTION_BANK_TOOL_GROUPS.map((group) => group.id), ['bank', 'session']);
+    const grouped = QUESTION_BANK_TOOL_GROUPS.flatMap((group) => questionBankToolIds(group.id));
+    assert.deepEqual(grouped, [...QUESTION_BANK_TOOL_IDS]); // every tool in one group, catalog order
+    assert.equal(QUESTION_BANK_TOOLS.report.group, 'bank');
+    for (const flow of ['options', 'submit', 'answer', 'explanation', 'navigation', 'reveal']) {
+        assert.ok(!(QUESTION_BANK_TOOL_IDS as readonly string[]).includes(flow), flow);
+    }
+});
+
 // ── Whole preferences ──────────────────────────────────────────────────────
 
 test('sanitizePreferences keeps only what this build knows', () => {
@@ -242,8 +309,18 @@ test('sanitizePreferences keeps only what this build knows', () => {
         landing_page: 'nowhere',
         theme: 'dark',
     }), { sidebar: { sections: ['study'], hidden: ['quests'] }, dashboard: { order: ['welcome'] } });
-    const full = { sidebar: { hidden: ['jobs'] }, dashboard: { order: ['streak'] }, landing_page: 'tests' };
+    const full = {
+        sidebar: { hidden: ['jobs'] }, dashboard: { order: ['streak'] }, landing_page: 'tests',
+        question_bank: { hidden: ['strike'], study_mode: 'exam' },
+    };
     assert.deepEqual(sanitizePreferences(full), full);
+    // The question bank: unknown / repeated tools, Flag Issue and unknown modes are dropped.
+    assert.deepEqual(sanitizePreferences({
+        question_bank: { hidden: ['strike', 'strike', 'report', 'gone', 4], study_mode: 'timed', order: ['strike'] },
+    }), { question_bank: { hidden: ['strike'] } });
+    for (const junk of [{ question_bank: 'exam' }, { question_bank: ['strike'] }, { question_bank: { hidden: ['report'] } }]) {
+        assert.deepEqual(sanitizePreferences(junk), {}, JSON.stringify(junk));
+    }
 });
 
 test('applyPreferencesPatch replaces named keys, null removes one, undefined keeps it', () => {
@@ -255,6 +332,11 @@ test('applyPreferencesPatch replaces named keys, null removes one, undefined kee
     assert.deepEqual(applyPreferencesPatch(prefs, { landing_page: null }), { sidebar: { hidden: ['jobs'] } });
     assert.deepEqual(applyPreferencesPatch(prefs, { sidebar: undefined }), prefs);
     assert.deepEqual(applyPreferencesPatch(prefs, RESET_PATCH), {});
+    const withBank = applyPreferencesPatch(prefs, { question_bank: { study_mode: 'exam' } });
+    assert.deepEqual(withBank.question_bank, { study_mode: 'exam' });
+    assert.deepEqual(applyPreferencesPatch(withBank, { question_bank: null }), prefs);
+    assert.deepEqual(applyPreferencesPatch(withBank, RESET_PATCH), {});
+    assert.deepEqual(Object.keys(RESET_PATCH).sort(), ['dashboard', 'landing_page', 'question_bank', 'sidebar']);
 });
 
 // ── Catalog and backend allow-lists ────────────────────────────────────────
@@ -279,6 +361,59 @@ test('the ids match the backend allow-lists (backend/accounts/preferences.py), i
     assert.deepEqual(pythonTuple(backend, 'DASHBOARD_WIDGET_IDS'), [...DASHBOARD_WIDGET_IDS]);
     assert.deepEqual(pythonTuple(backend, 'DASHBOARD_ALWAYS_SHOWN_IDS'), [...DASHBOARD_ALWAYS_SHOWN_IDS]);
     assert.deepEqual(pythonTuple(backend, 'LANDING_PAGE_IDS'), [...LANDING_PAGE_IDS]);
+    assert.deepEqual(pythonTuple(backend, 'QUESTION_BANK_TOOL_IDS'), [...QUESTION_BANK_TOOL_IDS]);
+    assert.deepEqual(pythonTuple(backend, 'QUESTION_BANK_ALWAYS_SHOWN_IDS'), [...QUESTION_BANK_ALWAYS_SHOWN_IDS]);
+    assert.deepEqual(pythonTuple(backend, 'STUDY_MODE_IDS'), [...STUDY_MODE_IDS]);
+});
+
+test('the question bank and practice pages read the question-bank choices', () => {
+    const bank = read('../../src/components/question/ExamQuestionBank.tsx');
+    assert.match(bank, /const questionBankPrefs = useQuestionBankPreferences\(\);/);
+    // The saved mode applies until the student switches (or answers) on the page.
+    assert.match(bank, /const studyMode: StudyMode = studyModeChoice \?\? questionBankPrefs\.studyMode;/);
+    assert.equal((bank.match(/keepStudyMode\(\);/g) || []).length, 2);
+    for (const tool of ['ai-analysis', 'mnemonic', 'textbook-reference', 'find-in-textbook', 'similar-pyqs',
+        'citations', 'video', 'discussion', 'shortcuts']) {
+        assert.match(bank, new RegExp(`shows\\('${tool}'\\)`), tool);
+    }
+    // Flag Issue and the answer flow are never behind a preference.
+    assert.doesNotMatch(bank, /shows\('report'\)/);
+    assert.match(bank, /<Flag className="w-3\.5 h-3\.5" \/> Flag Issue/);
+    assert.match(bank, /href="\/settings#customise-question-bank"/);
+
+    const year = read('../../src/app/questions/practice/page.tsx');
+    assert.match(year, /const \{ shows \} = useQuestionBankPreferences\(\);/);
+    for (const tool of ['ai-analysis', 'mnemonic', 'citations']) {
+        assert.match(year, new RegExp(`shows\\('${tool}'\\)`), tool);
+    }
+    assert.doesNotMatch(year, /shows\('report'\)/);
+    assert.match(year, /\{flagSection\}/);
+
+    const session = read('../../src/app/practice/page.tsx');
+    assert.match(session, /const \{ shows \} = useQuestionBankPreferences\(\);/);
+    assert.match(session, /onReveal=\{\(\) => setRevealed\(true\)\}/);
+    assert.match(session, /revealed=\{revealed\}/);
+    assert.match(session, /shows=\{shows\}/);
+    assert.match(session, /disabled=\{busy \|\| !!picked \|\| revealed \|\| q\.id !== qid\}/);
+    for (const tool of ['strike', 'provenance', 'related-pyqs', 'related-topics']) {
+        assert.match(session, new RegExp(`shows\\("${tool}"\\)`), tool);
+    }
+    // The per-question timer records study time whatever the student hides.
+    assert.match(session, /\{qid \? <QuestionTimer questionId=\{qid\} \/> : null\}/);
+
+    const toolbar = read('../../src/components/question/QuestionToolbar.tsx');
+    assert.doesNotMatch(toolbar, /const \[revealed, setRevealed\]/, 'Reveal is the page\'s reveal, not a local flag');
+    assert.match(toolbar, /onClick=\{onReveal\}/);
+    for (const tool of ['review-flag', 'confidence', 'strike', 'time-spent']) {
+        assert.match(toolbar, new RegExp(`shows\\("${tool}"\\)`), tool);
+    }
+
+    const settings = read('../../src/components/customize/CustomizeSection.tsx');
+    assert.match(settings, /id="customise-question-bank"/);
+    assert.match(settings, /updatePreferences\(\{ question_bank: null \}, \{ immediate: true \}\)/);
+    // Flag Issue's switch is shown on and cannot be turned off.
+    assert.match(settings, /title=\{fixed \? 'Always shown: it is how wrong answer keys get reported' : undefined\}/);
+    assert.match(settings, /const shown = fixed \|\| !hiddenTools\.has\(id\);/);
 });
 
 test('the sidebar, dashboard and settings use the preferences', () => {
@@ -418,7 +553,7 @@ test("store: reset sends every key as null; another user's answers are ignored",
     await settle();
     store.resetPreferences();
     await settle();
-    assert.deepEqual(calls.at(-1)?.body, { sidebar: null, dashboard: null, landing_page: null });
+    assert.deepEqual(calls.at(-1)?.body, { sidebar: null, dashboard: null, landing_page: null, question_bank: null });
     assert.deepEqual(store.getPreferencesSnapshot().prefs, {});
 
     // Switching user while a GET is out: the old answer never shows for the new user.

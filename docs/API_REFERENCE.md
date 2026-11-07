@@ -104,21 +104,33 @@ Username changes, refused attempts included, are limited to 10 per account per h
 ---
 
 ### `GET / PATCH /api/auth/preferences/`
-**Auth**: required (a user reads and writes only their own row). Layout chosen in Settings > Customise
-(`accounts/preferences.py`, `CustomUser.ui_preferences`); only what the user changed is stored.
+**Auth**: required (a user reads and writes only their own row). Layout and question-bank choices made in
+Settings > Customise (`accounts/preferences.py`, `CustomUser.ui_preferences`); only what the user changed is stored.
 
 ```json
 {
   "sidebar":   { "sections": ["study", "ai-tools", "resources", "account"], "items": ["questions", "..."], "hidden": ["jobs"] },
   "dashboard": { "order": ["today", "stats", "..."], "hidden": ["calendar"] },
-  "landing_page": "questions"
+  "landing_page": "questions",
+  "question_bank": { "hidden": ["discussion", "strike"], "study_mode": "exam" }
 }
 ```
 `GET` → `200 {"preferences": {...}}` (ids no longer on the allow-lists are dropped). `PATCH` replaces each
 top-level key it names and keeps the others; `null` or `{}` resets that key. Ids come from the allow-lists in
 `accounts/preferences.py` (same lists in `frontend/src/lib/preferences.ts`); unknown keys or ids, repeated ids,
-wrong types and hiding the free plan's `upgrade` widget → `400 {"code": "invalid_preferences", "errors": {...}}`;
-a body over 4096 bytes → `413`; non-JSON → `415`. Saves are limited to 60 per minute per account.
+wrong types, hiding the free plan's `upgrade` widget, hiding the `report` tool or an unknown `study_mode` →
+`400 {"code": "invalid_preferences", "errors": {...}}`; a body over 4096 bytes → `413`; non-JSON → `415`. Saves are
+limited to 60 per minute per account.
+
+`question_bank` (the question bank, the NEET PG / INI-CET banks, full-screen year practice and `/practice`; 2026-11-07):
+- `hidden`: tools left off the page. With a question in the bank / year practice: `ai-analysis`, `mnemonic`,
+  `textbook-reference`, `find-in-textbook`, `similar-pyqs`, `citations`, `video`, `discussion`, `shortcuts`; in a
+  `/practice` session: `review-flag`, `confidence`, `strike`, `time-spent`, `provenance`, `related-pyqs`,
+  `related-topics`. `report` (Flag Issue) is on the list but can never be hidden. The answer flow (options, Submit,
+  the answer and its explanation, navigation, Reveal) is not a tool, and hiding unlocks nothing: premium gating
+  stays on the server.
+- `study_mode`: `"practice"` (the default; the answer shows when an option is picked) or `"exam"` (pick, then
+  Submit). The bank opens in it until the student switches modes or answers on the page; absent or `null` = practice.
 
 ---
 

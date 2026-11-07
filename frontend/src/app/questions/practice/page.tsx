@@ -21,6 +21,7 @@ import { analytics } from '@/lib/analytics';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, FormattedOptionText, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import StudentCitations from '@/components/evidence/StudentCitations';
+import { useQuestionBankPreferences } from '@/components/customize/useQuestionBankPreferences';
 import { resolveImageTokens, type QuestionImageLike } from '@/lib/imageTokens';
 import { cleanOptionText, extractAnalysisFromJson, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
 import {
@@ -75,6 +76,8 @@ function PracticeContent() {
     const { ready } = useRequireAuth();
     const { activeTrack } = useExamTrack();
     const { show: showPaywall } = usePaywall();
+    // Tools the student switched off in Settings > Customise (all shown while loading).
+    const { shows } = useQuestionBankPreferences();
     const router = useRouter();
     const searchParams = useSearchParams();
     const year = searchParams.get('year');
@@ -787,10 +790,10 @@ function PracticeContent() {
                                 </Card>
 
                                 {/* Accepted textbook citations (snippets only; nothing when there are none). */}
-                                {currentQ && <StudentCitations questionId={currentQ.id} revealed={answerShown} />}
+                                {currentQ && shows('citations') && <StudentCitations questionId={currentQ.id} revealed={answerShown} />}
 
                                 {/* Mnemonic */}
-                                {revealData.mnemonic && !aiExplanation?.mnemonic && (
+                                {shows('mnemonic') && revealData.mnemonic && !aiExplanation?.mnemonic && (
                                     <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 dark:border-amber-900/30">
                                         <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                         <div>
@@ -803,7 +806,7 @@ function PracticeContent() {
                                 {flagSection}
 
                                 {/* Generate AI Analysis button */}
-                                {!aiExplanation && !aiLoading && !tokenError && (
+                                {shows('ai-analysis') && !aiExplanation && !aiLoading && !tokenError && (
                                     <button onClick={() => {
                                         // Consent-gated analytics (the direct window.gtag
                                         // call fired before consent was given).
@@ -822,7 +825,7 @@ function PracticeContent() {
                                 )}
 
                                 {/* AI Loading */}
-                                {aiLoading && (
+                                {shows('ai-analysis') && aiLoading && (
                                     <div className="flex items-center justify-center gap-3 p-6 rounded-xl border border-blue-200 bg-blue-50/30 dark:bg-blue-900/10">
                                         <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
                                         <span className="text-sm font-medium text-blue-600 dark:text-blue-400">Analyzing question with AI...</span>
@@ -830,7 +833,7 @@ function PracticeContent() {
                                 )}
 
                                 {/* Token Error */}
-                                {tokenError && (
+                                {shows('ai-analysis') && tokenError && (
                                     <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
                                         <CardContent className="p-4 text-center">
                                             <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Daily AI tokens exhausted</p>
@@ -840,7 +843,7 @@ function PracticeContent() {
                                 )}
 
                                 {/* AI Error (the Generate button above stays as the retry) */}
-                                {aiError && (
+                                {shows('ai-analysis') && aiError && (
                                     <Card role="status" className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900/40">
                                         <CardContent className="p-3 text-center">
                                             <p className="text-sm font-bold text-amber-800 dark:text-amber-300">{aiError.title}</p>
@@ -850,7 +853,7 @@ function PracticeContent() {
                                 )}
 
                                 {/* AI Explanation Panels */}
-                                {aiExplanation && (
+                                {shows('ai-analysis') && aiExplanation && (
                                     <div className="space-y-3 animate-fadeInUp">
                                         {aiExplanation.why_correct && (
                                             <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/10"><CardContent className="p-4">
