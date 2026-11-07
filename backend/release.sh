@@ -19,6 +19,10 @@ python manage.py reconcile_legacy_subscriptions || true
 python manage.py seed_question_bank
 python manage.py seed_blogs || true
 
+# UPSC's official CMS 2018-2025 keys as official_key reviews in the answer-key audit (questions.0047 made the
+# bank match them). Records only what is missing, so later deploys finish at once.
+python manage.py record_official_cms_keys --apply || true
+
 python manage.py load_ontology || true
 python manage.py ingest_source internal-notes || true
 echo "release.sh complete"

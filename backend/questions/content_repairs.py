@@ -212,3 +212,68 @@ def apply_repairs(repairs, *, question_model, snapshot_model) -> list[tuple[int,
             question_model.objects.filter(pk=question.pk).update(**updates)
         results.append((repair['id'], 'repaired'))
     return results
+
+
+# ── Questions hidden on 2026-11-07 ─────────────────────────────────────────────────────────────────────────
+# The owner's rule: a question is never hidden or deleted unless it is a duplicate or wrong. These were found by
+# the figure audit and approved by the owner. Each is hidden only while it is active and still holds the stem and
+# options it was judged on (stem_hash); a duplicate only while its kept copy is active with the same key. A
+# QuestionRevisionSnapshot is stored first and nothing is deleted: the editor can show the question again.
+HIDES_2026_11_07 = (
+    {'id': 12605, 'keep': 12321,
+     'stem_hash': 'ebc4b2014a1dd378d796f3dc57c6e6038bba55e5e1f0fa35601234d311e2e3bc',
+     'reason': 'Hidden 2026-11-07: duplicate of #12321 (the same NEET PG 2021 question imported twice)'},
+    {'id': 22456, 'keep': 6477,
+     'stem_hash': 'a582399af713620e9d2c47029340f76df4be2e2d4480cf7bdf91ee93779a136f',
+     'reason': 'Hidden 2026-11-07: duplicate of #6477 (CMS 2018 Paper II) that lost its data table'},
+    {'id': 22631, 'keep': 2210,
+     'stem_hash': '32257dfe4c5720fa65d6eca3a4d77cbd4637bf7ae28ae3df8910480306258417',
+     'reason': 'Hidden 2026-11-07: duplicate of #2210 (CMS 2025 Paper II) that lost its ECG table'},
+    {'id': 26454,
+     'stem_hash': '3e1f72f1c06fa68b97d6469e33dab9cd76e5dad6c29693510ecb7182f2924532',
+     'reason': 'Hidden 2026-11-07: seed demo question; its image file never existed ("[image unavailable]")'},
+    {'id': 26451,
+     'stem_hash': '7b6b4d14d59732ff00ff6fbfbf01446cc8b915c638a82807791a3e4465d1a917',
+     'reason': 'Hidden 2026-11-07: seed demo question; its image file never existed ("[image unavailable]")'},
+    {'id': 15370,
+     'stem_hash': '8e34c9b0570425f25b8240270027db385677e2731a293168a81484f8f1fa1d58',
+     'reason': 'Hidden 2026-11-07: the source book omits the lab values the question asks about'},
+    {'id': 15618,
+     'stem_hash': '81c84e11834af72facd3380b91a9772e1520f502ee00a289a948ee6a0201e0a1',
+     'reason': 'Hidden 2026-11-07: the source book omits the list of substances the options refer to'},
+)
+
+
+def hide_refusal(question, item, question_model) -> str:
+    """Why ``item`` must not hide ``question`` ('' when it may)."""
+    if question is None:
+        return 'missing'
+    if not question.is_active:
+        return 'already hidden'
+    if stem_hash(question) != item['stem_hash']:
+        return 'stem or options changed'
+    keep_id = item.get('keep')
+    if keep_id:
+        keep = question_model.objects.filter(pk=keep_id).first()
+        if keep is None or not keep.is_active:
+            return 'kept copy not active'
+        if valid_key(keep.correct_answer) != valid_key(question.correct_answer):
+            return 'kept copy has another key'
+    return ''
+
+
+def apply_hides(items, *, question_model, snapshot_model) -> list[tuple[int, str]]:
+    """Hide each question that still fits its item; returns (question id, 'hidden' or the refusal)."""
+    results = []
+    for item in items:
+        question = question_model.objects.filter(pk=item['id']).first()
+        reason = hide_refusal(question, item, question_model)
+        if reason:
+            results.append((item['id'], reason))
+            continue
+        with transaction.atomic():
+            snapshot_model.objects.create(question_id=question.pk, changed_by=None, reason=item['reason'][:200],
+                                          snapshot=revision_state(question))
+            question_model.objects.filter(pk=question.pk).update(is_active=False, updated_at=timezone.now())
+        results.append((item['id'], 'hidden'))
+    return results

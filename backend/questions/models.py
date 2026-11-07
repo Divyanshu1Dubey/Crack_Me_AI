@@ -1363,6 +1363,7 @@ class AnswerKeyChange(models.Model):
         ('undo_revision', 'Undo to revision'),
         ('management_command', 'Management command'),
         ('legacy_snapshot', 'Recovered from revision history'),
+        ('official_key', 'Official answer key (UPSC)'),
     ]
     EXPLANATION_ACTION_CHOICES = [('kept_stale', 'Kept (marked stale)'), ('replaced', 'Replaced'), ('cleared', 'Cleared')]
     RESCORE_CHOICES = [('pending', 'Pending'), ('done', 'Done'), ('skipped', 'Skipped')]

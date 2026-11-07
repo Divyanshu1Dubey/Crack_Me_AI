@@ -57,7 +57,7 @@ Use the existing Railway service behind `api.cracklabs.app` (or create one from 
 | Setting | Value |
 |---|---|
 | Root directory | `backend` |
-| Config file | **`/backend/railway.json`**: Railway → service → Settings → Config-as-code → Railway Config File, the full path from the repository root (the setting does not follow the Root Directory). The file sets build: collectstatic; pre-deploy: `bash release.sh` = migrate + idempotent seeds, database only, because Railway mounts no volume in the pre-deploy container; start: `bash start_web.sh` = migrate again (a no-op after release.sh) + the media steps in the background (media restore, fixture image relinking) + the django-q worker + gunicorn; health check `/api/health/` |
+| Config file | **`/backend/railway.json`**: Railway → service → Settings → Config-as-code → Railway Config File, the full path from the repository root (the setting does not follow the Root Directory). The file sets build: collectstatic; pre-deploy: `bash release.sh` = migrate + idempotent seeds (blog posts, UPSC's official CMS 2018-2025 keys in the answer-key audit: `record_official_cms_keys --apply`, which records only what is missing), database only, because Railway mounts no volume in the pre-deploy container; start: `bash start_web.sh` = migrate again (a no-op after release.sh) + the media steps in the background (media restore, fixture image relinking) + the django-q worker + gunicorn; health check `/api/health/` |
 | Volume | mount at `/data` (5 GB is plenty) |
 | Custom domain | `api.cracklabs.app` (then in Cloudflare: CNAME `api` → the `*.up.railway.app` target Railway shows; SSL mode Full) |
 
@@ -69,9 +69,12 @@ values, and Railpack's default start command is the `web` line of `backend/Procf
 the Procfile `release` line. Until 2026-11-04 that `web` line was gunicorn alone: the 2026-11-03 deploys
 needed `accounts.0028` / `0029` applied by hand, and the 2026-11-04 deploy went live without its 7
 migrations, so every signed-in request and `/api/questions/` answered 500 (missing columns) while
-`/api/health/` answered 200, and the blog was empty (`seed_blogs` had not run). Both start commands now run
-`migrate --no-input` before gunicorn, so a deploy can no longer serve a database without its migrations,
-but the seeds and the media steps still need the config file. After a deploy check:
+`/api/health/` answered 200, and the blog was empty (`seed_blogs` had not run). Since 2026-11-07 the
+Procfile `web` line is `bash start_web.sh`, so both start paths run the same script: `migrate --no-input`
+before gunicorn (a deploy can no longer serve a database without its migrations), the media steps and the
+django-q worker (per-question AI sections, renewal reminders, the stale-ingestion sweeper; without it those
+jobs waited in the queue for ever). Only `release.sh`'s idempotent seeds still need the config file. After a
+deploy check:
 
 * the top of the build log names `backend/railway.json`; the deploy log shows `release.sh complete` and
   `start_web.sh: media steps complete`;
