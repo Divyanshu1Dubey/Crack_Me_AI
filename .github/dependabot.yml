@@ -1,10 +1,15 @@
 version: 2
+# One pull request per ecosystem per month (2026-11-07): version updates are grouped instead of one PR
+# per package (seven PRs were open at once). Security updates still come as soon as GitHub reports them.
 updates:
   - package-ecosystem: pip
     directory: /backend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      backend:
+        patterns: ["*"]
     labels:
       - dependencies
       - python
@@ -12,8 +17,15 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      frontend:
+        patterns: ["*"]
+    ignore:
+      # 1.x renames / removes icons the app imports: the build failed on #61. Upgrade by hand.
+      - dependency-name: "lucide-react"
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
       - javascript
@@ -22,6 +34,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
     labels:
       - dependencies
       - ci

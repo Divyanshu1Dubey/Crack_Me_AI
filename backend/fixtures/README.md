@@ -152,7 +152,22 @@ figure from the official UPSC question paper in the questions editor
 Q109, Q110 and Paper 2 Q84, Q88, Q92, Q94, Q95, Q97, Q101, Q106, Q108,
 Q109, Q118 (Series C numbers).
 
-Run it against production the way the other data steps run (an env file
-with the production `DATABASE_URL`, `DJANGO_ENV_FILE=<file> python manage.py
-import_pyq_paper ...`), before deploying copy that quotes the bigger bank
-(`frontend/src/lib/bankStats.ts`).
+Production gets it at deploy: migration `questions.0043_import_cms_2026_papers`
+runs this import once on a live bank (1,000+ active CMS questions; a test or
+fresh database is skipped), in the same release as the copy that quotes the
+bigger bank (`frontend/src/lib/bankStats.ts`). It never fails the deploy: on
+an error it prints the command to run by hand. Rehearsed on the local copy
+of production: 240 created (226 visible, 14 hidden), 240 source keys and
+audits, 2 s.
+
+## The scholarship pool: `scholarship_pool.json` (2026-11-07)
+
+The questions the scholarship challenge draws from (id, stored key and the
+stem/options `stem_hash` of the reviewed version; see the file's
+`selection` and `caveat`). Migration `questions.0044_scholarship_pool`
+applies it once at deploy; `python manage.py apply_scholarship_pool` (dry
+run unless `--apply`, `--revoke` to take them out) does the same by hand.
+A question whose key or text changed since the review, or that the
+challenge cannot show fairly (a figure, free showcase, no key ...), is
+skipped and named. Admins add or remove single questions in the questions
+editor (toggle and "Scholarship pool" filter). No key is changed.

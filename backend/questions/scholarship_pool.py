@@ -41,12 +41,21 @@ _SHOWN_FIELDS = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d'
 _HASH_RE = re.compile(r'^[0-9a-f]{64}$')
 
 
-def pool_refusal(question) -> Optional[str]:
+def _models(question_model=None, showcase_model=None):
+    """The live models, or the historical ones a data migration passes in."""
+    if question_model is None:
+        from questions.models import Question as question_model
+    if showcase_model is None:
+        from accounts.models_freemium import FreeShowcaseQuestion as showcase_model
+    return question_model, showcase_model
+
+
+def pool_refusal(question, showcase_model=None) -> Optional[str]:
     """Why ``question`` cannot be in the scholarship challenge (a ``REFUSALS`` code), or None."""
-    from accounts.models_freemium import FreeShowcaseQuestion
     from questions.content_hashes import valid_key
     from questions.image_context import TOKEN_RE
 
+    _, FreeShowcaseQuestion = _models(showcase_model=showcase_model)
     if not question.is_active:
         return 'inactive'
     if question.is_dropped:
@@ -88,11 +97,11 @@ def load_pool(path) -> dict:
     return data
 
 
-def plan_pool(entries) -> list:
+def plan_pool(entries, question_model=None, showcase_model=None) -> list:
     """``[{'id', 'action': 'add' | 'already' | 'skip', 'reason'}]`` for the pool file's entries."""
     from questions.content_hashes import stem_hash, valid_key
-    from questions.models import Question
 
+    Question, showcase_model = _models(question_model, showcase_model)
     found = Question.objects.in_bulk([row['id'] for row in entries])
     plan = []
     for row in entries:
@@ -104,7 +113,7 @@ def plan_pool(entries) -> list:
         elif stem_hash(question) != row['stem_hash']:
             reason = 'content_changed'
         else:
-            reason = pool_refusal(question)
+            reason = pool_refusal(question, showcase_model=showcase_model)
         if reason:
             plan.append({'id': row['id'], 'action': 'skip', 'reason': reason})
         else:
@@ -113,13 +122,12 @@ def plan_pool(entries) -> list:
     return plan
 
 
-def set_eligible(question_ids, eligible: bool) -> int:
+def set_eligible(question_ids, eligible: bool, question_model=None) -> int:
     """Flag (or unflag) these questions; returns how many changed. ``save(update_fields=...)``, so the
     post_save receivers see exactly which field changed."""
     from django.db import transaction
 
-    from questions.models import Question
-
+    Question, _ = _models(question_model, showcase_model=False)
     changed = 0
     with transaction.atomic():
         for question in Question.objects.select_for_update().filter(pk__in=list(question_ids)):
@@ -130,8 +138,7 @@ def set_eligible(question_ids, eligible: bool) -> int:
     return changed
 
 
-def eligible_count() -> int:
+def eligible_count(question_model=None) -> int:
     """What ScholarshipStartView draws from."""
-    from questions.models import Question
-
+    Question, _ = _models(question_model, showcase_model=False)
     return Question.objects.filter(is_scholarship_eligible=True, is_active=True).count()
