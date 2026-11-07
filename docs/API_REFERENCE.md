@@ -141,6 +141,11 @@ Request: `{ "answers": { "812": "B", "907": "A", ... }, "challenge_token": "<fro
 Response `200`: `{ "status": "passed" | "failed", "score": 5 | null, "message": "..." }`. `score` is `5` on a pass and `null` on a failure: a failed attempt never reports how many answers were right. A 5/5 on the first attempt unlocks ₹79, on the second ₹99 (`scholarship_granted_price`).
 Errors: `400 {code: "scholarship_expired"}` (token older than 1 h), `400 {code: "scholarship_not_started"}` (bad token, a token already submitted, or any set other than the one stored for the current attempt), `400` for other ids, `403` after 2 attempts, `409 {code: "already_subscribed"}` for a caller with an active plan (staff excepted; no attempt is used).
 
+### The scholarship pool (2026-11-07)
+The challenge draws from questions flagged `is_scholarship_eligible`. The flag is admin-only: it is in no student payload, and `?is_scholarship_eligible=` on `GET /api/questions/` is honoured for admins only (as a public filter it listed every challenge question).
+- `PATCH /api/questions/<id>/scholarship/` (**admin**) `{ "eligible": true | false }` → `{ id, is_scholarship_eligible, pool_size }`. Adding answers `400 {code: "scholarship_refused", reason, detail}` for a question the challenge cannot show fairly (`questions.scholarship_pool.pool_refusal`: inactive / dropped, no key A–D, a missing option, a figure or `[[img:N]]` token, free showcase, disputed, controversial, needs review). Removing always works. Only the flag is written, never the key. The admin questions editor has the toggle and a "Scholarship pool" filter.
+- `python manage.py apply_scholarship_pool [file] [--apply] [--revoke]` (dry run by default) flags the questions of a pool file (`backend/fixtures/scholarship_pool.json`: id, stored key and stem/options `stem_hash` of the reviewed version). A question whose key or text changed since, or that the rules above refuse, is skipped and named. Migration `questions.0044_scholarship_pool` applies the shipped pool once at deploy (`questions.0043` imports the CMS 2026 papers the same way).
+
 ---
 
 ### `POST /api/auth/password-reset/` and `POST /api/auth/password-reset/confirm/` (disabled)

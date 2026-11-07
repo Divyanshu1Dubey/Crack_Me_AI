@@ -118,3 +118,56 @@ If you eventually need a server-side image upload step (because PNGs are
 too large for git), see `docs/INGESTION_REPORT.md` for the
 `crack-cms-question-images` Supabase bucket — but for editorial changes
 this image-token workflow is intentionally low-friction.
+
+## A new year's paper: `pyq/<exam>_<year>.json` (2026-11)
+
+`fixtures/pyq/cms_2026.json` holds UPSC CMS 2026 Paper 1 and Paper 2
+(question booklet Series C, 240 questions): stem, options, the printed
+key, number, subject section and topic of every question, in the
+`pyq-paper/1` format. Its `note` and `sources` say where it came from: the
+Salaah Shots solution PDFs, an **unofficial** key (UPSC had not published
+its key). Their explanations were not copied (their own writing); the
+questions are imported without an explanation.
+
+```
+python manage.py import_pyq_paper fixtures/pyq/cms_2026.json            # dry run: the plan
+python manage.py import_pyq_paper fixtures/pyq/cms_2026.json --apply    # write
+```
+
+The command (dry run unless `--apply`) skips what is already imported
+(same exam, year, paper and `display_number`, so a second run changes
+nothing) and stems an admin removed; it lists questions the bank already
+has under another label but still creates them, so the paper stays whole
+for the year simulator. Each printed key is recorded as a
+`key_audit.SourceKey` (`inline_answer`: a secondary-source signal, never a
+verified key) and the key audit runs for the new questions
+(`insufficient_evidence` until other evidence or an admin review).
+
+Figures: the solution PDFs have none; where the paper had one they write a
+bracketed description that often names the answer, so it was removed. The
+14 questions whose stem says a figure is shown (`needs_figure`) are created
+**hidden** (`is_active=False`, `needs_review`, `is_image_based`): add the
+figure from the official UPSC question paper in the questions editor
+(`[[img:N]]`), then activate the question. They are 2026 Paper 1 Q17,
+Q109, Q110 and Paper 2 Q84, Q88, Q92, Q94, Q95, Q97, Q101, Q106, Q108,
+Q109, Q118 (Series C numbers).
+
+Production gets it at deploy: migration `questions.0043_import_cms_2026_papers`
+runs this import once on a live bank (1,000+ active CMS questions; a test or
+fresh database is skipped), in the same release as the copy that quotes the
+bigger bank (`frontend/src/lib/bankStats.ts`). It never fails the deploy: on
+an error it prints the command to run by hand. Rehearsed on the local copy
+of production: 240 created (226 visible, 14 hidden), 240 source keys and
+audits, 2 s.
+
+## The scholarship pool: `scholarship_pool.json` (2026-11-07)
+
+The questions the scholarship challenge draws from (id, stored key and the
+stem/options `stem_hash` of the reviewed version; see the file's
+`selection` and `caveat`). Migration `questions.0044_scholarship_pool`
+applies it once at deploy; `python manage.py apply_scholarship_pool` (dry
+run unless `--apply`, `--revoke` to take them out) does the same by hand.
+A question whose key or text changed since the review, or that the
+challenge cannot show fairly (a figure, free showcase, no key ...), is
+skipped and named. Admins add or remove single questions in the questions
+editor (toggle and "Scholarship pool" filter). No key is changed.

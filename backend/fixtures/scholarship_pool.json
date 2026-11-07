@@ -1,0 +1,384 @@
+{
+ "format": "scholarship-pool/1",
+ "created": "2026-11-07",
+ "status": "proposed",
+ "about": "Questions proposed for the scholarship challenge (accounts.views.ScholarshipStartView draws 5; a student needs 5/5). Apply with: python manage.py apply_scholarship_pool --apply.",
+ "selection": "UPSC CMS 2018-2025, active, text only (no figure, no table, no figure reference), four options, not free showcase, not disputed / controversial / dropped / needs review, no open answer-key audit signal, and a key that came with the paper import or the original bank (key_audit provenance import / unknown) -- never an AI-chosen key. Each key was then read against standard textbook knowledge in an AI-assisted review; ambiguous, outdated or garbled questions were left out.",
+ "caveat": "Proposed by CrackLabs for the owner to confirm. Joining the pool does not verify a key: every question keeps its stored key, and review_note is a reviewer note, not a source. explanation_conflicts_with_key marks a question whose explanation in the bank names another answer than the key (the key is the standard answer; the explanation needs an edit).",
+ "questions": [
+  {
+   "id": 21503,
+   "year": 2018,
+   "subject": "General Surgery",
+   "topic": "Acute wound management",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "98ad2aa89e46e146aa59344e903b64f469e561555bd98f1e07bd110597293895",
+   "review_note": "Bleeding is controlled by pressure and elevation; vessels are not clamped blindly."
+  },
+  {
+   "id": 21512,
+   "year": 2018,
+   "subject": "General Surgery",
+   "topic": "Hilton's method",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "6e0fbb39f140e8f927f81d6cab4a592ff301da0a24f95f8006e6192def7062f7",
+   "review_note": "Blunt opening of the abscess cavity spares the nearby vessels and nerves."
+  },
+  {
+   "id": 21518,
+   "year": 2018,
+   "subject": "General Surgery",
+   "topic": "Triangle of doom",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "344c2a019e2c9138f0443a297ebff84c0d632be72c107e02fdbb8dd191c24ec0",
+   "review_note": "Bounded by the vas deferens, the spermatic vessels and the peritoneal fold; the inferior epigastric artery is not a boundary."
+  },
+  {
+   "id": 21519,
+   "year": 2018,
+   "subject": "General Surgery",
+   "topic": "Wound infection risk",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "c03c92165411fb6563818ed86b71c1f716925508354abdcdd9c1d9984fdd30b7",
+   "review_note": "A good blood supply lowers the risk; the other three raise it."
+  },
+  {
+   "id": 21521,
+   "year": 2018,
+   "subject": "General Surgery",
+   "topic": "Cellulitis",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "0aa691dc5c411f79df1dfd0e630c11a6a94fbd51099b27fdf37db9a1f0623168",
+   "review_note": "Cellulitis is a non-suppurative invasive infection of tissue."
+  },
+  {
+   "id": 21462,
+   "year": 2019,
+   "subject": "General Surgery",
+   "topic": "Capillary refill in shock",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "03f2dbf2ad28baebf681a870050b1a4230ef5ec6981f7833190018d808d8000c",
+   "review_note": "Warm (distributive) septic shock keeps capillary refill brisk."
+  },
+  {
+   "id": 21478,
+   "year": 2019,
+   "subject": "General Surgery",
+   "topic": "Surgical ethics",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "2689ef437e61806aa19ea18d68bb4f9f08b3b7c9dc384f0dce4e3af423bc9e15",
+   "review_note": "Experimentation is not a principle of good surgical practice."
+  },
+  {
+   "id": 21486,
+   "year": 2019,
+   "subject": "General Surgery",
+   "topic": "Hormonal agents in cancer",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "a42d580547a3d89cddd4f826858f6a7d1765ea73a20a2569357da9e028316f33",
+   "review_note": "Irinotecan is a topoisomerase I inhibitor, not a hormonal agent."
+  },
+  {
+   "id": 21492,
+   "year": 2019,
+   "subject": "General Surgery",
+   "topic": "Wound infection risk",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "d94cabe44a21b6308c3b1756c2672ebc8622bc6114a93e096b05f6d60e7905f0",
+   "review_note": "Obesity, jaundice and cancer raise the risk; hypertension is not a listed factor."
+  },
+  {
+   "id": 21500,
+   "year": 2019,
+   "subject": "General Surgery",
+   "topic": "Phases of wound healing",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "941b84c2688550d670d531eb2b71f65b5604bdb4882f169cb1b748931cb322f5",
+   "review_note": "Haemostasis, inflammation, proliferation, remodelling."
+  },
+  {
+   "id": 22431,
+   "year": 2019,
+   "subject": "Community Medicine",
+   "topic": "Jai Vigyan RF/RHD project",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "3b72f9a412f7ffbcc49c4d00ecccd5e4b52819c7ec7f14a31682d4daa7278284",
+   "review_note": "Its components: epidemiology of streptococcal sore throat, registries, vaccine development, pathology studies."
+  },
+  {
+   "id": 22432,
+   "year": 2019,
+   "subject": "Paediatrics",
+   "topic": "Mumps vaccine strains",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "badef8fd87fadc61e2370e31f81318c5a68a3358238ee11f20e0898cd1e0716b",
+   "review_note": "WHO advises against the Rubini strain in national programmes (low effectiveness)."
+  },
+  {
+   "id": 21429,
+   "year": 2020,
+   "subject": "General Surgery",
+   "topic": "Massive transfusion",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "91f68799f1ea0f747d173cc58606e26d2e61ef7dea9cbb0155508d1b015a4455",
+   "review_note": "Massive transfusion causes hypothermia, not hyperthermia."
+  },
+  {
+   "id": 21446,
+   "year": 2020,
+   "subject": "General Surgery",
+   "topic": "Wound classification",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "7efd48e9daceda0ea02d5c2e7f786fff6683fd215567599dcb8e8587a32d9901",
+   "review_note": "Laparoscopic cholecystectomy is a clean-contaminated operation."
+  },
+  {
+   "id": 21454,
+   "year": 2020,
+   "subject": "General Surgery",
+   "topic": "Necrotising soft tissue infection",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "86a9328b5ef17e62c65e85e8db5444eb9ccb925487357ecd060403e138c337a1",
+   "review_note": "These infections are usually polymicrobial."
+  },
+  {
+   "id": 22130,
+   "year": 2020,
+   "subject": "Paediatrics",
+   "topic": "PQLI",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "4a28cd740fa9a793bd5e6dca5f0f15f059962e3c28b4f81d426b1fc1f0a21d62",
+   "review_note": "Infant mortality, life expectancy at one and literacy, each scaled 0-100; it measures results, not growth."
+  },
+  {
+   "id": 22445,
+   "year": 2020,
+   "subject": "Community Medicine",
+   "topic": "Uses of epidemiology",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "c7d4af33dae5aa8c2618e37890cebefe374dd65d402d409c7e443fe746339fbb",
+   "review_note": "Community diagnosis is a use of epidemiology; clinical diagnosis is not."
+  },
+  {
+   "id": 22140,
+   "year": 2021,
+   "subject": "Community Medicine",
+   "topic": "PHC staffing",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "9843ffd4a8d53f99cce3f343aafe708288f0e14990001ff5c529c69aa24f8ffa",
+   "review_note": "Anaesthetists are posted at CHCs, not PHCs."
+  },
+  {
+   "id": 22414,
+   "year": 2021,
+   "subject": "Paediatrics",
+   "topic": "Congenital rubella syndrome",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "144b1ab76f6ae5ede2e58f6eb340a096ca6c03ae550d9aa3fe71a75571595514",
+   "review_note": "The classic triad: deafness, cardiac malformation, cataract."
+  },
+  {
+   "id": 22416,
+   "year": 2021,
+   "subject": "General Surgery",
+   "topic": "Rabies exposure category",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "6aa589fd08c4be37498a67b5c3e56a857e9208ff3ba7135a7610519a9fe4ed95",
+   "review_note": "An abrasion without bleeding is category II: wound care and vaccine, no immunoglobulin."
+  },
+  {
+   "id": 22420,
+   "year": 2021,
+   "subject": "Community Medicine",
+   "topic": "COVAX",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "47ba63b67d5d72a3fe5d9426474a64cb52616194f1168063597af77db0c5375b",
+   "review_note": "Co-led by Gavi, WHO and CEPI."
+  },
+  {
+   "id": 22621,
+   "year": 2021,
+   "subject": "Paediatrics",
+   "topic": "Water purification",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "684a17124d56f9c76be5eedc77d75869c75213f572671b793a45b474f31144dd",
+   "review_note": "The Schmutzdecke is the vital layer of the slow sand filter."
+  },
+  {
+   "id": 22460,
+   "year": 2022,
+   "subject": "Paediatrics",
+   "topic": "ICDS services",
+   "key": "D",
+   "key_provenance": "unknown",
+   "stem_hash": "99ddf2389b5885f87b98417d7ee36423cfe980870889f0bb5491bed5766c3c5d",
+   "review_note": "Pregnant women receive all four services listed."
+  },
+  {
+   "id": 22473,
+   "year": 2023,
+   "subject": "Paediatrics",
+   "topic": "SUMAN",
+   "key": "A",
+   "key_provenance": "unknown",
+   "stem_hash": "18cc49abe56dcec6392bffb15ee4715031b96135267f21059ab81834c92fc409",
+   "review_note": "SUMAN aims at zero preventable maternal and newborn deaths."
+  },
+  {
+   "id": 22619,
+   "year": 2023,
+   "subject": "Community Medicine",
+   "topic": "Methaemoglobinaemia from water",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "decef8b1f5d4b2221bda47d4f395a9721ec8f577723bcab73b0717f3ca35449d",
+   "review_note": "Nitrate in drinking water causes methaemoglobinaemia."
+  },
+  {
+   "id": 22138,
+   "year": 2024,
+   "subject": "Community Medicine",
+   "topic": "ASHA selection",
+   "key": "C",
+   "key_provenance": "unknown",
+   "stem_hash": "ac8590092e5c367c42146af860e5f21b1f0dd7691ef737163155d3cd5888bdb7",
+   "review_note": "A resident of the village, married, widowed or divorced, aged 25-45."
+  },
+  {
+   "id": 2033,
+   "year": 2025,
+   "subject": "General Medicine",
+   "topic": "CKD staging",
+   "key": "C",
+   "key_provenance": "import",
+   "stem_hash": "76c41c288f8e31d0b2538642e29acf7cb4ca370a82c0cb64644f7807911e5681",
+   "review_note": "GFR 15-29 mL/min/1.73 m2 is stage 4."
+  },
+  {
+   "id": 2043,
+   "year": 2025,
+   "subject": "General Medicine",
+   "topic": "Anaemia work-up",
+   "key": "D",
+   "key_provenance": "import",
+   "stem_hash": "e36f121d47e88b4d93610504881104fef4a83c0fca300dfc92bc2e6fd2092573",
+   "review_note": "Normocytic anaemia with a high reticulocyte production index points to haemolysis."
+  },
+  {
+   "id": 2058,
+   "year": 2025,
+   "subject": "General Medicine",
+   "topic": "Pellagra",
+   "key": "C",
+   "key_provenance": "import",
+   "stem_hash": "b31b5f19d0b3823408d656d5f6d2a705ea6e2a616e8ed129b15647da0ce62e98",
+   "review_note": "Pellagra is linked with a maize (corn) diet.",
+   "explanation_conflicts_with_key": true
+  },
+  {
+   "id": 2065,
+   "year": 2025,
+   "subject": "General Medicine",
+   "topic": "Osteoarthritis joints",
+   "key": "C",
+   "key_provenance": "import",
+   "stem_hash": "66fc1bb5dffa59929b9d3b7ce3222a590b1a458d845cf6bab6fda44497160d73",
+   "review_note": "First MTP, PIP and C5-C6 are commonly involved; the ankle is usually spared.",
+   "explanation_conflicts_with_key": true
+  },
+  {
+   "id": 2098,
+   "year": 2025,
+   "subject": "General Medicine",
+   "topic": "Portal hypertension",
+   "key": "B",
+   "key_provenance": "import",
+   "stem_hash": "be1f77e0bc302435c318772a81c74b9c5f1168fd3f7e0c343f9bc5f1173c6df7",
+   "review_note": "Portal vein thrombosis is pre-hepatic presinusoidal."
+  },
+  {
+   "id": 2103,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "Radiopaque poisons",
+   "key": "D",
+   "key_provenance": "import",
+   "stem_hash": "f436d2c54a1d83e40ea8a8857ff8d14ad2d65e98144fac210d62a188c4d8bf61",
+   "review_note": "Chloral hydrate is radiopaque on a plain film.",
+   "explanation_conflicts_with_key": true
+  },
+  {
+   "id": 2108,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "Ear problem referral",
+   "key": "C",
+   "key_provenance": "import",
+   "stem_hash": "b25adaa2fa6f9a6ff7ddb06ee1001a5ec4cd733eb48430d5ad6e2282d0fa4d2a",
+   "review_note": "A tender swelling behind the ear (mastoiditis) needs urgent referral."
+  },
+  {
+   "id": 2113,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "RBSK deficiencies",
+   "key": "D",
+   "key_provenance": "import",
+   "stem_hash": "180d1b1f7ebc51036be3aa7f2c4a57627c89621d7aba18ac5c5b454d5c2368ec",
+   "review_note": "Vitamin A deficiency, anaemia and vitamin D deficiency are in the Deficiencies group; hypothyroidism is not.",
+   "explanation_conflicts_with_key": true
+  },
+  {
+   "id": 2114,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "Hyperkalaemia in children",
+   "key": "D",
+   "key_provenance": "import",
+   "stem_hash": "d5841e6249c167ba547a3d5741ccc6ac40a795979568273fd3778d9c27ab76e5",
+   "review_note": "Insulin with glucose shifts potassium into cells; resins remove it from the body."
+  },
+  {
+   "id": 2115,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "Oral rotavirus vaccine",
+   "key": "C",
+   "key_provenance": "import",
+   "stem_hash": "b80837bfd9c7a7d63ec052f04b03967f0ba1a1ca245d05af8d4dd12b37a17d6e",
+   "review_note": "Stored at 2-8 C; a past intussusception is a contraindication."
+  },
+  {
+   "id": 22146,
+   "year": 2025,
+   "subject": "Paediatrics",
+   "topic": "Rickets",
+   "key": "B",
+   "key_provenance": "unknown",
+   "stem_hash": "dab9be47f768082f3e77b1bcd481242f4c152ae181fc7f87c7fbe0498835bfb0",
+   "review_note": "Pigeon chest is a rickets deformity (vitamin D deficiency)."
+  }
+ ]
+}

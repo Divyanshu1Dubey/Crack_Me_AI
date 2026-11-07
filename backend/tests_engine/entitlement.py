@@ -184,7 +184,7 @@ def locked_test_response(action='take'):
             'feature': LOCKED_TEST_FEATURE,
             'message': (
                 'This test includes questions from the premium question bank. '
-                f'Subscribe to {what}, with answers and explanations for every question.'
+                f'Subscribe to {what}, with every answer and explanation unlocked.'
             ),
         },
         status=402,

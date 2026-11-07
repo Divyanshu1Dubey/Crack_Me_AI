@@ -15,7 +15,7 @@ google-genai>=1.0
 groq>=0.11
 openai>=2.32.0
 gunicorn>=22.0
-whitenoise>=6.7
+whitenoise>=6.12.0
 cerebras-cloud-sdk>=1.0
 cohere>=5.0
 together>=2.0
@@ -35,7 +35,7 @@ google-auth>=2.40,<3
 # Phase 7: Monitoring & structured logging
 sentry-sdk[django]>=2.58.0
 ddtrace>=4.15.6
-python-json-logger>=4.1.0
+python-json-logger>=4.2.0
 # PDF parsing for NEET PG
 PyMuPDF>=1.23.0
 # Admin Import Center parsers (material_importer/parser/: DOCX, PDF, PPTX).
@@ -63,7 +63,7 @@ sentence-transformers>=2.7.0
 # Railway runs Python 3.12 (backend/.python-version); 2.15.0+cpu has cp312 wheels.
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.15.0+cpu; sys_platform == "linux"
-numpy>=1.26
+numpy>=2.5.4
 # Security floors for transitive dependencies: the first versions without
 # known advisories (pip-audit, 2026-11-01). Without them pip keeps older,
 # vulnerable copies that are already installed or cached in a build layer.

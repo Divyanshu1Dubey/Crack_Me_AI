@@ -626,7 +626,7 @@ export default function TakeTestPage() {
                         <Lock className="w-12 h-12 mx-auto mb-4 text-primary" aria-hidden="true" />
                         <h1 className="text-xl font-bold mb-2 text-foreground">This test is part of Premium</h1>
                         <p className="text-sm text-muted-foreground mb-6">
-                            {premiumGate.message || 'Subscribe to take this test, with answers and explanations for every question.'}
+                            {premiumGate.message || 'Subscribe to take this test, with every answer and explanation unlocked.'}
                         </p>
                         <div className="flex flex-col gap-3 sm:flex-row">
                             <button onClick={() => router.push('/tests')} className="btn-secondary w-full inline-flex items-center justify-center">
@@ -1020,7 +1020,7 @@ export default function TakeTestPage() {
                                 </p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                     {answerLocked
-                                        ? 'You can see whether your answer was right. Upgrade to see the correct answer, the explanation and AI analysis for every question.'
+                                        ? 'You can see whether your answer was right. Upgrade to unlock the correct answers, explanations and AI analysis.'
                                         : 'Upgrade to get the AI analysis of every question.'}
                                 </p>
                             </div>

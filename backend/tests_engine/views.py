@@ -932,7 +932,7 @@ class TestViewSet(viewsets.ModelViewSet):
                     'feature': LOCKED_TEST_FEATURE,
                     'message': (
                         'This mock test is part of the Premium library. '
-                        'Subscribe to unlock all 100+ tests from just ₹129/month.'
+                        'Subscribe to unlock every mock test from just ₹129/month.'
                     ),
                 },
                 status=402,

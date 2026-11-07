@@ -1260,7 +1260,7 @@ export default function LandingPage() {
                     {[
                       { title: "AI Tutor", desc: "AI credits on every plan; unlimited AI explanations on the 1-year plan." },
                       { title: "Full QBank & Simulations", desc: `${CMS_PYQ_PHRASE} by year, the NEET PG bank (${NEET_PG_QUESTION_COUNT} questions) and full-length mock tests.` },
-                      { title: "Answers & Explanations", desc: "Correct answers, explanations and mnemonics for every question, not just the free showcase." },
+                      { title: "Answers & Explanations", desc: "The answer to every question, with its explanation and mnemonic where one is written, not just the free showcase." },
                       { title: "Spaced-Repetition Flashcards", desc: "SM-2 flashcards for high-yield facts and mnemonics." }
                     ].map((item, i) => (
                       <div key={i} className="flex gap-3">

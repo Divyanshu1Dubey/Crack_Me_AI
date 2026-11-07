@@ -867,7 +867,7 @@ def _send_purchase_emails(user, sub, price_paid, order_id, payment_id):
             f"- Valid Until: {expires_str}\n"
             f"- Razorpay Order ID: {order_id}\n"
             f"- Razorpay Payment ID: {payment_id}\n\n"
-            f"You now have full access to all CrackLabs Premium features, including our full 2018-2025 UPSC CMS bank, spaced repetition tools, and {ai_line}.\n\n"
+            f"You now have full access to all CrackLabs Premium features, including our full 2018-2026 UPSC CMS bank, spaced repetition tools, and {ai_line}.\n\n"
             f"Best of luck with your preparation!\n\n"
             f"Best regards,\n"
             f"The CrackLabs Team\n"

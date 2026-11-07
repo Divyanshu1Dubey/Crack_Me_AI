@@ -10,6 +10,7 @@ import { buildQuestionEditPayload, isValidAnswerLetter, mergeGeneratedFields, un
 import ExplanationSuggestionPanel from './ExplanationSuggestionPanel';
 import KeyChangeBox from './KeyChangeBox';
 import ProvenancePanel, { useProvenance } from './ProvenancePanel';
+import ScholarshipToggle from './ScholarshipToggle';
 import {
   EXPLANATION_FIELDS,
   EXPLANATION_FIELD_LABELS,
@@ -1096,6 +1097,12 @@ export default function QuestionEditModal({ question, images: initialImages, onC
             </label>
           ))}
         </div>
+
+        <ScholarshipToggle
+          questionId={question.id}
+          initial={!!question.is_scholarship_eligible}
+          onChanged={(eligible) => onSaved({ id: question.id, is_scholarship_eligible: eligible })}
+        />
 
         <div className="border-t border-gray-200 dark:border-slate-700 pt-3">
           <p className="text-sm font-medium mb-2 text-gray-900 dark:text-slate-100">Images attached ({images.length})</p>

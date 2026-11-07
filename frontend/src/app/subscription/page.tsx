@@ -7,6 +7,7 @@ import Header from '@/components/Header';
 import { authAPI, getApiErrorCode, type ScholarshipChallengeQuestion } from '@/lib/api';
 import { PREMIUM_PLANS, SCHOLARSHIP_PRICE_INR, type PurchasablePlanId } from './plans';
 import { CMS_MARKS_PER_QUESTION, CMS_PENALTY_PER_WRONG, round2 } from '@/lib/examPatterns';
+import { CMS_PYQ_YEARS } from '@/lib/bankStats';
 import {
     Crown, BookOpen, FileText, Clock,
     Sparkles, MessageSquare, ShieldCheck,
@@ -591,6 +592,15 @@ export default function SubscriptionPage() {
         return Math.round((curPerMonth - targetPerMonth) * 12);
     };
 
+    // Every paid plan unlocks the same premium access (backend: accounts.utils.is_premium);
+    // plans differ only in duration and AI allowance (PLAN_FEATURES). List only what the
+    // site gives today: no topic notes (none are published), no personal notes, no
+    // textbook page screenshots on the question bank (2026-11-07).
+    const sharedPremiumFeatures = [
+        'Every answer and explanation in the CMS, NEET PG and INI-CET question banks',
+        'All mock tests and year-wise PYQ simulations, with negative marking',
+        'Every discussion thread, and the answers in your Mistake Notebook',
+    ];
     const planCopy: Record<PurchasablePlanId, {
         description: string;
         features: string[];
@@ -599,40 +609,33 @@ export default function SubscriptionPage() {
         scholarshipPromo: boolean;
     }> = {
         '1_month': {
-            description: 'Essential premium features for short-term quick revision.',
+            description: '30 days of full premium access.',
             features: [
-                'Complete Year-wise & Subject-wise CMS/NEET QBank',
+                ...sharedPremiumFeatures,
                 '100 AI credits added on purchase (plus your free daily tokens)',
-                'SM-2 Active Spaced Flashcards',
-                'Community updates & discussion boards',
             ],
             badge: null,
             cta: 'Unlock Monthly Access',
             scholarshipPromo: true,
         },
         '3_months': {
-            description: 'Highly recommended for final month revisions & mock prep.',
+            description: '90 days of full premium access, for a complete revision cycle.',
             features: [
-                'Everything in 1 Month Pass',
+                ...sharedPremiumFeatures,
                 '300 AI credits added on purchase (plus your free daily tokens)',
-                'Full mock simulator with negative marking',
-                'Access to standard textbook screenshots/mappings',
             ],
             badge: 'Popular',
             cta: 'Unlock 3 Months Access',
             scholarshipPromo: false,
         },
         '1_year': {
-            description: 'Ultimate comprehensive bundle for NEET PG and UPSC CMS prep.',
+            description: '365 days of full premium access, with unlimited AI.',
             features: [
-                'Full Premium NEET PG QBank & CMS QBank',
-                'Topic notes & summaries',
-                '100% UNLIMITED AI explanations (No tokens)',
-                'Discussion threads on every question',
-                'Personalized checklist roadmap & progress audit',
+                ...sharedPremiumFeatures,
+                'Unlimited AI: no token limit on the AI Tutor or AI explanations',
             ],
             badge: 'Best Value',
-            cta: 'Claim Full VIP Pass',
+            cta: 'Unlock 1 Year Access',
             scholarshipPromo: false,
         },
     };
@@ -654,8 +657,8 @@ export default function SubscriptionPage() {
         },
         {
             icon: <FileText className="w-6 h-6 text-cyan-400" />,
-            title: "Topic Notes & Summaries",
-            desc: "Subject and topic notes, cheat sheets and summaries to revise high-yield areas quickly."
+            title: "Answers & Explanations",
+            desc: "The answer to every question in the bank, with its explanation and mnemonic where one is written. Free accounts see the free showcase only."
         },
         {
             icon: <MessageSquare className="w-6 h-6 text-emerald-400" />,
@@ -664,18 +667,18 @@ export default function SubscriptionPage() {
         },
         {
             icon: <BookOpen className="w-6 h-6 text-blue-400" />,
-            title: "Textbook References",
-            desc: "Explanations linked to the standard textbook chapters and pages they draw on."
+            title: "Mistake Notebook",
+            desc: "Every question you answer wrong is saved automatically, with its answer, so you can revise your weak spots."
         },
         {
             icon: <Clock className="w-6 h-6 text-purple-400" />,
-            title: "Full 2018-2025 PYQ QBank",
+            title: `Full ${CMS_PYQ_YEARS} PYQ QBank`,
             desc: "Complete year-wise and subject-wise previous year question papers. Review corrected solutions with performance analysis."
         },
         {
             icon: <ShieldCheck className="w-6 h-6 text-rose-400" />,
             title: "Interactive Mock Simulations",
-            desc: "Practice real exam simulations with timed mock tests, negative marking, and real-time national leaderboard standings."
+            desc: "Timed mock tests and year-wise PYQ simulations with negative marking, and a full review after you submit."
         }
     ];
 
@@ -691,7 +694,7 @@ export default function SubscriptionPage() {
                                 <Crown className="w-7 h-7 text-amber-500 animate-pulse" />
                                 Premium Membership Hub
                             </h1>
-                            <p className="text-muted-foreground text-sm mt-1">Unlock expert guidance, textbooks, and interactive mock series.</p>
+                            <p className="text-muted-foreground text-sm mt-1">Unlock every answer and explanation, all mock tests and more AI.</p>
                         </div>
                         {isSubscribed && (
                             <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/15 border border-amber-500/30 px-3 py-1 font-bold">
@@ -929,10 +932,10 @@ export default function SubscriptionPage() {
                                     <Sparkles className="w-3.5 h-3.5" /> Scholarship Offer · ₹{scholarshipOfferPrice} Monthly Pass
                                 </span>
                                 <h3 className="text-xl font-extrabold text-foreground">
-                                    Diagnose 5/5 Correctly to Get Monthly Pass for ₹{scholarshipOfferPrice}
+                                    Answer 5/5 Correctly to Get the Monthly Pass for ₹{scholarshipOfferPrice}
                                 </h3>
                                 <p className="text-sm text-muted-foreground max-w-2xl">
-                                    Take our 5-question clinical skill test. Positive marking (<strong className="text-emerald-600 dark:text-emerald-400 font-semibold">+{round2(CMS_MARKS_PER_QUESTION).toFixed(2)}</strong>) &amp; negative marking (<strong className="text-red-600 dark:text-red-400 font-semibold">-{round2(CMS_PENALTY_PER_WRONG).toFixed(2)}</strong>) applies. Results are instant: score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price!
+                                    Take our 5-question test of UPSC CMS previous-year questions. Results are instant: score a perfect 5/5 to claim the ₹{scholarshipOfferPrice}/month scholarship price. You get 2 attempts: ₹{SCHOLARSHIP_PRICE_INR} if you pass on the first, ₹{SECOND_ATTEMPT_SCHOLARSHIP_PRICE_INR} on the second.
                                 </p>
                             </div>
                             {user?.scholarship_test_passed ? (
@@ -1426,11 +1429,12 @@ export default function SubscriptionPage() {
                                                 <div className="space-y-6">
                                                     <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
                                                         <span>QUESTION {currentQuestionIdx + 1} OF {scholarshipQuestions.length}</span>
-                                                        <Badge variant="outline" className="text-[10px] py-0.5 px-2">Negative marking active</Badge>
+                                                        <Badge variant="outline" className="text-[10px] py-0.5 px-2">All 5 must be correct</Badge>
                                                     </div>
 
                                                     {/* Question Text */}
-                                                    <div className="text-base font-bold leading-relaxed text-foreground bg-muted/30 p-4 rounded-2xl border border-border/60">
+                                                    {/* pre-line: numbered statements ("1. ... 2. ...") keep their own lines. */}
+                                                    <div className="text-base font-bold leading-relaxed text-foreground bg-muted/30 p-4 rounded-2xl border border-border/60 whitespace-pre-line">
                                                         {scholarshipQuestions[currentQuestionIdx].question_text}
                                                     </div>
 
@@ -1532,7 +1536,7 @@ function FAQ() {
         },
         {
             q: 'What happens to my data if my plan expires?',
-            a: 'Your bookmarks, notes, mock-test attempts and progress stay safe forever. When your plan is active again, premium tools (AI tutor credits — unlimited on the 1-year plan — full mock simulator, textbook screenshots) re-light automatically.',
+            a: 'Your bookmarks, flashcards, mock-test attempts and progress stay saved. When your plan is active again, premium access (every answer and explanation, all mock tests, AI credits — unlimited on the 1-year plan) comes back automatically.',
         },
         {
             q: 'Do you issue invoices?',
