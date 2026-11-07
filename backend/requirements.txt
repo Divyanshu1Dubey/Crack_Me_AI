@@ -1,28 +1,28 @@
-Django>=5.2.18,<6.0
+Django>=6.1.3,<7.0
 djangorestframework>=3.18.3
-djangorestframework-simplejwt>=5.3
-django-cors-headers>=4.3
-django-filter>=24.0
+djangorestframework-simplejwt>=5.5.1
+django-cors-headers>=4.9.0
+django-filter>=26.2
 # Pillow cannot reach the patched 12.1.1+ line while moviepy is installed:
 # moviepy 2.2.1 (the latest release) requires pillow<12.0. Pillow 11.3.0 has
 # open advisories (pip-audit, 2026-11-01). See docs/audit/OVERNIGHT_MISSION_FINAL_REPORT.md.
-Pillow>=11.3
-python-dotenv>=1.0
-dj-database-url>=2.2
-psycopg[binary]>=3.2
-google-generativeai>=0.8
-google-genai>=1.0
-groq>=0.11
-openai>=2.32.0
-gunicorn>=22.0
+Pillow>=13.0.0
+python-dotenv>=1.2.4
+dj-database-url>=3.1.2
+psycopg[binary]>=3.3.8
+google-generativeai>=0.8.6
+google-genai>=2.34.0
+groq>=1.7.0
+openai>=3.45.0
+gunicorn>=26.2.0
 whitenoise>=6.12.0
-cerebras-cloud-sdk>=1.0
-cohere>=5.0
-together>=2.0
+cerebras-cloud-sdk>=1.91.0
+cohere>=7.3.0
+together>=3.1.0
 # Phase 4E: Login security — brute-force protection
-django-axes>=7.0
+django-axes>=9.0.0
 # Argon2 password hasher (industry-standard, PWH winner)
-argon2-cffi>=21.3
+argon2-cffi>=25.1.0
 # Django-native sign-in (AUTH_PROVIDER=django). Both were only transitive
 # dependencies: bcrypt verifies the password hashes imported from Supabase
 # Auth (accounts/hashers.py), google-auth checks Google ID tokens
@@ -31,31 +31,31 @@ argon2-cffi>=21.3
 # 2.49.0.dev0 pre-release is not on PyPI, so a pin to it breaks deploys).
 # 2.40 has everything the verifier uses (a list of audiences, clock skew).
 bcrypt==5.0.0
-google-auth>=2.40,<3
+google-auth>=2.62.1,<3
 # Phase 7: Monitoring & structured logging
-sentry-sdk[django]>=2.58.0
-ddtrace>=4.15.6
+sentry-sdk[django]>=2.73.0
+ddtrace>=4.16.1
 python-json-logger>=4.2.0
 # PDF parsing for NEET PG
-PyMuPDF>=1.23.0
+PyMuPDF>=2.1
 # Admin Import Center parsers (material_importer/parser/: DOCX, PDF, PPTX).
 # They import these lazily and report "not installed" errors without them,
 # so every DOCX/PDF/PPTX upload failed on deploys built from this file.
 python-docx==1.2.0
-pdfplumber==0.11.9
+pdfplumber==0.11.10
 python-pptx==1.0.2
 # Phase 10: Redis cache (optional — falls back to local memory if Redis unavailable)
-django-redis>=5.4
+django-redis>=7.0.0
 # Supabase admin operations
-supabase>=2.28.3
-razorpay>=1.3.0
+supabase>=2.34.0
+razorpay>=2.0.1
 # Phase 3: Video generation & Background tasks
-edge-tts>=6.1
+edge-tts>=7.3.1
 # video_engine uses the moviepy 2.x API (with_duration / with_audio).
-moviepy>=2.0,<3
-django-q2>=1.6
+moviepy>=2.2.1,<3
+django-q2>=1.11.1
 # Knowledge Base: embeddings + optional pgvector + local reranker
-sentence-transformers>=2.7.0
+sentence-transformers>=6.2.0
 # The servers have no GPU: install the CPU build of PyTorch (pulled in by
 # sentence-transformers). The default Linux wheel bundles ~3 GB of CUDA
 # libraries, which overflowed Railway's build disk. Pinned to an exact +cpu
@@ -68,21 +68,21 @@ numpy>=2.5.4
 # known advisories (pip-audit, 2026-11-01). Without them pip keeps older,
 # vulnerable copies that are already installed or cached in a build layer.
 # Raise them when pip-audit reports new advisories.
-aiohttp>=3.14.4
-anyio>=4.14.2
-certifi>=2026.10.18
-cryptography>=50.0.0
-filelock>=4.2.1
-fsspec>=2026.6.0
+aiohttp>=3.14.5
+anyio>=4.16.0
+certifi>=2026.10.23
+cryptography>=50.0.2
+filelock>=4.2.8
+fsspec>=2026.9.0
 h2>=4.4.1
 hpack>=4.2.0
-httplib2>=0.32.0
-idna>=3.15
-multidict>=6.9.1
-opentelemetry-api>=1.45.1
+httplib2>=0.32.1
+idna>=3.20
+multidict>=7.2.1
+opentelemetry-api>=1.45.2
 pyasn1>=0.6.5
-Pygments>=2.20.0
+Pygments>=2.21.0
 PyJWT>=2.15.1
-requests>=2.33.0
-sqlparse>=0.6.0
+requests>=2.34.2
+sqlparse>=0.6.1
 urllib3>=2.8.0
