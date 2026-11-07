@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { aiAPI } from '@/lib/api';
+import { STANDARD_MAX_COUNT, isUpgradeRequired } from './limits';
 import type {
   AIExplanation,
   Difficulty,
@@ -194,10 +195,18 @@ export function useGenerate(): UseGenerateApi {
         message?: string;
       };
       let banner: string;
-      if (e?.response?.status === 429) {
-        banner =
-          'AI tokens exhausted — your daily/weekly free quota is used up. ' +
-          'Visit /subscription or /tokens to top up.';
+      if (isUpgradeRequired(err)) {
+        // 402 for a batch above the plan's limit (nothing was charged); the
+        // api.ts interceptor has already opened the upgrade modal.
+        banner = e.response?.data?.message ||
+          `Batches of more than ${STANDARD_MAX_COUNT} questions are part of the 1-year plan. ` +
+          `Choose ${STANDARD_MAX_COUNT} or fewer. You were not charged.`;
+      } else if (e?.response?.data?.error === 'insufficient_tokens') {
+        banner = e.response.data.message ||
+          'Not enough AI tokens for this batch. Visit /tokens to top up or wait for your free daily tokens.';
+      } else if (e?.response?.status === 429) {
+        // The ai_tutor rate limit, not the token wallet.
+        banner = 'Too many AI requests in a short time. Please wait a minute and try again.';
       } else if (e?.response?.data?.code === 'ai_unavailable' && e.response.data.message) {
         banner = e.response.data.message;
       } else {

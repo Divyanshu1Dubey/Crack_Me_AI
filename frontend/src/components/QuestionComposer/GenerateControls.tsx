@@ -2,7 +2,11 @@
  * GenerateControls — the composer card with subject, topic, difficulty,
  * count, cost preview, generate button, and progress bar.
  *
- * Stateless: the parent owns `selectedSubject`, `topic`, etc.
+ * The parent owns `selectedSubject`, `topic`, etc. The batch limit comes from
+ * `useGenerationLimit` (limits.ts): 15 and 20 questions per batch are for
+ * unlimited-AI users (1-year plan, admins); for everyone else they are listed
+ * as locked 1-year plan options that open the upgrade modal instead of being
+ * picked, and the backend refuses them too (403 upgrade_required, no charge).
  */
 'use client';
 
@@ -11,13 +15,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { Coins, ChevronDown, Loader2, Sparkles, Target } from 'lucide-react';
+import { Coins, ChevronDown, Infinity as InfinityIcon, Loader2, Lock, Sparkles, Target } from 'lucide-react';
+import { usePaywall } from '@/lib/paywall/paywallContext';
 import {
-  COUNT_OPTIONS,
   DIFFICULTY_OPTIONS,
   EXPLANATION_TOKEN_COST,
   GENERATION_TOKEN_COST,
 } from './constants';
+import { LARGE_BATCH_FEATURE, PREMIUM_MAX_COUNT, countOptions, isCountLocked } from './limits';
+import { useGenerationLimit } from './useGenerationLimit';
 import type { Difficulty } from './types';
 
 interface GenerateControlsProps {
@@ -49,6 +55,30 @@ export function GenerateControls({
   progress,
   onGenerate,
 }: GenerateControlsProps) {
+  const { unlimitedAi, maxCount } = useGenerationLimit();
+  const { show: showPaywall } = usePaywall();
+  // A count above the limit (e.g. the plan ended while the page was open)
+  // opens the upgrade modal instead of a request the backend would refuse.
+  const countLocked = isCountLocked(count, unlimitedAi);
+
+  const handleCountChange = (value: string) => {
+    const n = Number(value);
+    if (isCountLocked(n, unlimitedAi)) {
+      // The select is controlled, so it stays on the current count.
+      showPaywall(LARGE_BATCH_FEATURE);
+      return;
+    }
+    onCountChange(n);
+  };
+
+  const handleGenerate = () => {
+    if (countLocked) {
+      showPaywall(LARGE_BATCH_FEATURE);
+      return;
+    }
+    onGenerate();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -89,27 +119,66 @@ export function GenerateControls({
           </Field>
 
           <Field label="Questions">
-            <Select value={String(count)} onChange={(v) => onCountChange(Number(v))}>
-              {COUNT_OPTIONS.map((n) => (
-                <option key={n} value={n}>{n}</option>
+            <Select value={String(count)} onChange={handleCountChange}>
+              {countOptions(unlimitedAi).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </Select>
+            <p className="flex items-start gap-1 text-[11px] leading-snug text-muted-foreground">
+              {unlimitedAi ? (
+                <>
+                  <InfinityIcon className="h-3 w-3 mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+                  <span>Up to {maxCount} per batch on your plan.</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
+                  <span>
+                    Up to {maxCount} per batch.{' '}
+                    <button
+                      type="button"
+                      onClick={() => showPaywall(LARGE_BATCH_FEATURE)}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {PREMIUM_MAX_COUNT} at once with the 1-year plan
+                    </button>
+                  </span>
+                </>
+              )}
+            </p>
           </Field>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Coins className="h-3.5 w-3.5 text-amber-500" />
-            <span>
-              Cost:&nbsp;
-              <span className="font-semibold text-foreground">{GENERATION_TOKEN_COST} tokens</span>
-              &nbsp;per quiz (any number of questions). AI deep explanations are optional:{' '}
-              {EXPLANATION_TOKEN_COST} tokens each, only when you ask. Unlimited plans pay nothing.
-            </span>
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            {unlimitedAi ? (
+              <>
+                <InfinityIcon className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  Cost:&nbsp;
+                  <span className="font-semibold text-foreground">no tokens</span>
+                  &nbsp;— your plan has unlimited AI: up to {maxCount} questions per batch, and AI
+                  deep explanations are included.
+                </span>
+              </>
+            ) : (
+              <>
+                <Coins className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
+                <span>
+                  Cost:&nbsp;
+                  <span className="font-semibold text-foreground">{GENERATION_TOKEN_COST} tokens per batch</span>
+                  &nbsp;of up to {maxCount} questions. AI deep explanations are optional:{' '}
+                  {EXPLANATION_TOKEN_COST} tokens each, only when you ask. The 1-year plan generates up
+                  to {PREMIUM_MAX_COUNT} per batch with no tokens.
+                </span>
+              </>
+            )}
           </div>
-          <Button onClick={onGenerate} disabled={generating} size="lg" className="gap-2">
+          <Button onClick={handleGenerate} disabled={generating} size="lg" className="gap-2 shrink-0">
             {generating ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
+            ) : countLocked ? (
+              <><Lock className="h-4 w-4" /> Unlock {count} per batch</>
             ) : (
               <><Sparkles className="h-4 w-4" /> Generate Questions</>
             )}

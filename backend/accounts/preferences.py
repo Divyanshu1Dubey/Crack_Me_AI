@@ -1,27 +1,32 @@
 """Per-user layout preferences (Settings > Customise): ``GET`` / ``PATCH /api/auth/preferences/``.
 
 A learner may reorder the sidebar's sections and links, hide links, reorder or hide dashboard
-widgets and pick the page the app opens on. Customisation only reorders and hides: a hidden link
-stays reachable in the sidebar's "More" group, and every hidden widget can be turned back on in
-Settings. The Admin group of the sidebar is not customisable.
+widgets, pick the page the app opens on, hide question-bank tools and pick the mode the question
+bank opens in. Customisation only reorders and hides: a hidden link stays reachable in the
+sidebar's "More" group, and every hidden widget or tool can be turned back on in Settings. The
+Admin group of the sidebar is not customisable. The question bank's answer flow (the options,
+Submit, the answer and its explanation, navigation) is not on the tool list, "Flag Issue" can
+never be hidden, and hiding a tool unlocks nothing: premium gating stays on the server.
 
 Stored in ``CustomUser.ui_preferences``, only what the user changed (``{}`` = the defaults)::
 
     {
       "sidebar":   {"sections": [<section id>, ...], "items": [<link id>, ...], "hidden": [<link id>, ...]},
       "dashboard": {"order": [<widget id>, ...], "hidden": [<widget id>, ...]},
-      "landing_page": "<page id>"
+      "landing_page": "<page id>",
+      "question_bank": {"hidden": [<tool id>, ...], "study_mode": "practice" | "exam"}
     }
 
 * ``GET`` answers ``{"preferences": {...}}``: the stored value without anything that is no
   longer on the allow-lists (an id dropped in a later release never reaches the client).
 * ``PATCH`` replaces each top-level key it names and keeps the others; ``null`` (or an empty
-  object) removes a key, so that part goes back to the default. Empty lists are not stored.
-  Validation is strict: unknown keys, unknown or repeated ids, wrong types and the free plan's
-  upgrade row in ``dashboard.hidden`` answer ``400 invalid_preferences`` (``errors`` names each
-  field), a body over ``MAX_BODY_BYTES`` answers ``413 preferences_too_large``; nothing is saved.
-  An order list may name only some ids: the client places the ids it does not name after the
-  named ones, in their default order.
+  object) removes a key, so that part goes back to the default. Empty lists and a ``null``
+  ``study_mode`` are not stored. Validation is strict: unknown keys, unknown or repeated ids,
+  wrong types, an unknown mode, the free plan's upgrade row in ``dashboard.hidden`` and
+  ``report`` in ``question_bank.hidden`` answer ``400 invalid_preferences`` (``errors`` names
+  each field), a body over ``MAX_BODY_BYTES`` answers ``413 preferences_too_large``; nothing is
+  saved. An order list may name only some ids: the client places the ids it does not name after
+  the named ones, in their default order.
 * Signed-in users only; a user reads and writes only their own row (there is no user
   parameter). Saves are limited to 60 a minute per account (reads are not counted).
 
@@ -70,17 +75,42 @@ LANDING_PAGE_IDS = (
     'dashboard', 'questions', 'tests', 'flashcards', 'simulator', 'mistake-notebook',
     'ai-tutor', 'roadmap', 'analytics', 'bookmarks',
 )
+# Question-bank tools a learner may hide, in their default order: the panels of a question in the
+# question bank and the full-screen year practice, then the toolbar and panels of a practice
+# session. The answer flow itself is not on the list.
+QUESTION_BANK_TOOL_IDS = (
+    'ai-analysis', 'mnemonic', 'textbook-reference', 'find-in-textbook', 'similar-pyqs', 'citations',
+    'video', 'discussion', 'report', 'shortcuts',
+    'review-flag', 'confidence', 'strike', 'time-spent', 'provenance', 'related-pyqs', 'related-topics',
+)
+# Flag Issue: how wrong answer keys get reported, so it is never hidden.
+QUESTION_BANK_ALWAYS_SHOWN_IDS = (
+    'report',
+)
+# The modes the question bank may open in, the default first: practice shows the answer when an
+# option is picked, exam waits for Submit.
+STUDY_MODE_IDS = (
+    'practice', 'exam',
+)
 
-PREFERENCE_KEYS = ('sidebar', 'dashboard', 'landing_page')
+PREFERENCE_KEYS = ('sidebar', 'dashboard', 'landing_page', 'question_bank')
 # The id lists of each object-valued preference and the ids each one accepts.
 _ID_LISTS = {
     'sidebar': {'sections': SIDEBAR_SECTION_IDS, 'items': SIDEBAR_ITEM_IDS, 'hidden': SIDEBAR_ITEM_IDS},
     'dashboard': {'order': DASHBOARD_WIDGET_IDS, 'hidden': DASHBOARD_WIDGET_IDS},
+    'question_bank': {'hidden': QUESTION_BANK_TOOL_IDS},
 }
 # Ids a list may never contain, per (preference, list).
-_NEVER = {('dashboard', 'hidden'): DASHBOARD_ALWAYS_SHOWN_IDS}
+_NEVER = {
+    ('dashboard', 'hidden'): DASHBOARD_ALWAYS_SHOWN_IDS,
+    ('question_bank', 'hidden'): QUESTION_BANK_ALWAYS_SHOWN_IDS,
+}
+# Fields of an object-valued preference that hold one id, and the ids each one accepts.
+_CHOICES = {
+    'question_bank': {'study_mode': STUDY_MODE_IDS},
+}
 
-# A complete preference object is a few hundred bytes.
+# The largest valid preference object (every id named everywhere) is under 2 KB.
 MAX_BODY_BYTES = 4096
 # Errors reported per request (a body full of unknown keys gets the first ones).
 _MAX_ERRORS = 10
@@ -145,10 +175,11 @@ def validate_patch(data: object) -> dict[str, object]:
             errors[key] = 'Expected an object.'
         else:
             lists = _ID_LISTS[key]
+            choices = _CHOICES.get(key, {})
             for field in value:
-                if field not in lists and len(errors) < _MAX_ERRORS:
+                if field not in lists and field not in choices and len(errors) < _MAX_ERRORS:
                     errors[f'{key}.{str(field)[:_ECHO_CHARS]}'] = 'Unknown field.'
-            part: dict[str, list[str]] = {}
+            part: dict[str, object] = {}
             for field, allowed in lists.items():
                 if field not in value:
                     continue
@@ -157,6 +188,14 @@ def validate_patch(data: object) -> dict[str, object]:
                     errors[f'{key}.{field}'] = error
                 elif value[field]:
                     part[field] = list(value[field])
+            for field, allowed in choices.items():
+                # Absent or null: the default.
+                if value.get(field) is None:
+                    continue
+                if isinstance(value[field], str) and value[field] in allowed:
+                    part[field] = value[field]
+                else:
+                    errors[f'{key}.{field}'] = 'Unknown value.'
             # An object with nothing left in it is the default: remove the key.
             cleaned[key] = part or None
     if errors:
@@ -173,7 +212,7 @@ def clean_stored(raw: object) -> dict[str, object]:
         value = raw.get(key)
         if not isinstance(value, dict):
             continue
-        part: dict[str, list[str]] = {}
+        part: dict[str, object] = {}
         for field, allowed in lists.items():
             ids = value.get(field)
             if not isinstance(ids, list):
@@ -185,6 +224,10 @@ def clean_stored(raw: object) -> dict[str, object]:
                     kept.append(item)
             if kept:
                 part[field] = kept
+        for field, allowed in _CHOICES.get(key, {}).items():
+            choice = value.get(field)
+            if isinstance(choice, str) and choice in allowed:
+                part[field] = choice
         if part:
             out[key] = part
     landing = raw.get('landing_page')

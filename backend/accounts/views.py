@@ -541,6 +541,37 @@ class SubscribeOrderView(APIView):
                     'idempotent_replay': True,
                 })
 
+        # Coupon code (2026-11-07, accounts.coupons): checked and priced on the server only. A code
+        # worth the whole price activates the plan here, without a payment; otherwise the order is
+        # created for the discounted amount and holds one use of the code until it is paid.
+        from . import coupons
+        coupon = None
+        coupon_quote = None
+        coupon_code = coupons.normalize_code(request.data.get('coupon_code'))
+        if coupon_code:
+            if plan not in coupons.COUPON_PLANS:
+                error = coupons.CouponError('coupon_not_for_plan')
+                return Response({'code': error.code, 'error': error.message}, status=status.HTTP_400_BAD_REQUEST)
+            coupon = coupons.find(coupon_code)
+            try:
+                coupons.check(coupon, user, plan)
+            except coupons.CouponError as error:
+                return Response({'code': error.code, 'error': error.message}, status=status.HTTP_400_BAD_REQUEST)
+            coupon_quote = coupons.quote(coupon, plan)
+            if coupon_quote['final_amount'] == 0:
+                try:
+                    sub = coupons.redeem_free(coupon, user, plan)
+                except coupons.CouponError as error:
+                    return Response({'code': error.code, 'error': error.message}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'free_activation': True,
+                    'plan': plan,
+                    'coupon_code': coupon.code,
+                    'message': f'Coupon {coupon.code} applied: your {sub.plan_display_name} is active.',
+                    'is_subscribed': True,
+                    'subscription': _serialize_subscription(sub),
+                })
+
         # Plan routing & amount lookup.
         if plan == '1_year':
             amount_paise = 199900
@@ -558,6 +589,9 @@ class SubscribeOrderView(APIView):
             amount_paise = int(amount_rs * 100)
         else:  # pragma: no cover - unreachable, plan validated above
             return Response({'error': 'Unknown or unavailable plan.'}, status=status.HTTP_400_BAD_REQUEST)
+        if coupon_quote is not None:
+            amount_rs = float(coupon_quote['final_amount'])
+            amount_paise = int(coupon_quote['final_amount']) * 100
 
         from .payments_mock import get_razorpay_client
         client = get_razorpay_client(key_id, key_secret)
@@ -569,6 +603,8 @@ class SubscribeOrderView(APIView):
             }
             if client_request_id:
                 order_notes['request_id'] = client_request_id
+            if coupon is not None:
+                order_notes['coupon'] = coupon.code
 
             order_data = {
                 'amount': amount_paise,
@@ -581,7 +617,7 @@ class SubscribeOrderView(APIView):
             # Record payment attempt with plan type
             from accounts.models import PaymentAttempt
             error_marker = f'request_id:{client_request_id}' if client_request_id else ''
-            PaymentAttempt.objects.create(
+            attempt = PaymentAttempt.objects.create(
                 user=user,
                 razorpay_order_id=order['id'],
                 amount=amount_rs,
@@ -594,16 +630,28 @@ class SubscribeOrderView(APIView):
             # mail mid-checkout (promising unlimited AI on metered plans). An
             # abandoned-checkout reminder belongs in a scheduled job that
             # mails attempts still 'initiated' hours later.
-
-            return Response({
-                'order_id': order['id'],
-                'amount': order['amount'],
-                'key_id': key_id,
-                'plan': plan,
-            })
         except Exception:
             logger.exception('Failed to create Razorpay order for user_id=%s plan=%s', user.id, plan)
             return Response({'error': 'Could not start the payment. Please try again in a moment.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if coupon is not None:
+            try:
+                coupons.reserve(coupon, user, plan, order['id'])
+            except coupons.CouponError as error:
+                # Another checkout took the last use meanwhile: this order is never paid.
+                PaymentAttempt.objects.filter(pk=attempt.pk).update(status='failed', error_message=f'coupon:{error.code}')
+                return Response({'code': error.code, 'error': error.message}, status=status.HTTP_400_BAD_REQUEST)
+
+        payload = {
+            'order_id': order['id'],
+            'amount': order['amount'],
+            'key_id': key_id,
+            'plan': plan,
+        }
+        if coupon is not None:
+            payload.update({'coupon_code': coupon.code, 'original_amount': coupon_quote['original_amount'],
+                            'discount_amount': coupon_quote['discount_amount']})
+        return Response(payload)
 
 
 class SubscribeVerifyView(APIView):
@@ -736,13 +784,17 @@ def _record_razorpay_purchase(user, attempt, payment_id, *, source):
         razorpay_order_id=order_id,
         razorpay_payment_id=payment_id,
     )
+    # A coupon held for this order is used now (verify, webhook or recovery alike).
+    from .coupons import mark_redeemed
+    coupon_code = mark_redeemed(order_id, sub)
     label = {'verify': 'Razorpay Premium', 'webhook': 'Razorpay Webhook:'}.get(source, f'Razorpay ({source})')
     TokenTransaction.objects.create(
         user=user,
         transaction_type="purchase",
         amount=0,
         price_paid=price_paid,
-        note=f"{label} {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}",
+        note=(f"{label} {sub.plan_display_name} (₹{price_paid}): order={order_id}, payment={payment_id}"
+              + (f", coupon={coupon_code}" if coupon_code else '')),
     )
     return sub
 
@@ -994,8 +1046,19 @@ class SubscriptionInvoiceView(APIView):
             except PaymentAttempt.DoesNotExist:
                 payment = None
 
+        coupon = None
+        if sub.razorpay_order_id:
+            from .models_coupons import CouponRedemption
+            redemption = (CouponRedemption.objects.select_related('coupon')
+                          .filter(razorpay_order_id=sub.razorpay_order_id, user=user, status='redeemed').first())
+            if redemption is not None:
+                coupon = {'code': redemption.coupon.code,
+                          'original_amount': float(redemption.original_amount),
+                          'discount_amount': float(redemption.discount_amount)}
+
         return Response({
             'subscription': _serialize_subscription(sub),
+            'coupon': coupon,
             'payment': {
                 'razorpay_order_id': payment.razorpay_order_id if payment else (sub.razorpay_order_id or ''),
                 'razorpay_payment_id': (
@@ -2327,7 +2390,10 @@ class AdminPaymentHistoryView(APIView):
     def get(self, request):
         from .models import PaymentAttempt
         # Return last 100 payments for simplicity
-        payments = PaymentAttempt.objects.select_related('user').order_by('-created_at')[:100]
+        from .models_coupons import CouponRedemption
+        payments = list(PaymentAttempt.objects.select_related('user').order_by('-created_at')[:100])
+        codes = dict(CouponRedemption.objects.filter(razorpay_order_id__in=[p.razorpay_order_id for p in payments])
+                     .values_list('razorpay_order_id', 'coupon__code'))
         data = []
         for p in payments:
             data.append({
@@ -2339,6 +2405,7 @@ class AdminPaymentHistoryView(APIView):
                 'amount': float(p.amount) if p.amount else 0,
                 'status': p.status,
                 'razorpay_order_id': p.razorpay_order_id,
+                'coupon_code': codes.get(p.razorpay_order_id, ''),
                 'created_at': p.created_at,
             })
         return Response(data)

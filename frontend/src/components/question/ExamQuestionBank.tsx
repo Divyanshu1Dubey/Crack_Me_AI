@@ -22,6 +22,11 @@
  * pre-seed the initial filter state from URL params so links like
  * `/questions/neet-pg/practice?year=2025&q=12345` or
  * `/questions?exam=cms&subject=medicine` open the right view immediately.
+ *
+ * Settings > Customise (useQuestionBankPreferences): the mode the bank opens
+ * in, and the tools shown with a question (`shows(...)`). The answer flow
+ * and "Flag Issue" are never hidden; the defaults render while the
+ * preferences load.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
@@ -34,9 +39,12 @@ import {
     BookOpen, Search, Filter, Bookmark, ChevronLeft, ChevronRight,
     ChevronDown, Loader2, Brain, Sparkles, CheckCircle, ArrowRight,
     Flag, Target, Zap, GraduationCap, Lightbulb, Play, Calendar, ListChecks,
-    Lock,
+    Lock, SlidersHorizontal,
 } from 'lucide-react';
 import DiscussionThread from '@/components/DiscussionThread';
+import AiMarkdown from '@/components/ai/AiMarkdown';
+import { useQuestionBankPreferences } from '@/components/customize/useQuestionBankPreferences';
+import type { StudyMode } from '@/lib/preferences';
 import StudentCitations from '@/components/evidence/StudentCitations';
 import { ExamTrackProvider, useExamTrack } from '@/components/ExamTrackProvider';
 import ImageViewer, { type ViewerImage } from '@/components/image/ImageViewer';
@@ -264,7 +272,17 @@ function ExamQuestionBankInner({
     const [questionDetail, setQuestionDetail] = useState<any>(null);
     const [showAnswer, setShowAnswer] = useState(false);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-    const [studyMode, setStudyMode] = useState<'practice' | 'exam'>('practice');
+    // Practice (the answer shows on a pick) or exam (pick, then Submit). The
+    // bank follows the student's default (Settings > Customise) until they
+    // switch modes or answer here; practice while the preferences load.
+    const questionBankPrefs = useQuestionBankPreferences();
+    const { shows } = questionBankPrefs;
+    const [studyModeChoice, setStudyMode] = useState<StudyMode | null>(null);
+    const studyMode: StudyMode = studyModeChoice ?? questionBankPrefs.studyMode;
+    // An answer keeps the mode it was given in (a late preference never flips it).
+    const keepStudyMode = () => {
+        if (studyModeChoice === null) setStudyMode(studyMode);
+    };
     // isCorrect null: the question has no answer key, so the pick is ungraded.
     const [examAnswers, setExamAnswers] = useState<Record<number, { selected: string; isCorrect: boolean | null; answeredAt: number }>>({});
     const [examPaletteOpen, setExamPaletteOpen] = useState(true);
@@ -436,7 +454,7 @@ function ExamQuestionBankInner({
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questionDetail, showAnswer, questions, selectedQuestion, page, totalCount]);
+    }, [questionDetail, showAnswer, questions, selectedQuestion, page, totalCount, studyMode]);
 
     useEffect(() => {
         if (!aiLoading) return;
@@ -785,6 +803,7 @@ function ExamQuestionBankInner({
             showPaywall('PYQ answers');
             return;
         }
+        keepStudyMode();
         setSelectedAnswer(opt);
 
         if (studyMode === 'practice') {
@@ -805,6 +824,7 @@ function ExamQuestionBankInner({
     const handleSubmitExamModeAnswer = () => {
         if (!questionDetail || !selectedAnswer || showAnswer) return;
         if (questionDetail.id !== selectedQuestion) return;
+        keepStudyMode();
         setShowAnswer(true);
         const qId = questionDetail.id;
         const picked = selectedAnswer;
@@ -1274,23 +1294,37 @@ function ExamQuestionBankInner({
                                         value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                                 </div>
-                                <div className="flex items-center gap-1 bg-muted/40 p-1.5 rounded-xl border border-border/60 shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => setStudyMode('practice')}
-                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-md ring-1 ring-primary/40' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
-                                    >
-                                        <Play className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
-                                        Practice Mode
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStudyMode('exam')}
-                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-400/60' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
-                                    >
-                                        <Target className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
-                                        Exam Mode
-                                    </button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-1 bg-muted/40 p-1.5 rounded-xl border border-border/60 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStudyMode('practice')}
+                                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'practice' ? 'bg-primary text-primary-foreground shadow-md ring-1 ring-primary/40' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
+                                        >
+                                            <Play className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                                            Practice Mode
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStudyMode('exam')}
+                                            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${studyMode === 'exam' ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-400/60' : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'}`}
+                                        >
+                                            <Target className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />
+                                            Exam Mode
+                                        </button>
+                                    </div>
+                                    {/* Settings > Customise: the default mode and which tools show. */}
+                                    {questionBankPrefs.signedIn && (
+                                        <Link
+                                            href="/settings#customise-question-bank"
+                                            prefetch={false}
+                                            aria-label="Customise the question bank"
+                                            title="Customise the question bank"
+                                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/40 text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_120px_120px] gap-2 lg:gap-2 items-center">
@@ -1837,9 +1871,9 @@ function ExamQuestionBankInner({
                                         </Card>
 
                                         {/* Accepted textbook citations (snippets only; nothing when there are none). */}
-                                        <StudentCitations questionId={detail.id} revealed={showAnswer} />
+                                        {shows('citations') && <StudentCitations questionId={detail.id} revealed={showAnswer} />}
 
-                                        {detail?.video_url && detail?.video_status === 'completed' && (
+                                        {shows('video') && detail?.video_url && detail?.video_status === 'completed' && (
                                             <div className="explanation-card explanation-card-indigo animate-fadeInUp mt-4 mb-4 overflow-hidden">
                                                 <div className="p-1">
                                                     <h4 className="explanation-card-title indigo px-4 py-2"><Play className="w-4 h-4" /> AI Video Explanation</h4>
@@ -1892,7 +1926,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {!aiExplanation && !aiLoading && !tokenError && (
+                                        {shows('ai-analysis') && !aiExplanation && !aiLoading && !tokenError && (
                                             <button onClick={() => {
                                                     // The GA4 "ai_explain_request" conversion (consent-gated).
                                                     analytics.aiExplainRequest(detail.id, selectedExam, 'question_bank');
@@ -1907,19 +1941,19 @@ function ExamQuestionBankInner({
                                             </button>
                                         )}
 
-                                        {detail.mnemonic && !aiExplanation?.mnemonic && (
+                                        {shows('mnemonic') && detail.mnemonic && !aiExplanation?.mnemonic && (
                                             <div className="mnemonic-card">
                                                 <div className="flex items-start gap-3">
                                                     <div className="mnemonic-icon">💡</div>
                                                     <div>
                                                         <h5 className="text-sm font-bold mb-1" style={{ color: '#f59e0b' }}>🧠 Memory Trick</h5>
-                                                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{String(detail.mnemonic)}</p>
+                                                        <AiMarkdown text={detail.mnemonic} className="text-sm leading-relaxed" />
                                                     </div>
                                                 </div>
                                             </div>
                                         )}
 
-                                        {detail.book_name && !aiExplanation?.textbook_reference?.book && (
+                                        {shows('textbook-reference') && detail.book_name && !aiExplanation?.textbook_reference?.book && (
                                             <div className="glass-card p-4 flex items-start gap-3">
                                                 <Bookmark className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#8b5cf6' }} />
                                                 <div>
@@ -1929,7 +1963,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {detail.similar && (detail.similar as unknown[]).length > 0 && (
+                                        {shows('similar-pyqs') && detail.similar && (detail.similar as unknown[]).length > 0 && (
                                             <div className="glass-card p-4">
                                                 <h5 className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--accent-primary)' }}>
                                                     <Target className="w-3.5 h-3.5" /> Similar PYQs from Database
@@ -1963,7 +1997,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {aiLoading && (
+                                        {shows('ai-analysis') && aiLoading && (
                                             <div className="glass-card p-5 flex items-center gap-4 animate-pulse" style={{ borderColor: 'rgba(6,182,212,0.3)' }}>
                                                 <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--accent-primary)' }} />
                                                 <div>
@@ -1973,7 +2007,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {tokenError && (
+                                        {shows('ai-analysis') && tokenError && (
                                             <div className="token-depleted-banner mt-3">
                                                 <div className="flex items-start gap-3">
                                                     <Zap className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#ef4444' }} />
@@ -1990,7 +2024,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {aiError && !tokenError && (
+                                        {shows('ai-analysis') && aiError && !tokenError && (
                                             <div className="glass-card p-4 mt-3" style={{ borderColor: 'rgba(239,68,68,0.3)' }}>
                                                 <div className="flex items-start gap-3">
                                                     <Brain className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
@@ -2005,7 +2039,7 @@ function ExamQuestionBankInner({
                                             </div>
                                         )}
 
-                                        {aiExplanation && !aiLoading && (
+                                        {shows('ai-analysis') && aiExplanation && !aiLoading && (
                                             <div className="space-y-3">
                                                 <div className="flex items-center gap-2 px-1 pt-1 opacity-80">
                                                     <Brain className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -2046,7 +2080,7 @@ function ExamQuestionBankInner({
                                                             <div className="mnemonic-icon">💡</div>
                                                             <div className="flex-1">
                                                                 <h5 className="text-sm font-bold mb-1.5" style={{ color: '#f59e0b' }}>🧠 Memory Trick — Never Forget This!</h5>
-                                                                <p className="text-sm font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>{aiExplanation.mnemonic}</p>
+                                                                <AiMarkdown text={aiExplanation.mnemonic} className="text-sm font-medium leading-relaxed" />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2129,7 +2163,7 @@ function ExamQuestionBankInner({
                                                                                     {aiExplanation.high_yield_points.map((point: string, i: number) => (
                                                                                         <li key={i} className="text-xs flex gap-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                                                                                             <span className="mt-0.5 shrink-0" style={{ color: '#ec4899' }}>▸</span>
-                                                                                            <span>{point}</span>
+                                                                                            <AiMarkdown text={point} className="min-w-0 flex-1 text-xs" />
                                                                                         </li>
                                                                                     ))}
                                                                                 </ul>
@@ -2143,7 +2177,7 @@ function ExamQuestionBankInner({
                                                                                 <ul className="space-y-2">
                                                                                     {aiExplanation.key_differentiators.map((d: string, i: number) => (
                                                                                         <li key={i} className="text-xs leading-relaxed px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,0.05)', color: 'var(--text-secondary)', borderLeft: '2px solid rgba(245,158,11,0.3)' }}>
-                                                                                            {d}
+                                                                                            <AiMarkdown text={d} className="text-xs" />
                                                                                         </li>
                                                                                     ))}
                                                                                 </ul>
@@ -2159,7 +2193,7 @@ function ExamQuestionBankInner({
                                                                                 <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#10b981' }} />
                                                                                 <div>
                                                                                     <h6 className="text-xs font-bold mb-0.5" style={{ color: '#10b981' }}>💎 Clinical Pearl</h6>
-                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.clinical_pearl}</p>
+                                                                                    <AiMarkdown text={aiExplanation.clinical_pearl} className="text-xs leading-relaxed" />
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -2168,7 +2202,7 @@ function ExamQuestionBankInner({
                                                                                 <GraduationCap className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} />
                                                                                 <div>
                                                                                     <h6 className="text-xs font-bold mb-0.5" style={{ color: '#f59e0b' }}>🎓 Exam Strategy</h6>
-                                                                                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{aiExplanation.exam_tip}</p>
+                                                                                    <AiMarkdown text={aiExplanation.exam_tip} className="text-xs leading-relaxed" />
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -2214,7 +2248,7 @@ function ExamQuestionBankInner({
                                     </div>
                                 )}
 
-                                {showAnswer && detail && (
+                                {showAnswer && detail && shows('find-in-textbook') && (
                                     <div className="space-y-2">
                                         {!textbookRef && !textbookLoading && (
                                             <button
@@ -2295,13 +2329,15 @@ function ExamQuestionBankInner({
                                     </div>
                                 )}
 
-                                <DiscussionThread questionId={detail.id} />
+                                {shows('discussion') && <DiscussionThread questionId={detail.id} />}
 
-                                <div className="flex flex-wrap items-center gap-3 px-2 py-2 text-[10px] text-muted-foreground">
-                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">A-D</kbd> answer</span>
-                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">N</kbd> next</span>
-                                    <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">P</kbd> prev</span>
-                                </div>
+                                {shows('shortcuts') && (
+                                    <div className="flex flex-wrap items-center gap-3 px-2 py-2 text-[10px] text-muted-foreground">
+                                        <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">A-D</kbd> answer</span>
+                                        <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">N</kbd> next</span>
+                                        <span><kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono">P</kbd> prev</span>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <Card className="p-8 md:p-16 text-center min-h-[260px] md:h-125 flex flex-col items-center justify-center">

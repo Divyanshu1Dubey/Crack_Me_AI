@@ -9,6 +9,7 @@ class AccountsConfig(AppConfig):
         # Ensure the freemium models module is imported so makemigrations
         # and the ORM see FreeShowcaseQuestion.
         from . import models_freemium  # noqa: F401
+        from . import models_coupons  # noqa: F401  (Coupon, CouponRedemption)
         # Wire up post_migrate → freemium auto-seed (showcase) and the
         # renewal-reminder schedule.
         from . import signals  # noqa: F401

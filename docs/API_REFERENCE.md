@@ -104,21 +104,33 @@ Username changes, refused attempts included, are limited to 10 per account per h
 ---
 
 ### `GET / PATCH /api/auth/preferences/`
-**Auth**: required (a user reads and writes only their own row). Layout chosen in Settings > Customise
-(`accounts/preferences.py`, `CustomUser.ui_preferences`); only what the user changed is stored.
+**Auth**: required (a user reads and writes only their own row). Layout and question-bank choices made in
+Settings > Customise (`accounts/preferences.py`, `CustomUser.ui_preferences`); only what the user changed is stored.
 
 ```json
 {
   "sidebar":   { "sections": ["study", "ai-tools", "resources", "account"], "items": ["questions", "..."], "hidden": ["jobs"] },
   "dashboard": { "order": ["today", "stats", "..."], "hidden": ["calendar"] },
-  "landing_page": "questions"
+  "landing_page": "questions",
+  "question_bank": { "hidden": ["discussion", "strike"], "study_mode": "exam" }
 }
 ```
 `GET` → `200 {"preferences": {...}}` (ids no longer on the allow-lists are dropped). `PATCH` replaces each
 top-level key it names and keeps the others; `null` or `{}` resets that key. Ids come from the allow-lists in
 `accounts/preferences.py` (same lists in `frontend/src/lib/preferences.ts`); unknown keys or ids, repeated ids,
-wrong types and hiding the free plan's `upgrade` widget → `400 {"code": "invalid_preferences", "errors": {...}}`;
-a body over 4096 bytes → `413`; non-JSON → `415`. Saves are limited to 60 per minute per account.
+wrong types, hiding the free plan's `upgrade` widget, hiding the `report` tool or an unknown `study_mode` →
+`400 {"code": "invalid_preferences", "errors": {...}}`; a body over 4096 bytes → `413`; non-JSON → `415`. Saves are
+limited to 60 per minute per account.
+
+`question_bank` (the question bank, the NEET PG / INI-CET banks, full-screen year practice and `/practice`; 2026-11-07):
+- `hidden`: tools left off the page. With a question in the bank / year practice: `ai-analysis`, `mnemonic`,
+  `textbook-reference`, `find-in-textbook`, `similar-pyqs`, `citations`, `video`, `discussion`, `shortcuts`; in a
+  `/practice` session: `review-flag`, `confidence`, `strike`, `time-spent`, `provenance`, `related-pyqs`,
+  `related-topics`. `report` (Flag Issue) is on the list but can never be hidden. The answer flow (options, Submit,
+  the answer and its explanation, navigation, Reveal) is not a tool, and hiding unlocks nothing: premium gating
+  stays on the server.
+- `study_mode`: `"practice"` (the default; the answer shows when an option is picked) or `"exam"` (pick, then
+  Submit). The bank opens in it until the student switches modes or answers on the page; absent or `null` = practice.
 
 ---
 
@@ -216,6 +228,19 @@ Device limit: a new device (an unknown `X-Session-ID`, or a Supabase session wit
 | POST | `/api/auth/subscribe/verify/` | `{ "razorpay_payment_id", "razorpay_order_id", "razorpay_signature" }` |
 | POST | `/api/auth/subscribe/webhook/` | Razorpay webhook (server-to-server) |
 | GET | `/api/auth/subscribe/status/` | `{ "is_subscribed": true, "subscription": { "id", "plan", "plan_display_name", "status", "is_active", "starts_at", "expires_at", "days_remaining", "amount_paid", "razorpay_order_id", "created_at" } }`; `subscription` is `null` without an active plan. From `Subscription` rows only: a bare `is_subscribed` flag no longer yields a "Legacy Early Bird (Lifetime)" plan. |
+
+### Coupon codes (2026-11-07)
+Logic: `accounts/coupons.py`; models `accounts/models_coupons.py` (`Coupon`, `CouponRedemption`, migration accounts.0031); views `accounts/views_coupons.py`. Prices are computed on the server only, in whole rupees, from `PLAN_FEATURES`. A code applies to `1_month`, `3_months` and `1_year`, never to the scholarship rate.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/coupons/validate/` | **Signed in**, 30 per hour. `{ "code", "plan"? }` → `{ code, discount_type, discount_value, plans: { "<plan>": { plan, original_amount, discount_amount, final_amount } } }`. Refusals answer `400 { code, error }` with `code` one of `coupon_invalid` (unknown or switched off), `coupon_not_started`, `coupon_expired`, `coupon_used_up`, `coupon_already_used`, `coupon_not_for_you` (a personal code) or `coupon_not_for_plan`. The admin note and the limits are never returned. |
+| POST | `/api/auth/subscribe/order/` | Optional `coupon_code`. Same checks as above. A paid code creates the order for the discounted amount (`amount` in paise, plus `coupon_code`, `original_amount`, `discount_amount`) and holds one use for 30 minutes; a student's earlier unpaid hold of the code is released. Verify, webhook or recovery marks the hold `redeemed` (`_record_razorpay_purchase`). A code worth the whole price answers `{ free_activation: true, plan, coupon_code, message, is_subscribed, subscription }` and activates the plan with no Razorpay order (order id `COUPON-<code>-<hex>`, amount 0). |
+| GET / POST | `/api/auth/admin/coupons/` | **Admin.** List with `redeemed`, `checkouts_in_progress`, `discount_given`, `revenue` and `state` (`live`, `off`, `expired`, `scheduled`, `used_up`) / create. Create fields: `code` (empty → generated `CL-XXXXXXXX`), `discount_type` (`percent` 1–100 or `fixed` rupees), `discount_value`, `plans` (empty = all), `max_uses` (null = no limit), `max_uses_per_user` (default 1), `valid_from` / `valid_until` (ISO), `assigned_email` (one account only), `description` (admin note), `is_active`. Validation errors answer `400 { code: "invalid_coupon", errors: { field: message } }`. |
+| PATCH / DELETE | `/api/auth/admin/coupons/<id>/` | **Admin.** Edit (a used code cannot be renamed) / delete (only a code nobody redeemed, `409 coupon_in_use` otherwise; switch it off instead). |
+| GET | `/api/auth/admin/coupons/redemptions/` | **Admin.** Who used which code: `?coupon=<id>&status=redeemed\|reserved\|released`, newest 500, with user id, username and email, plan, the three amounts, the order id and the dates. |
+
+`GET /api/auth/admin/payments/` rows carry `coupon_code`, and `GET /api/auth/subscribe/invoice/<id>/` carries `coupon: { code, original_amount, discount_amount }` or `null`. UI: `/subscription` ("Have a coupon code?"; `?coupon=CODE` links fill it in) and `/admin/coupons` (Admin sidebar → Coupon Codes). Django admin lists both models too.
 
 ---
 
@@ -668,7 +693,7 @@ Failure contract: when no provider answers, the view gives back what it charged 
 | POST | `/api/ai/mnemonic/` | `{ "topic": "cranial nerves" }` | Generate mnemonic |
 | POST | `/api/ai/analyze/` | `{ "question_id": 35 }` | Analyze question structure |
 | POST | `/api/ai/explain-answer/` | `{ "question_id": 35, "selected_answer": "C" }` | Rich JSON explanation |
-| POST | `/api/ai/generate-questions/` | `{ "topic": "..." , "count": 5, "difficulty": "medium" }` | AI MCQ generator |
+| POST | `/api/ai/generate-questions/` | `{ "subject": "...", "topic": "...", "count": 5, "difficulty": "easy\|medium\|hard" }` | AI MCQ generator: 10 tokens per batch (refunded when the AI fails or returns no valid question). `count` is 1–10 for everyone and up to 20 when the caller's AI is unlimited (1-year, legacy and admin-granted plans; admins and staff). A larger `count` from anyone else is `402 { "code": "upgrade_required", "feature": "Generate up to 20 MCQs at once", "message", "max_count": 10, "charged": false }`, answered before any token is consumed. A count below 1 becomes 1; an unlimited caller's count above 20 becomes 20. `200 { "questions", "count", "cost" }` |
 | POST | `/api/ai/study-plan/` | `{ "weak_topic_ids": [1,2,3] }` | Personalized plan |
 | GET | `/api/ai/high-yield/` | `?exam_track=1` | High-yield topics list |
 
@@ -906,7 +931,7 @@ curl https://crackcms-vsthc.ondigitalocean.app/api/questions/ \
 | `account_link_required` | 401 | The email belongs to an admin/staff row (or a row linked to another identity) that this Supabase identity may not link to automatically; an operator links it with `manage.py link_supabase_identity`. The frontend signs out with "This account must be verified by an administrator". |
 | `device_inactive` | 401 | This device's Supabase session was logged out (Settings or admin) or replaced by a newer sign-in on that browser; refused whatever `X-Session-ID` is sent. `api.ts` retries a request sent with an older session's token once with the current token; otherwise it drops the device id and signs out. |
 | `device_limit_reached` | 401 | A new device beyond the plan's cap (2 free / 4 subscribed). `api.ts` keeps the session and opens `/settings?deviceLimit=1` (not while on `/settings` or `/subscription`). |
-| `upgrade_required` | 402 | Paywall; carries `feature` (`PYQ answers`, `Mock Tests`, `AI Tutor`, ...) and `message`. Opens the upgrade modal. |
+| `upgrade_required` | 402 | Paywall; carries `feature` (`PYQ answers`, `Mock Tests`, `AI Tutor`, `Generate up to 20 MCQs at once`, ...) and `message`. Opens the upgrade modal (for the 20-MCQ batch it names the 1-year plan). The generator's answer also carries `max_count: 10` and `charged: false`. |
 | `insufficient_tokens` | 429 | AI token balance below the action's cost (in `error`, with `available` / `required`). |
 | `auth_verification_busy` | 429 | The access token could not be checked with Supabase right now (verification capacity or the per-IP budget, [`AUTHENTICATION.md`](./AUTHENTICATION.md) §12); `Retry-After: 1`. `api.ts` retries once. |
 | `already_subscribed` | 409 | Scholarship start / verify by a caller with an active plan (staff excepted). |

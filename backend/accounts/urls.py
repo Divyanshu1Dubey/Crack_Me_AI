@@ -1,5 +1,5 @@
 from django.urls import path
-from . import native_auth, preferences, views
+from . import native_auth, preferences, views, views_coupons
 
 urlpatterns = [
     # Which sign-in the backend runs (both modes) and the Django-native
@@ -62,6 +62,11 @@ urlpatterns = [
     path('admin/users/<int:user_id>/subscription/', views.AdminSubscriptionManageView.as_view(), name='admin_subscription_manage'),
     path('admin/users/<int:user_id>/devices/', views.AdminDeviceManageView.as_view(), name='admin_device_manage'),
     path('admin/payments/', views.AdminPaymentHistoryView.as_view(), name='admin_payment_history'),
+    # Coupon codes (2026-11-07): students check a code; admins create codes and see who used them.
+    path('coupons/validate/', views_coupons.CouponValidateView.as_view(), name='coupon_validate'),
+    path('admin/coupons/', views_coupons.AdminCouponListView.as_view(), name='admin_coupon_list'),
+    path('admin/coupons/redemptions/', views_coupons.AdminCouponRedemptionsView.as_view(), name='admin_coupon_redemptions'),
+    path('admin/coupons/<int:coupon_id>/', views_coupons.AdminCouponDetailView.as_view(), name='admin_coupon_detail'),
 ]
 
 # Dev-only local auth (see accounts/local_auth.py). Only mounted when

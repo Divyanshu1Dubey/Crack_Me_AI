@@ -1,9 +1,11 @@
 """Per-user layout preferences: GET / PATCH /api/auth/preferences/ (accounts/preferences.py).
 
-ALLOW-LISTS  ids are unique; every opening page is a sidebar link; the upgrade row is a widget.
+ALLOW-LISTS  ids are unique; every opening page is a sidebar link; the upgrade row is a widget;
+             Flag Issue is a question-bank tool; practice is the first (default) mode.
 VALIDATION   known keys only, ids from the allow-lists, no repeats, bounded lists and body
-             (413 over MAX_BODY_BYTES), JSON only (415), the free plan's upgrade row cannot be
-             hidden, and a refused body saves nothing (not even its valid parts).
+             (413 over MAX_BODY_BYTES; the largest valid body fits), JSON only (415), the free
+             plan's upgrade row and Flag Issue cannot be hidden, the question bank's mode is one
+             of the known ones, and a refused body saves nothing (not even its valid parts).
 MERGE        PATCH replaces the top-level keys it names and keeps the others; null or {} removes
              a key; empty lists are not stored; a stored value the allow-lists no longer accept is
              dropped on read.
@@ -27,8 +29,11 @@ from accounts.preferences import (
     DASHBOARD_WIDGET_IDS,
     LANDING_PAGE_IDS,
     MAX_BODY_BYTES,
+    QUESTION_BANK_ALWAYS_SHOWN_IDS,
+    QUESTION_BANK_TOOL_IDS,
     SIDEBAR_ITEM_IDS,
     SIDEBAR_SECTION_IDS,
+    STUDY_MODE_IDS,
     PreferencesError,
     _PreferencesSaveThrottle,
     clean_stored,
@@ -48,7 +53,21 @@ SIDEBAR = {
     'hidden': ['quests', 'jobs'],
 }
 DASHBOARD = {'order': ['mastery', 'welcome', 'upgrade'], 'hidden': ['toolkit', 'announcements']}
-FULL = {'sidebar': SIDEBAR, 'dashboard': DASHBOARD, 'landing_page': 'questions'}
+QUESTION_BANK = {'hidden': ['discussion', 'similar-pyqs', 'strike'], 'study_mode': 'exam'}
+FULL = {'sidebar': SIDEBAR, 'dashboard': DASHBOARD, 'landing_page': 'questions', 'question_bank': QUESTION_BANK}
+# Every id named everywhere it may be: the largest body the endpoint accepts.
+LARGEST = {
+    'sidebar': {'sections': list(SIDEBAR_SECTION_IDS), 'items': list(SIDEBAR_ITEM_IDS), 'hidden': list(SIDEBAR_ITEM_IDS)},
+    'dashboard': {
+        'order': list(DASHBOARD_WIDGET_IDS),
+        'hidden': [i for i in DASHBOARD_WIDGET_IDS if i not in DASHBOARD_ALWAYS_SHOWN_IDS],
+    },
+    'landing_page': max(LANDING_PAGE_IDS, key=len),
+    'question_bank': {
+        'hidden': [i for i in QUESTION_BANK_TOOL_IDS if i not in QUESTION_BANK_ALWAYS_SHOWN_IDS],
+        'study_mode': max(STUDY_MODE_IDS, key=len),
+    },
+}
 
 
 def _student(username='stu'):
@@ -74,9 +93,18 @@ def _stored(user):
 
 class AllowListTests(SimpleTestCase):
     def test_ids_are_unique(self):
-        for ids in (SIDEBAR_SECTION_IDS, SIDEBAR_ITEM_IDS, DASHBOARD_WIDGET_IDS, LANDING_PAGE_IDS):
+        for ids in (SIDEBAR_SECTION_IDS, SIDEBAR_ITEM_IDS, DASHBOARD_WIDGET_IDS, LANDING_PAGE_IDS,
+                    QUESTION_BANK_TOOL_IDS, STUDY_MODE_IDS):
             with self.subTest(ids=ids):
                 self.assertEqual(len(ids), len(set(ids)))
+
+    def test_flag_issue_is_always_shown_and_practice_is_the_default_mode(self):
+        self.assertEqual(QUESTION_BANK_ALWAYS_SHOWN_IDS, ('report',))
+        self.assertTrue(set(QUESTION_BANK_ALWAYS_SHOWN_IDS) <= set(QUESTION_BANK_TOOL_IDS))
+        self.assertEqual(STUDY_MODE_IDS, ('practice', 'exam'))
+        # The answer flow is not a tool: it can never be switched off.
+        for flow in ('options', 'submit', 'answer', 'explanation', 'navigation', 'reveal'):
+            self.assertNotIn(flow, QUESTION_BANK_TOOL_IDS)
 
     def test_opening_pages_are_sidebar_links_and_the_upgrade_row_is_a_widget(self):
         self.assertTrue(set(LANDING_PAGE_IDS) <= set(SIDEBAR_ITEM_IDS))
@@ -94,15 +122,34 @@ class ValidatePatchTests(SimpleTestCase):
         # Order lists may name only some ids; every allowed id may be named once.
         every = {'sidebar': {'items': list(SIDEBAR_ITEM_IDS)}, 'dashboard': {'order': list(DASHBOARD_WIDGET_IDS)}}
         self.assertEqual(validate_patch(every), every)
+        self.assertEqual(validate_patch(LARGEST), LARGEST)
+
+    def test_question_bank_tools_and_mode(self):
+        for mode in STUDY_MODE_IDS:
+            with self.subTest(mode=mode):
+                body = {'question_bank': {'study_mode': mode}}
+                self.assertEqual(validate_patch(body), body)
+        # Every tool but Flag Issue may be hidden, in any order.
+        hideable = [i for i in reversed(QUESTION_BANK_TOOL_IDS) if i not in QUESTION_BANK_ALWAYS_SHOWN_IDS]
+        self.assertEqual(validate_patch({'question_bank': {'hidden': hideable}}), {'question_bank': {'hidden': hideable}})
+        self.assertEqual(validate_patch({'question_bank': {'hidden': ['ai-analysis']}}),
+                         {'question_bank': {'hidden': ['ai-analysis']}})
 
     def test_null_empty_objects_and_empty_lists_mean_the_default(self):
         self.assertEqual(
-            validate_patch({'sidebar': None, 'dashboard': {}, 'landing_page': None}),
-            {'sidebar': None, 'dashboard': None, 'landing_page': None},
+            validate_patch({'sidebar': None, 'dashboard': {}, 'landing_page': None, 'question_bank': None}),
+            {'sidebar': None, 'dashboard': None, 'landing_page': None, 'question_bank': None},
         )
         self.assertEqual(
             validate_patch({'sidebar': {'sections': [], 'hidden': ['quests']}, 'dashboard': {'hidden': []}}),
             {'sidebar': {'hidden': ['quests']}, 'dashboard': None},
+        )
+        # A null mode is the default mode; an object with nothing left is the default.
+        self.assertEqual(validate_patch({'question_bank': {'hidden': [], 'study_mode': None}}), {'question_bank': None})
+        self.assertEqual(validate_patch({'question_bank': {}}), {'question_bank': None})
+        self.assertEqual(
+            validate_patch({'question_bank': {'hidden': ['strike'], 'study_mode': None}}),
+            {'question_bank': {'hidden': ['strike']}},
         )
 
     def test_refusals(self):
@@ -137,6 +184,26 @@ class ValidatePatchTests(SimpleTestCase):
             ({'landing_page': ''}, 'landing_page'),
             ({'landing_page': 3}, 'landing_page'),
             ({'landing_page': ['tests']}, 'landing_page'),
+            ({'question_bank': ['strike']}, 'question_bank'),
+            ({'question_bank': 'exam'}, 'question_bank'),
+            ({'question_bank': {'hidden': ['report']}}, 'question_bank.hidden'),  # Flag Issue stays
+            ({'question_bank': {'hidden': ['strike', 'report']}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': ['options']}}, 'question_bank.hidden'),  # the answer flow is no tool
+            ({'question_bank': {'hidden': ['submit']}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': ['questions']}}, 'question_bank.hidden'),  # a link is no tool
+            ({'question_bank': {'hidden': ['strike', 'strike']}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': 'strike'}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': [1]}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': list(QUESTION_BANK_TOOL_IDS) + ['strike']}}, 'question_bank.hidden'),
+            ({'question_bank': {'study_mode': 'timed'}}, 'question_bank.study_mode'),
+            ({'question_bank': {'study_mode': 'Exam'}}, 'question_bank.study_mode'),  # case-sensitive
+            ({'question_bank': {'study_mode': ''}}, 'question_bank.study_mode'),
+            ({'question_bank': {'study_mode': 1}}, 'question_bank.study_mode'),
+            ({'question_bank': {'study_mode': True}}, 'question_bank.study_mode'),
+            ({'question_bank': {'study_mode': ['exam']}}, 'question_bank.study_mode'),
+            ({'question_bank': {'study_mode': {'mode': 'exam'}}}, 'question_bank.study_mode'),
+            ({'question_bank': {'order': ['strike']}}, 'question_bank.order'),  # tools are not reordered
+            ({'question_bank': {'premium': True}}, 'question_bank.premium'),
         ]
         for body, field in cases:
             with self.subTest(body=body):
@@ -173,6 +240,16 @@ class CleanStoredAndMergeTests(SimpleTestCase):
         for junk in (None, [], 'x', 3, {'sidebar': 'x', 'dashboard': None}):
             with self.subTest(junk=junk):
                 self.assertEqual(clean_stored(junk), {})
+
+    def test_question_bank_values_no_longer_accepted_are_dropped(self):
+        raw = {'question_bank': {'hidden': ['strike', 'report', 'retired-tool', 'strike', 3], 'study_mode': 'exam',
+                                 'order': ['strike']}}
+        self.assertEqual(clean_stored(raw), {'question_bank': {'hidden': ['strike'], 'study_mode': 'exam'}})
+        self.assertEqual(clean_stored({'question_bank': {'study_mode': 'timed'}}), {})
+        self.assertEqual(clean_stored({'question_bank': {'hidden': ['report'], 'study_mode': ['exam']}}), {})
+        self.assertEqual(clean_stored({'question_bank': ['strike']}), {})
+        self.assertEqual(clean_stored({'question_bank': {'study_mode': 'practice'}}),
+                         {'question_bank': {'study_mode': 'practice'}})
 
     def test_merge_replaces_named_keys_only(self):
         stored = {'sidebar': SIDEBAR, 'landing_page': 'tests'}
@@ -227,10 +304,42 @@ class PreferencesEndpointTests(TestCase):
         client = _client(self.student)
         client.patch(URL, FULL, format='json')
         response = client.patch(URL, {'sidebar': None, 'dashboard': {}}, format='json')
+        self.assertEqual(response.data, {'preferences': {'landing_page': 'questions', 'question_bank': QUESTION_BANK}})
+        response = client.patch(URL, {'question_bank': {'hidden': [], 'study_mode': None}}, format='json')
         self.assertEqual(response.data, {'preferences': {'landing_page': 'questions'}})
-        response = client.patch(URL, {'sidebar': None, 'dashboard': None, 'landing_page': None}, format='json')
+        client.patch(URL, {'question_bank': QUESTION_BANK}, format='json')
+        response = client.patch(
+            URL, {'sidebar': None, 'dashboard': None, 'landing_page': None, 'question_bank': None}, format='json',
+        )
         self.assertEqual((response.status_code, response.data), (200, {'preferences': {}}))
         self.assertEqual(_stored(self.student), {})
+
+    def test_question_bank_rules_on_the_endpoint(self):
+        client = _client(self.student)
+        response = client.patch(URL, {'question_bank': {'hidden': ['ai-analysis'], 'study_mode': 'exam'}}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(client.get(URL).data,
+                         {'preferences': {'question_bank': {'hidden': ['ai-analysis'], 'study_mode': 'exam'}}})
+        for body, field in (
+            ({'question_bank': {'hidden': ['report']}}, 'question_bank.hidden'),
+            ({'question_bank': {'hidden': ['options']}}, 'question_bank.hidden'),
+            ({'question_bank': {'study_mode': 'timed'}}, 'question_bank.study_mode'),
+            ({'question_bank': {'hidden': 'strike'}}, 'question_bank.hidden'),
+        ):
+            with self.subTest(body=body):
+                refused = client.patch(URL, body, format='json')
+                self.assertEqual(refused.status_code, 400)
+                self.assertEqual(refused.data['code'], 'invalid_preferences')
+                self.assertEqual(set(refused.data['errors']), {field})
+        # Nothing from the refused bodies was saved.
+        self.assertEqual(_stored(self.student), {'question_bank': {'hidden': ['ai-analysis'], 'study_mode': 'exam'}})
+
+    def test_the_largest_valid_body_fits_the_limit(self):
+        body = json.dumps(LARGEST)
+        self.assertLess(len(body.encode()), MAX_BODY_BYTES // 2)
+        response = _client(self.student).patch(URL, body, content_type='application/json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(_stored(self.student), LARGEST)
 
     def test_a_refused_patch_saves_nothing(self):
         client = _client(self.student)

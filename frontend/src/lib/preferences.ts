@@ -1,11 +1,13 @@
 /**
  * Layout preferences (Settings > Customise): the order of the sidebar's sections and links, the
- * links a learner hides, the order and visibility of the dashboard widgets, and the page the app
- * opens on.
+ * links a learner hides, the order and visibility of the dashboard widgets, the page the app
+ * opens on, the question-bank tools a learner hides and the mode the question bank opens in.
  *
  * Customisation only reorders and hides. A hidden link moves to the sidebar's "More" group and a
- * hidden widget can be turned back on in Settings, so every feature stays reachable. The sidebar's
- * Admin group is not customisable.
+ * hidden widget or tool can be turned back on in Settings, so every feature stays reachable. The
+ * sidebar's Admin group is not customisable. The question bank's answer flow (options, Submit, the
+ * answer and its explanation, navigation) is not a tool, "Flag Issue" is never hidden, and hiding a
+ * tool unlocks nothing: premium gating stays on the server and in the pages.
  *
  * Pure (no React, no network, no DOM) so tests/unit can import it. The server keeps the choice per
  * user (GET / PATCH /api/auth/preferences/, backend/accounts/preferences.py) and accepts only the
@@ -179,6 +181,99 @@ export function landingPageLabel(id: LandingPageId): string {
     return sidebarItem(id)?.label ?? id;
 }
 
+// ── Question bank catalog ──────────────────────────────────────────────────
+
+/**
+ * Tools a learner may switch off, in their default order: what is shown with a question in the
+ * question bank (/questions, the NEET PG and INI-CET banks) and the full-screen year practice,
+ * then the toolbar and panels of a practice session (/practice).
+ */
+export const QUESTION_BANK_TOOL_IDS = [
+    'ai-analysis', 'mnemonic', 'textbook-reference', 'find-in-textbook', 'similar-pyqs', 'citations',
+    'video', 'discussion', 'report', 'shortcuts',
+    'review-flag', 'confidence', 'strike', 'time-spent', 'provenance', 'related-pyqs', 'related-topics',
+] as const;
+export type QuestionBankToolId = (typeof QUESTION_BANK_TOOL_IDS)[number];
+
+/** Tools that are never hidden: "Flag Issue" is how wrong answer keys get reported. */
+export const QUESTION_BANK_ALWAYS_SHOWN_IDS: readonly QuestionBankToolId[] = ['report'];
+
+/** `bank`: the question bank and the full-screen year practice. `session`: a practice session (/practice). */
+export type QuestionBankToolGroup = 'bank' | 'session';
+
+export interface QuestionBankToolDef {
+    label: string;
+    description: string;
+    group: QuestionBankToolGroup;
+}
+
+export const QUESTION_BANK_TOOLS: Readonly<Record<QuestionBankToolId, QuestionBankToolDef>> = {
+    'ai-analysis': { label: 'AI analysis', description: 'The "Generate AI Analysis" button and the analysis it writes.', group: 'bank' },
+    mnemonic: { label: 'Memory trick', description: 'The mnemonic saved with the question.', group: 'bank' },
+    'textbook-reference': { label: 'Textbook reference', description: 'The book, chapter and page saved with the question.', group: 'bank' },
+    'find-in-textbook': { label: 'Find in Textbook', description: 'Look up the textbook page that covers the topic.', group: 'bank' },
+    'similar-pyqs': { label: 'Similar PYQs', description: 'Other past questions on the same topic.', group: 'bank' },
+    citations: { label: 'Textbook citations', description: 'Reviewed textbook passages that support the answer.', group: 'bank' },
+    video: { label: 'AI video explanation', description: 'Shown when the question has a video.', group: 'bank' },
+    discussion: { label: 'Discussion', description: "Students' comments on the question.", group: 'bank' },
+    report: { label: 'Flag Issue', description: 'Report a wrong answer key or a typo. Always shown.', group: 'bank' },
+    shortcuts: { label: 'Keyboard shortcut hints', description: 'The A–D, N and P reminder under the question.', group: 'bank' },
+    'review-flag': { label: 'Flag for review', description: 'Mark a question to come back to.', group: 'session' },
+    confidence: { label: 'Confidence rating', description: 'Rate how sure you were, from 1 to 5.', group: 'session' },
+    strike: { label: 'Strike out options', description: 'Cross out the options you have ruled out.', group: 'session' },
+    'time-spent': { label: 'Time spent', description: 'How long you have spent on the question.', group: 'session' },
+    provenance: { label: 'Provenance', description: 'Where the question comes from.', group: 'session' },
+    'related-pyqs': { label: 'Related PYQs', description: 'Past questions linked to this one.', group: 'session' },
+    'related-topics': { label: 'Related topics', description: 'Topics linked to this question.', group: 'session' },
+};
+
+export interface QuestionBankToolGroupDef {
+    id: QuestionBankToolGroup;
+    title: string;
+    description: string;
+    /** Where the tools show, for the switches' names ("Show Discussion in the question bank"). */
+    where: string;
+}
+
+export const QUESTION_BANK_TOOL_GROUPS: readonly QuestionBankToolGroupDef[] = [
+    {
+        id: 'bank',
+        title: 'Question bank',
+        description: 'Shown with a question in the question bank and in full-screen year practice.',
+        where: 'in the question bank',
+    },
+    {
+        id: 'session',
+        title: 'Practice sessions',
+        description: 'The toolbar and panels of a practice session (Random, Weak topics, Timed mock and the other modes).',
+        where: 'in practice sessions',
+    },
+];
+
+/** The tools of one group, in catalog order. */
+export function questionBankToolIds(group: QuestionBankToolGroup): QuestionBankToolId[] {
+    return QUESTION_BANK_TOOL_IDS.filter((id) => QUESTION_BANK_TOOLS[id].group === group);
+}
+
+export function toolAlwaysShown(id: string): boolean {
+    return (QUESTION_BANK_ALWAYS_SHOWN_IDS as readonly string[]).includes(id);
+}
+
+/** The question bank's modes: practice shows the answer when an option is picked, exam waits for Submit. */
+export const STUDY_MODE_IDS = ['practice', 'exam'] as const;
+export type StudyMode = (typeof STUDY_MODE_IDS)[number];
+export const DEFAULT_STUDY_MODE: StudyMode = 'practice';
+
+/** The names the question bank's mode switch uses. */
+export const STUDY_MODE_LABELS: Readonly<Record<StudyMode, string>> = {
+    practice: 'Practice Mode',
+    exam: 'Exam Mode',
+};
+
+export function isStudyMode(value: unknown): value is StudyMode {
+    return typeof value === 'string' && (STUDY_MODE_IDS as readonly string[]).includes(value);
+}
+
 // ── Stored shape ───────────────────────────────────────────────────────────
 
 export interface SidebarPreferences {
@@ -195,17 +290,25 @@ export interface DashboardPreferences {
     hidden?: string[];
 }
 
+export interface QuestionBankPreferences {
+    /** Tool ids the learner switched off (never "Flag Issue"). */
+    hidden?: string[];
+    /** The mode the question bank opens in; absent: practice. */
+    study_mode?: StudyMode;
+}
+
 /** Only what the learner changed; `{}` is the default layout. */
 export interface UiPreferences {
     sidebar?: SidebarPreferences;
     dashboard?: DashboardPreferences;
     landing_page?: LandingPageId;
+    question_bank?: QuestionBankPreferences;
 }
 
 /** A PATCH body: each named key replaces the stored one, `null` removes it (back to the default). */
 export type UiPreferencesPatch = { [K in keyof UiPreferences]?: UiPreferences[K] | null };
 
-export const RESET_PATCH: UiPreferencesPatch = { sidebar: null, dashboard: null, landing_page: null };
+export const RESET_PATCH: UiPreferencesPatch = { sidebar: null, dashboard: null, landing_page: null, question_bank: null };
 
 // ── Ordering helpers ───────────────────────────────────────────────────────
 
@@ -415,6 +518,29 @@ export function landingHref(id: LandingPageId, track: string): string {
     return resolveNavHref(sidebarItem(id)?.href ?? '/dashboard', track);
 }
 
+// ── Question bank ──────────────────────────────────────────────────────────
+
+/** Hidden tool ids (never the ones that are always shown). */
+export function questionBankHidden(prefs?: QuestionBankPreferences | null): Set<QuestionBankToolId> {
+    return new Set(QUESTION_BANK_TOOL_IDS.filter((id) => !toolAlwaysShown(id) && prefs?.hidden?.includes(id)));
+}
+
+/** The mode the question bank opens in. */
+export function studyModeOf(prefs?: QuestionBankPreferences | null): StudyMode {
+    const mode = prefs?.study_mode;
+    return isStudyMode(mode) ? mode : DEFAULT_STUDY_MODE;
+}
+
+/** The question-bank preference to save: only what differs from the default, or null (= the default). */
+export function compactQuestionBank(hidden: Iterable<string>, studyMode: string): QuestionBankPreferences | null {
+    const out: QuestionBankPreferences = {};
+    const hiddenSet = new Set(hidden);
+    const hiddenIds = QUESTION_BANK_TOOL_IDS.filter((id) => hiddenSet.has(id) && !toolAlwaysShown(id));
+    if (hiddenIds.length) out.hidden = hiddenIds;
+    if (isStudyMode(studyMode) && studyMode !== DEFAULT_STUDY_MODE) out.study_mode = studyMode;
+    return Object.keys(out).length ? out : null;
+}
+
 // ── Whole preferences ──────────────────────────────────────────────────────
 
 function cleanIds(value: unknown, allowed: readonly string[], never: readonly string[] = []): string[] {
@@ -460,6 +586,16 @@ export function sanitizePreferences(raw: unknown): UiPreferences {
     }
 
     if (isLandingPageId(source.landing_page)) out.landing_page = source.landing_page;
+
+    const questionBank = source.question_bank;
+    if (questionBank && typeof questionBank === 'object' && !Array.isArray(questionBank)) {
+        const q = questionBank as Record<string, unknown>;
+        const part: QuestionBankPreferences = {};
+        const hidden = cleanIds(q.hidden, QUESTION_BANK_TOOL_IDS, QUESTION_BANK_ALWAYS_SHOWN_IDS);
+        if (hidden.length) part.hidden = hidden;
+        if (isStudyMode(q.study_mode)) part.study_mode = q.study_mode;
+        if (Object.keys(part).length) out.question_bank = part;
+    }
     return out;
 }
 

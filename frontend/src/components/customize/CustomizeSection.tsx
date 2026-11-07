@@ -2,10 +2,11 @@
 
 /**
  * Settings > Customise: the order of the sidebar's sections and links, which links show (the others
- * move to the sidebar's "More" group), the order and visibility of the dashboard widgets, and the
- * page the app opens on. Every change applies at once and is saved to the account
- * (preferencesStore.ts); "Reset to default" restores everything. Controls stay disabled until the
- * server's copy is loaded, so an edit never builds on an older layout.
+ * move to the sidebar's "More" group), the order and visibility of the dashboard widgets, the
+ * page the app opens on, and the question bank's tools and opening mode (#customise-question-bank).
+ * Every change applies at once and is saved to the account (preferencesStore.ts); "Reset to
+ * default" restores everything, "Reset question bank" only the question bank. Controls stay
+ * disabled until the server's copy is loaded, so an edit never builds on an older layout.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
@@ -14,24 +15,36 @@ import { useExamTrack } from '@/components/ExamTrackProvider';
 import {
     DASHBOARD_WIDGETS,
     LANDING_PAGE_IDS,
+    QUESTION_BANK_TOOLS,
+    QUESTION_BANK_TOOL_GROUPS,
+    STUDY_MODE_IDS,
+    STUDY_MODE_LABELS,
     compactDashboard,
+    compactQuestionBank,
     compactSidebar,
     dashboardHidden,
     dashboardOrder,
     isLandingPageId,
+    isStudyMode,
     landingPageLabel,
     landingPageOf,
     moveId,
     navItemAvailable,
+    questionBankHidden,
+    questionBankToolIds,
     sectionItemOrder,
     sidebarHidden,
     sidebarItem,
     sidebarItemOrder,
     sidebarSectionOrder,
+    studyModeOf,
+    toolAlwaysShown,
     widgetAlwaysShown,
     SIDEBAR_SECTIONS,
     type DashboardWidgetId,
     type NavItemDef,
+    type QuestionBankToolGroupDef,
+    type QuestionBankToolId,
 } from '@/lib/preferences';
 import { MoveButtons, VisibilitySwitch } from './ReorderControls';
 import { refreshPreferences, resetPreferences, updatePreferences } from './preferencesStore';
@@ -95,6 +108,8 @@ export default function CustomizeSection() {
     const widgetOrder = dashboardOrder(prefs.dashboard);
     const hiddenWidgets = dashboardHidden(prefs.dashboard);
     const landing = landingPageOf(prefs);
+    const hiddenTools = questionBankHidden(prefs.question_bank);
+    const studyMode = studyModeOf(prefs.question_bank);
     const customised = Object.keys(prefs).length > 0;
 
     // What this learner sees: admin-only and exam-track links, the upgrade row of the free plan.
@@ -164,8 +179,29 @@ export default function CustomizeSection() {
         setAnnouncement(`The app now opens on ${landingPageLabel(value)}.`);
     };
 
+    const toggleTool = (id: QuestionBankToolId, group: QuestionBankToolGroupDef, show: boolean) => {
+        const hidden = new Set<string>(hiddenTools);
+        if (show) hidden.delete(id);
+        else hidden.add(id);
+        updatePreferences({ question_bank: compactQuestionBank(hidden, studyMode) });
+        setAnnouncement(`${QUESTION_BANK_TOOLS[id].label} ${show ? 'shown' : 'hidden'} ${group.where}.`);
+    };
+
+    const changeStudyMode = (value: string) => {
+        if (!isStudyMode(value)) return;
+        // Practice is the default and is not stored.
+        updatePreferences({ question_bank: compactQuestionBank(hiddenTools, value) }, { immediate: true });
+        setAnnouncement(`The question bank now opens in ${STUDY_MODE_LABELS[value]}.`);
+    };
+
+    const handleResetQuestionBank = () => {
+        if (!window.confirm('Show every question bank tool again and open the question bank in Practice Mode?')) return;
+        updatePreferences({ question_bank: null }, { immediate: true });
+        setAnnouncement('The question bank shows every tool again and opens in Practice Mode.');
+    };
+
     const handleReset = () => {
-        if (!window.confirm('Reset the sidebar, the dashboard and the opening page to the default layout?')) return;
+        if (!window.confirm('Reset the sidebar, the dashboard, the opening page and the question bank to the default layout?')) return;
         resetPreferences();
         setAnnouncement('The default layout is back.');
     };
@@ -200,7 +236,7 @@ export default function CustomizeSection() {
             <p className="text-xs text-muted-foreground mb-5">
                 Put what you use most at the top and hide what you don&apos;t. Nothing is removed: hidden
                 sidebar links stay under <strong className="font-semibold text-foreground">More</strong>, and hidden
-                dashboard sections can be switched back on here.
+                dashboard sections and question bank tools can be switched back on here.
             </p>
 
             {/* Opening page */}
@@ -321,6 +357,90 @@ export default function CustomizeSection() {
                         );
                     })}
                 </ol>
+            </div>
+
+            {/* Question bank: opening mode and tools (the question bank's settings link opens here) */}
+            <div
+                id="customise-question-bank"
+                role="group"
+                aria-labelledby="customise-question-bank-heading"
+                className="mt-6 scroll-mt-24"
+            >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 id="customise-question-bank-heading" className="text-sm font-semibold text-foreground">Question bank</h4>
+                    <button
+                        type="button"
+                        onClick={handleResetQuestionBank}
+                        disabled={!canEdit || !prefs.question_bank}
+                        className="btn-secondary text-xs inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                        Reset question bank
+                    </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                    Pick the mode the question bank opens in and switch off the tools you don&apos;t use. Answering
+                    works the same whatever you choose: the options, Submit and the answer with its explanation are
+                    always there, and so is Flag Issue.
+                </p>
+
+                <div className="mb-4 space-y-1.5">
+                    <label htmlFor="customise-study-mode" className="block text-sm font-medium text-foreground">
+                        Open the question bank in
+                    </label>
+                    <select
+                        id="customise-study-mode"
+                        className="input-field"
+                        value={studyMode}
+                        disabled={!canEdit}
+                        onChange={(event) => changeStudyMode(event.target.value)}
+                        aria-describedby="customise-study-mode-hint"
+                    >
+                        {STUDY_MODE_IDS.map((id) => (
+                            <option key={id} value={id}>{STUDY_MODE_LABELS[id]}</option>
+                        ))}
+                    </select>
+                    <p id="customise-study-mode-hint" className="text-xs text-muted-foreground">
+                        Practice Mode shows the answer as soon as you pick an option; Exam Mode waits until you press
+                        Submit Answer. You can still switch on the page.
+                    </p>
+                </div>
+
+                {QUESTION_BANK_TOOL_GROUPS.map((group) => (
+                    <div key={group.id} className="mb-4 last:mb-0">
+                        <h5 id={`customise-tools-${group.id}`} className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            {group.title}
+                        </h5>
+                        <p className="text-xs text-muted-foreground mt-0.5 mb-2">{group.description}</p>
+                        <ul
+                            aria-labelledby={`customise-tools-${group.id}`}
+                            className="divide-y divide-border rounded-xl border border-border bg-card"
+                        >
+                            {questionBankToolIds(group.id).map((id) => {
+                                const tool = QUESTION_BANK_TOOLS[id];
+                                const fixed = toolAlwaysShown(id);
+                                const shown = fixed || !hiddenTools.has(id);
+                                return (
+                                    <li key={id} className="flex items-center gap-2 px-3 py-2">
+                                        <span className="min-w-0 flex-1">
+                                            <span className={`block text-sm break-words ${shown ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {tool.label}
+                                            </span>
+                                            <span className="block text-xs text-muted-foreground break-words">{tool.description}</span>
+                                        </span>
+                                        <VisibilitySwitch
+                                            checked={shown}
+                                            label={`Show ${tool.label} ${group.where}`}
+                                            title={fixed ? 'Always shown: it is how wrong answer keys get reported' : undefined}
+                                            disabled={!canEdit || fixed}
+                                            onChange={(show) => toggleTool(id, group, show)}
+                                        />
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                ))}
             </div>
 
             {saveError ? (
