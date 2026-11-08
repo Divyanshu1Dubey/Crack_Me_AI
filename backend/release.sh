@@ -18,6 +18,9 @@ python manage.py reconcile_legacy_subscriptions || true
 # Seeds an EMPTY question bank only; a live bank is never touched.
 python manage.py seed_question_bank
 python manage.py seed_blogs || true
+# Unpublished blog drafts from the question bank (paper analyses, topic-wise PYQs), each slug created once; editors
+# review and publish them at /admin/blog (blog_engine/pyq_drafts.py).
+python manage.py generate_pyq_blog_drafts --apply || true
 
 # UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (questions.0047 / 0049 made
 # the bank match them). Records only what is missing, so later deploys finish at once.

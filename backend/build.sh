@@ -43,6 +43,9 @@ python manage.py seed_question_bank
 # Import static blog posts the database lacks; never overwrites admin edits (see seed_blogs)
 python manage.py seed_blogs || true
 
+# Unpublished blog drafts from the question bank, each slug created once (blog_engine/pyq_drafts.py)
+python manage.py generate_pyq_blog_drafts --apply || true
+
 # UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (records only what is missing)
 python manage.py record_official_cms_keys --apply || true
 

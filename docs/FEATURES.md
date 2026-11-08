@@ -625,7 +625,14 @@ rows server-side with ISR.
 ### Files
 - Backend: `backend/blog_engine/` — `models.py` (`BlogPost`, `BlogSeedImport`), `serializers.py`, `views.py`,
   `images.py` (image upload + hardened serve), `text_stats.py` (word count / reading time), `seeding.py` +
-  `management/commands/seed_blogs.py` (imports `seed_data/static_posts.json`, never overwrites an admin edit).
+  `management/commands/seed_blogs.py` (imports `seed_data/static_posts.json`, never overwrites an admin edit),
+  `pyq_drafts.py` + `management/commands/generate_pyq_blog_drafts.py` (release step, 2026-11-09): **unpublished
+  drafts from the question bank**, no AI: one per UPSC CMS paper (section-wise breakdown, tagged topics, every question
+  stem in order) and one per clinical term asked often (`TERMS`: the questions whose stem mentions it, by year; at least
+  6 questions and 400 words). Only facts the bank holds; no options or answers (the bank shows them by plan; the drafts
+  link to practice); "Generated from the question bank … not reviewed yet" in each; category "PYQ Analysis". Each slug
+  is created once (`GeneratedBlogDraft`, `blog_engine.0005`): a draft an editor deleted is not created again; an
+  existing post is never touched. Production copy: 107 drafts (26 papers 2014–2026, 81 topics).
 - Rendering: `frontend/src/lib/blogMarkdown.ts` (the one markdown pipeline: parse, sanitize, callouts, figures,
   tables, heading ids, `blogToc`), `src/components/blog/BlogArticle.tsx` (Server Component; core in
   `blogArticleCore.ts`), `.blog-prose` styles in `src/app/globals.css`, `src/lib/blogText.ts` (counts, dates,

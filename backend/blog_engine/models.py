@@ -96,6 +96,21 @@ class BlogPost(models.Model):
         return is_thin(self.body_word_count)
 
 
+class GeneratedBlogDraft(models.Model):
+    """One row per slug ``generate_pyq_blog_drafts`` created a draft for (blog_engine.pyq_drafts): a draft is created
+    once, so one an editor deleted or renamed is not created again."""
+
+    slug = models.SlugField(max_length=200, unique=True)
+    kind = models.CharField(max_length=20, help_text="'paper' or 'term'")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["slug"]
+
+    def __str__(self):
+        return self.slug
+
+
 class BlogSeedImport(models.Model):
     """One row per slug ``seed_blogs`` has handled: a static post it imported,
     or a row of the previous seed it unpublished.
