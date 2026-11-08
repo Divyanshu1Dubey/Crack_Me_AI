@@ -73,6 +73,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon; exact?: bool
     { href: '/admin/analytics-dashboard', label: 'Analytics Dashboard', icon: BarChart3 },
     { href: '/admin/questions-editor', label: 'Questions Editor', icon: FileQuestion },
     { href: '/admin/review-queue', label: 'Answer-Key Review', icon: ClipboardCheck },
+    { href: '/admin/explanations', label: 'AI Explanations', icon: Sparkles },
     { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
     { href: '/admin/blog', label: 'Blog', icon: Newspaper },
     { href: '/admin/coupons', label: 'Coupon Codes', icon: Ticket },

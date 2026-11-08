@@ -118,3 +118,17 @@ def generate_ai_task(question_id: int):
     except Exception as e:
         logger.error(f"AI generation failed for Q{question_id}: {e}")
         return False
+
+
+def run_explanation_batch_task(run_id: int, max_items: int = 200, sleep_seconds: float = 1.0):
+    """django-q: process up to ``max_items`` questions of an explanation batch (questions.explanation_batch).
+    Started from /admin/explanations; resumable, so a stopped worker loses nothing."""
+    from questions import explanation_batch
+    from questions.models import ExplanationBatchRun
+
+    run = ExplanationBatchRun.objects.filter(pk=run_id).first()
+    if run is None:
+        return {}
+    stats = explanation_batch.run_batch(run, max_items=max_items, sleep_seconds=sleep_seconds)
+    logger.info('explanation batch %s: %s', run_id, dict(stats))
+    return dict(stats)

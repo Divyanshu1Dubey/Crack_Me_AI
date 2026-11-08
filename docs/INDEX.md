@@ -80,6 +80,7 @@ For hands-on work:
 | **[BATCH_SYSTEM.md](./BATCH_SYSTEM.md)** | Import batch lifecycle, data model, and operations |
 | **[MOCK_GENERATION.md](./MOCK_GENERATION.md)** | Auto mock test generation (bulk build + one-off strategies) |
 | **[REVIEW_QUEUE.md](./REVIEW_QUEUE.md)** | Review queue workflow + AI re-classification |
+| **[EXPLANATION_BATCH.md](./EXPLANATION_BATCH.md)** | AI explanation batch (only when the AI's answer is the key, no made-up citations, checkpoints / claims) and its review queue at `/admin/explanations` |
 | **[ANSWER_KEY_AUDIT.md](./ANSWER_KEY_AUDIT.md)** | Answer-key audit: statuses, signals, dry-run imports (printed source keys, AI review signals), `/admin/review-queue`, production rollout, measured results |
 | **[ANALYTICS.md](./ANALYTICS.md)** | GA4 + Microsoft Clarity + PostHog + Datadog + internal admin dashboard (shipped in `57f4dfb`) |
 

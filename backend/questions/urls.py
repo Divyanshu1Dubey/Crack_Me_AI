@@ -76,6 +76,7 @@ urlpatterns = [
     # they come before the router, whose empty-prefix detail routes would otherwise shadow them.
     path('', include('questions.urls_notes')),
     path('', include('questions.urls_editorial')),
+    path('', include('questions.urls_explanation_batch')),
 
     # Router URLs (QuestionViewSet, SubjectViewSet, etc.) - must be last
     path('', include(router.urls)),
