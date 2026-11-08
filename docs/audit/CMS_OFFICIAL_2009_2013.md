@@ -38,7 +38,7 @@ never scored).
 | official questions added (numbered as in the paper, the paper's section as subject, the official key) | 1,198 |
 | questions UPSC dropped, added without a key and flagged | 2 |
 | match-the-list questions as tables (codes written out "A-2, B-3, …") | 55 |
-| printed misspellings corrected (listed per question in the data file: "Latrogenic" → "Iatrogenic", "nectosis factor" → "necrosis factor", "Supra condyler humerous" → "Supracondylar humerus", …) | 6 questions |
+| printed misspellings corrected (listed per question in the data file: "Latrogenic" → "Iatrogenic", "nectosis factor" → "necrosis factor", "Supra condyler humerous" → "Supracondylar humerus", "Tropin-T" → "Troponin-T", "Gullian-Barre" → "Guillain-Barré", "Rheumatic cordites" → "Rheumatic carditis", "Fluconozole" → "Fluconazole", "Brocca index" → "Broca index", …) | 16 questions |
 
 * **Sections** (checked at each boundary, `qa.json`): Paper I of **2009** runs General Ability 1–30, General
   Medicine 31–100, Paediatrics 101–120; Paper I of 2010–2013 General Medicine 1–70, Paediatrics 71–90, General
@@ -46,7 +46,8 @@ never scored).
 * **Already in the bank:** none as untagged copies. 11 official questions also appear under other years (UPSC asked
   them again): those rows are left as they are.
 * Kept as printed where only the scan's faint print is uncertain: "Terfenadine" (2010 P-I Q54), "C1q" (2010 P-I Q62),
-  "Licks on intact skin by a dog" (2011 P-II Q113).
+  "Licks on intact skin by a dog" (2011 P-II Q113); and "Sand Flea" against kala-azar (2012 P-II Q106): changing it
+  would change the question, not its spelling.
 
 ## Checked
 
