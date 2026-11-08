@@ -102,7 +102,8 @@ const MODES: { k: string; label: string; scopes: Array<"year" | "subject" | "top
 ];
 
 const COUNTS = [10, 20, 30, 50];
-const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
+// UPSC CMS papers in the bank: 2014-2026 (2014-2017 from questions.0049).
+const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
 const DIFFICULTIES = ["", "easy", "medium", "hard"];
 
 // Shared control styles (theme tokens, readable in light and dark).

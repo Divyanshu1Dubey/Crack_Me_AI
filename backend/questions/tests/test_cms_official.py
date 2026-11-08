@@ -135,6 +135,36 @@ class ApplyPlanTests(TestCase):
         self.assertEqual(again['add skipped: already in the bank'], 1)
         self.assertEqual(Question.objects.filter(year=2023, display_number=35).count(), 1)
 
+    def test_a_question_with_the_same_stem_but_other_options_is_still_added(self):
+        stem = 'Which one of the following pairs is not correctly matched?'
+        first = {'question_text': stem, 'option_a': 'Addison disease : Hyperkalaemia',
+                 'option_b': 'Conn syndrome : Hypokalaemia', 'option_c': 'SIADH : Hyponatraemia',
+                 'option_d': 'Diabetes insipidus : Hyponatraemia'}
+        second = {'question_text': stem, 'option_a': 'Tetany : Hypocalcaemia', 'option_b': 'Rickets : Vitamin D',
+                  'option_c': 'Scurvy : Vitamin C', 'option_d': 'Pellagra : Vitamin A'}
+        ops = [{'op': 'add', 'year': 2014, 'paper': 1, 'n': 12, 'text': first, 'off': '2014_P1', 'key_page': 650},
+               {'op': 'add', 'year': 2014, 'paper': 1, 'n': 83, 'text': second, 'off': '2014_P1', 'key_page': 650}]
+        results = _apply(self._data(ops))
+        self.assertEqual(results['add applied'], 2)
+        again = _apply(self._data(ops))
+        self.assertEqual(again['add skipped: already in the bank'], 2)
+
+    def test_general_ability_is_created_for_paper_one_up_to_2017_and_a_copy_without_a_year_is_tagged(self):
+        text = {'question_text': 'Which one of the following is a greenhouse gas?', 'option_a': 'Nitrogen',
+                'option_b': 'Oxygen', 'option_c': 'Methane', 'option_d': 'Argon'}
+        copy_without_year = self._q(year=0, paper=0)
+        ops = [{'op': 'add', 'year': 2016, 'paper': 1, 'n': 95, 'subject': 'General Ability', 'text': text,
+                'off': '2016_P1', 'key_page': 543},
+               {'op': 'place', 'id': copy_without_year.pk, 'to_year': 2016, 'to_paper': 2, 'to_n': 30,
+                'off': '2016_P2', 'n': 30, **_guard(copy_without_year)}]
+        results = _apply(self._data(ops))
+        self.assertEqual((results['add applied'], results['place applied']), (1, 1))
+        added = Question.objects.get(year=2016, paper=1, display_number=95)
+        self.assertEqual((added.subject.name, added.subject.code), ('General Ability', 'GENABIL'))
+        copy_without_year.refresh_from_db()
+        self.assertEqual((copy_without_year.year, copy_without_year.paper, copy_without_year.display_number),
+                         (2016, 2, 30))
+
     def test_subject_moves_with_a_topic_of_the_same_name(self):
         q = self._q(year=2018, topic=self.surgery_topic)
         op = {'op': 'subject', 'id': q.pk, 'to_subject': 'Community Medicine', 'off': '2018_P2', 'n': 1, **_guard(q)}
@@ -255,6 +285,51 @@ class Data2026FileTests(SimpleTestCase):
         self.assertFalse([op for op in data['ops'] if op['op'] == 'key'])  # no official 2026 key: keys untouched
 
 
+class Data2014To2017FileTests(SimpleTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.data = cms_official.load_data(cms_official.DATA_2014_2017)
+
+    def test_every_official_question_is_added_or_tagged_once_with_its_official_key(self):
+        from collections import Counter
+        self.assertEqual(sorted(self.data['keys']), [f'{y}_P{p}' for y in range(2014, 2018) for p in (1, 2)])
+        slots = Counter()
+        keys = {(op['off'], op['n']): op['to'] for op in self.data['ops'] if op['op'] == 'key' and op['id'] is None}
+        for op in self.data['ops']:
+            if op['op'] == 'add':
+                slots[(op['off'], op['n'])] += 1
+                self.assertEqual(op['off'], f"{op['year']}_P{op['paper']}")
+                self.assertTrue(op['text']['question_text'].strip())
+                self.assertTrue(all(op['text'][f'option_{l}'].strip() for l in 'abcd'), op['off'])
+                self.assertEqual(keys[(op['off'], op['n'])], self.data['keys'][op['off']][str(op['n'])])
+            elif op['op'] == 'place':
+                slots[(f"{op['to_year']}_P{op['to_paper']}", op['to_n'])] += 1
+        for paper, paper_keys in self.data['keys'].items():
+            self.assertEqual(sorted(map(int, paper_keys)), list(range(1, 121)), paper)
+            self.assertTrue(all(k in ('A', 'B', 'C', 'D') for k in paper_keys.values()), paper)
+            self.assertEqual(sorted(n for off, n in slots if off == paper), list(range(1, 121)), paper)
+        self.assertEqual(max(slots.values()), 1)
+        self.assertEqual(list(self.data['needs_review']), ['2015_P2:60'])
+
+    def test_spelling_corrections_are_listed_and_applied(self):
+        corrected = [op for op in self.data['ops'] if op['op'] == 'add' and op.get('spelling')]
+        self.assertTrue(corrected)
+        for op in corrected:
+            text = '\n'.join(op['text'].values())
+            for old, new in op['spelling']:
+                self.assertIn(new, text, (op['off'], op['n']))
+
+    def test_hides_name_their_reason_and_page_numbers_are_gone(self):
+        for op in self.data['ops']:
+            if op['op'] == 'hide':
+                self.assertTrue(op['reason'])
+        ends = {(op['off'], op['n']): op['text']['option_d'] for op in self.data['ops'] if op['op'] == 'add'}
+        self.assertEqual(ends[('2017_P1', 28)], 'At least resistance to Streptomycin and Rifampicin')
+        self.assertEqual(ends[('2017_P2', 96)], '1, 3 and 4 only')
+
+
 class MojibakeTests(SimpleTestCase):
 
     def test_utf8_read_as_cp437_is_decoded(self):
@@ -339,3 +414,21 @@ class RecordOfficialKeysTests(TestCase):
         out = io.StringIO()
         call_command('record_official_cms_keys', apply=True, stdout=out)
         self.assertIn('1 already recorded, 0 to record', out.getvalue())
+
+    def test_2014_2017_keys_are_recorded_and_a_key_held_for_review_is_not(self):
+        from key_audit.models import QuestionAudit
+        subject = Subject.objects.create(name='General Medicine', code='GM-R')
+        official = Question.objects.create(  # CMS 2014 Paper I Q1: official key D
+            subject=subject, year=2014, paper=1, display_number=1, exam_type='cms',
+            question_text='A patient with small cell lung carcinoma has symptomatic hyponatraemia.',
+            option_a='Fanconi Syndrome', option_b='Cushing’s Syndrome', option_c='Metabolic Syndrome',
+            option_d='Syndrome of inappropriate ADH', correct_answer='D')
+        held = Question.objects.create(  # CMS 2015 Paper II Q60: the key table prints "Dc"
+            subject=subject, year=2015, paper=2, display_number=60, exam_type='cms', question_text='Held',
+            option_a='a', option_b='b', option_c='c', option_d='d', correct_answer='D', needs_review=True)
+        out = io.StringIO()
+        call_command('record_official_cms_keys', apply=True, stdout=out)
+        self.assertIn('2 question(s) found, 0 already recorded, 1 to record, 1 held for review', out.getvalue())
+        review = [r for r in QuestionAudit.objects.get(question=official).reviews if r.get('reviewer') == 'official_key']
+        self.assertEqual((review[0]['best_option'], review[0]['reviewer_ref']), ('D', 'cms_official_2014_2017'))
+        self.assertFalse(QuestionAudit.objects.filter(question=held).exists())

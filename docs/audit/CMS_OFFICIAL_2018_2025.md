@@ -62,8 +62,9 @@ decoded (`ΓåÆ` → `→`, `ΓëÑ` → `≥`, `┬░` → `°`, `╬▓` →
 
 ## What was not changed
 
-* **2009–2017** (in the PDF, 2014–2017 with a text layer, 2009–2013 scanned) are not in the bank and were not
-  imported; **2026** is not in this PDF.
+* **2009–2017** (in the PDF, 2014–2017 with a text layer, 2009–2013 scanned) were not imported here; 2014–2017
+  followed in `questions.0049` (`CMS_OFFICIAL_2014_2017.md`); **2026** is not in this PDF
+  (`CMS_OFFICIAL_2026.md`).
 * Past attempts keep the score they were given (re-scoring after a key change is not implemented; the
   `AnswerKeyChange` rows are `rescore_status='pending'`).
 * Questions UPSC dropped stay active (the bank keeps its key); students are not yet shown that UPSC dropped them.
@@ -72,6 +73,6 @@ decoded (`ΓåÆ` → `→`, `ΓëÑ` → `≥`, `┬░` → `°`, `╬▓` →
 ## Verify after a deploy
 
 ```
-python manage.py record_official_cms_keys          # dry run: "1899 found, 1899 already recorded, 0 to record"
+python manage.py record_official_cms_keys          # dry run, with 0049: "2859 found, 2858 already recorded, 0 to record, 1 held for review"
 ```
 and, per paper, `Question.objects.filter(exam_type='cms', year=Y, paper=P, is_active=True).count() == 120`.

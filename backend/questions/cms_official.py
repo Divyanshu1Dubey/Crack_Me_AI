@@ -1,29 +1,41 @@
-"""UPSC CMS 2018-2025 made to match the official papers and answer keys (2026-11-07).
+"""UPSC CMS papers made to match the official question papers and answer keys (2026-11-07 / 08).
 
-Source: "UPSC CMS 2009-2025 with Answer Key.pdf" (the owner's copy of the official question papers and UPSC
-answer keys, Series A). ``questions/data/cms_official_2018_2025.json`` holds the official key of every question
-of the 16 papers and the reviewed operations that make the bank match them: every bank question of those years
-was matched to its official question by text, every key that disagreed was checked on a crop of the key page,
-and every question added was typed from the scanned paper.
+Plans (each applied by one data migration):
 
-Each operation was written for a row as it was found (stem hash, key, active flag, paper). A row is touched only
-while it still matches, so an admin's later edit wins and a second run changes nothing. Before a row changes its
-previous state is stored as a ``QuestionRevisionSnapshot`` (the editor can show and undo it); nothing is deleted.
+* ``data/cms_official_2018_2025.json`` (questions.0047): source "UPSC CMS 2009-2025 with Answer Key.pdf" (the
+  owner's copy of the official question papers and UPSC answer keys, Series A). Every bank question of those years
+  was matched to its official question by text, every key that disagreed was checked on a crop of the key page,
+  and every question added was typed from the scanned paper.
+* ``data/cms_official_2026.json`` (questions.0048): the official 2026 papers (Series A) the owner supplied:
+  numbering, layouts, figures cropped from the scans. No official 2026 key exists yet: no key is changed.
+* ``data/cms_official_2014_2017.json`` (questions.0049): the same PDF's text layer: 939 official questions added
+  with the key of the paper's key table (spelling slips of the transcription corrected, each listed on its
+  ``add`` as ``spelling``), 21 untagged copies tagged, their second copies hidden.
+
+Each operation on an existing row was written for the row as it was found (stem hash, key, active flag, paper).
+A row is touched only while it still matches, so an admin's later edit wins and a second run changes nothing.
+Before a row changes its previous state is stored as a ``QuestionRevisionSnapshot`` (the editor can show and undo
+it); nothing is deleted.
 
 Operations, in this order:
 
 * ``hide``    a second copy of an official question (``keep``: the copy kept) or a question that is not in
-              the official paper: ``is_active=False``.
+              the official paper or is broken: ``is_active=False``.
 * ``repair``  text damaged on import (lost options, text between '<' and '>' stripped) set to the official text.
 * ``restore`` a hidden question that is the only copy of an official question: active again, its key set.
+* ``format``  the same words laid out as the paper prints them (statements on their own lines, tables).
 * ``add``     an official question the bank lacked: created with the official text and key; the subject is the
-              paper's section (Paper 1: General Medicine 1-96, Paediatrics 97-120; Paper 2: General Surgery 1-40,
-              Obstetrics & Gynaecology 41-80, Community Medicine 81-120).
-* ``place``   ``paper`` and ``display_number`` (the number in the official paper).
+              paper's section (``subject_name``; up to 2017 Paper I ends with General Ability, 91-120), and
+              skipped when the bank already has it (``_same_question``).
+* ``place``   ``paper`` and ``display_number`` (the number in the official paper), and ``year`` (``to_year``)
+              for a copy that had none.
+* ``subject`` the paper's section as subject (the topic follows when the new subject has one of the same name).
 * ``key``     the official key, recorded like ``questions.editorial.change_answer_key``: an ``AnswerKeyChange``
               with the official key as evidence, the old key kept there, an explanation written for the old key
               marked stale (students are not shown it; it is generated again for the new key).
 * ``dropped`` UPSC dropped the question (no answer was scored): ``is_dropped=True``; it stays active.
+* ``figure``  a figure cropped from the official paper attached (and the question made live when it was hidden
+              only for the missing figure).
 * ``mojibake`` UTF-8 text that was read as cp437 ("ΓåÆ" for "→", "┬░" for "°") decoded back; hashes recorded
               for the old text (explanation, reviews, evidence) move to the new text, which says the same.
 """
@@ -43,6 +55,7 @@ from questions.content_repairs import REVISION_FIELDS
 
 DATA = Path(__file__).resolve().parent / 'data' / 'cms_official_2018_2025.json'
 DATA_2026 = Path(__file__).resolve().parent / 'data' / 'cms_official_2026.json'
+DATA_2014_2017 = Path(__file__).resolve().parent / 'data' / 'cms_official_2014_2017.json'
 OP_ORDER = ('hide', 'repair', 'restore', 'format', 'add', 'place', 'subject', 'key', 'dropped', 'figure', 'mojibake')
 # questions/media_restore.py writes a staged file to MEDIA_ROOT when the image endpoint first asks for it (and
 # start_web.sh restores every staged file at container start); same table as scripts/railway/upload_media_to_db.py
@@ -140,6 +153,17 @@ def _canon_stem(text: str) -> str:
     return ' '.join(''.join(ch if ch.isalnum() else ' ' for ch in (text or '').casefold()).split())
 
 
+def _same_question(text: dict, other) -> bool:
+    """``other`` (a bank row) is the question ``text`` describes: the same opening words and at least three of the
+    four options. A stem alone is not enough: "Which one of the following pairs is not correctly matched?" is
+    asked several times in one year, with other pairs as options."""
+    if _canon_stem(other.question_text)[:120] != _canon_stem(text['question_text'])[:120]:
+        return False
+    mine = [_canon_stem(text.get(f'option_{letter}')) for letter in 'abcd']
+    theirs = [_canon_stem(getattr(other, f'option_{letter}', '')) for letter in 'abcd']
+    return sum(1 for option in mine if option and option in theirs) >= 3
+
+
 def evidence_for(data: dict, op: dict, new_key: str) -> list[dict]:
     year, paper = op['off'][:4], op['off'][-1]
     return [{
@@ -219,15 +243,28 @@ def apply_plan(*, question_model, snapshot_model, key_change_model, subject_mode
     return results
 
 
+# Subjects a plan may need that a bank may not have yet: name -> (code, paper, description)
+CREATABLE_SUBJECTS = {
+    'General Ability': ('GENABIL', 1, 'General Ability section of CMS Paper I (papers up to 2017).'),
+}
+
+
 def _subject(m, subjects, name):
     if name not in subjects:
-        subjects[name] = m.Subject.objects.filter(name=name).first()
+        subject = m.Subject.objects.filter(name=name).first()
+        if subject is None and name in CREATABLE_SUBJECTS:
+            code, paper, description = CREATABLE_SUBJECTS[name]
+            if not m.Subject.objects.filter(code=code).exists():
+                subject = m.Subject.objects.create(name=name, code=code, exam_type='cms', paper=paper,
+                                                   description=description)
+        subjects[name] = subject
     return subjects[name]
 
 
 def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> str:
     kind = op['op']
-    label = f"CMS official reconciliation 2026-11-07 ({op.get('off', 'bank')} Q{op.get('n', '-')})"
+    label = (f"CMS official reconciliation {data.get('prepared', '2026-11-07')} "
+             f"({op.get('off', 'bank')} Q{op.get('n', '-')})")
     if kind == 'hide':
         if not q.is_active:
             return 'skipped: already hidden'
@@ -252,9 +289,8 @@ def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> st
     if kind == 'add':
         year, paper, n = op['year'], op['paper'], op['n']
         text = op['text']
-        canon = _canon_stem(text['question_text'])[:120]
-        for other in m.Question.objects.filter(exam_type='cms', year=year).only('id', 'question_text'):
-            if _canon_stem(other.question_text)[:120] == canon:
+        for other in m.Question.objects.filter(exam_type='cms', year=year).only('id', *STEM_FIELDS):
+            if _same_question(text, other):
                 return 'skipped: already in the bank'
         name = op.get('subject') or subject_name(paper, n, year)
         subject = _subject(m, subjects, name)
@@ -263,17 +299,20 @@ def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> st
         key = added_keys.get((op['off'], n), '')
         m.Question.objects.create(
             exam_type='cms', exam_source='UPSC CMS', year=year, paper=paper, display_number=n,
-            subject=subject, correct_answer=key, is_active=True,
-            source=f"UPSC CMS {year} Paper {'I' if paper == 1 else 'II'} (official paper, Series A) Q{n}",
+            subject=subject, correct_answer=key, is_active=True, needs_review=bool(op.get('needs_review')),
+            source=(op.get('source') or
+                    f"UPSC CMS {year} Paper {'I' if paper == 1 else 'II'} (official paper, Series A) Q{n}")[:200],
             **{field: text[field] for field in STEM_FIELDS})
         added.add((op['off'], n))
         return 'applied'
     if kind == 'place':
-        if q.paper == op['to_paper'] and q.display_number == op['to_n']:
+        year = op.get('to_year', q.year)
+        if q.paper == op['to_paper'] and q.display_number == op['to_n'] and q.year == year:
             return 'skipped: already numbered so'
         snapshot(q, f'{label}: numbered as in the official paper')
-        m.Question.objects.filter(pk=q.pk).update(paper=op['to_paper'], display_number=op['to_n'], updated_at=now)
-        q.paper, q.display_number = op['to_paper'], op['to_n']
+        m.Question.objects.filter(pk=q.pk).update(paper=op['to_paper'], display_number=op['to_n'], year=year,
+                                                  updated_at=now)
+        q.paper, q.display_number, q.year = op['to_paper'], op['to_n'], year
         return 'applied'
     if kind == 'subject':
         subject = _subject(m, subjects, op['to_subject'])
