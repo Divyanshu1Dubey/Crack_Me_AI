@@ -42,7 +42,22 @@ from questions.content_hashes import stem_hash, valid_key
 from questions.content_repairs import REVISION_FIELDS
 
 DATA = Path(__file__).resolve().parent / 'data' / 'cms_official_2018_2025.json'
-OP_ORDER = ('hide', 'repair', 'restore', 'format', 'add', 'place', 'subject', 'key', 'dropped', 'mojibake')
+DATA_2026 = Path(__file__).resolve().parent / 'data' / 'cms_official_2026.json'
+OP_ORDER = ('hide', 'repair', 'restore', 'format', 'add', 'place', 'subject', 'key', 'dropped', 'figure', 'mojibake')
+# questions/media_restore.py writes a staged file to MEDIA_ROOT when the image endpoint first asks for it (and
+# start_web.sh restores every staged file at container start); same table as scripts/railway/upload_media_to_db.py
+MEDIA_DDL = """
+CREATE TABLE IF NOT EXISTS ops_media_transfer (
+    id bigserial PRIMARY KEY,
+    target text NOT NULL CHECK (target IN ('media', 'mirror')),
+    rel_path text NOT NULL,
+    sha256 char(64) NOT NULL,
+    size bigint NOT NULL,
+    data bytea NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (target, rel_path)
+)
+"""
 TEXT_FIELDS = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'explanation', 'concept_explanation',
                'mnemonic', 'why_correct', 'why_wrong_a', 'why_wrong_b', 'why_wrong_c', 'why_wrong_d', 'ai_explanation',
                'ai_answer', 'ai_mnemonic', 'ai_clinical_pearl', 'reference_text', 'learning_technique', 'shortcut_tip')
@@ -50,8 +65,11 @@ STEM_FIELDS = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d')
 EXPLANATION_FIELDS = ('explanation', 'concept_explanation', 'mnemonic')
 
 
-def load_data() -> dict:
-    return json.loads(DATA.read_text(encoding='utf-8'))
+def load_data(path: Path | None = None) -> dict:
+    path = Path(path or DATA)
+    data = json.loads(path.read_text(encoding='utf-8'))
+    data['_dir'] = str(path.parent)
+    return data
 
 
 # The 2018 Paper II runs Preventive & Social Medicine (1-40), Obstetrics & Gynaecology (41-80), Surgery (81-120).
@@ -139,18 +157,19 @@ def evidence_for(data: dict, op: dict, new_key: str) -> list[dict]:
 
 
 class _Models:
-    def __init__(self, question, snapshot, key_change, subject, audit=None, extra_hash_models=()):
+    def __init__(self, question, snapshot, key_change, subject, audit=None, extra_hash_models=(), image=None):
         self.Question, self.Snapshot, self.KeyChange, self.Subject = question, snapshot, key_change, subject
-        self.Audit = audit
+        self.Audit, self.Image = audit, image
         # (model, field) pairs that store a questions.content_hashes.stem_hash of a question
         self.extra_hash_models = tuple(extra_hash_models)
 
 
 def apply_plan(*, question_model, snapshot_model, key_change_model, subject_model, audit_model=None,
-               extra_hash_models=(), data=None, now=None) -> Counter:
+               extra_hash_models=(), image_model=None, data=None, now=None) -> Counter:
     """Apply the plan; returns a Counter of outcomes ('<op> applied', '<op> skipped: <why>')."""
     data = data or load_data()
-    m = _Models(question_model, snapshot_model, key_change_model, subject_model, audit_model, extra_hash_models)
+    m = _Models(question_model, snapshot_model, key_change_model, subject_model, audit_model, extra_hash_models,
+                image_model)
     now = now or timezone.now()
     results = Counter()
     ops = sorted(data['ops'], key=lambda o: OP_ORDER.index(o['op']))
@@ -305,9 +324,11 @@ def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> st
         return 'applied'
     if kind == 'format':
         q = m.Question.objects.get(pk=q.pk)
-        if q.question_text == op['fields']['question_text']:
+        if all(getattr(q, field) == value for field, value in op['fields'].items()):
             return 'skipped: already formatted'
         return _rewrite(m, q, dict(op['fields']), snapshot, f"{label}: {op['reason']}", now)
+    if kind == 'figure':
+        return _attach_figures(m, data, op, q, snapshot, label, now)
     if kind == 'mojibake':
         q = m.Question.objects.get(pk=q.pk)  # current values (earlier operations may have run)
         updates = {}
@@ -320,6 +341,44 @@ def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> st
             return 'skipped: nothing to repair'
         return _rewrite(m, q, updates, snapshot, f'{label}: characters repaired (mojibake)', now)
     return 'skipped: unknown operation'
+
+
+def _attach_figures(m, data, op, q, snapshot, label, now) -> str:
+    """The figure cropped from the official paper: staged for the media volume (Postgres) and attached as the
+    question's image; a question hidden only because its figure was missing becomes live."""
+    from django.db import connection
+
+    if m.Image is None:
+        return 'skipped: no image model'
+    if m.Image.objects.filter(question_id=q.pk, is_active=True).exclude(role='explanation').exists():
+        return 'skipped: already has its figure'
+    folder = Path(data.get('_dir') or DATA.parent) / data.get('figures_dir', '')
+    staged = []
+    for fig in op['figures']:
+        blob = (folder / fig['file']).read_bytes()
+        if hashlib.sha256(blob).hexdigest() != fig['sha256']:
+            return 'skipped: figure file does not match its checksum'
+        staged.append((fig, blob, f"question_figures/official/{fig['file']}"))
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as cur:
+            cur.execute(MEDIA_DDL)
+            for fig, blob, rel in staged:
+                cur.execute('INSERT INTO ops_media_transfer (target, rel_path, sha256, size, data) VALUES '
+                            '(%s, %s, %s, %s, %s) ON CONFLICT (target, rel_path) DO UPDATE SET sha256 = EXCLUDED.sha256, '
+                            'size = EXCLUDED.size, data = EXCLUDED.data, created_at = now()',
+                            ['media', rel, fig['sha256'], len(blob), blob])
+    snapshot(q, f'{label}: figure attached from the official paper')
+    for index, (fig, blob, rel) in enumerate(staged):
+        m.Image.objects.create(
+            question_id=q.pk, page_number=int(fig.get('page') or 0), image_index_in_page=index, url=f'/media/{rel}',
+            mime='image/jpeg', width=fig['width'], height=fig['height'], bytes=len(blob), sha256=fig['sha256'],
+            sha256_short=fig['sha256'][:16], role='primary', role_source='position_heuristic', is_active=True,
+            alt_text='Figure for this question (official question paper)', caption_source='source_pdf')
+    if op.get('activate') and not q.is_active:
+        m.Question.objects.filter(pk=q.pk).update(is_active=True, needs_review=False, updated_at=now)
+        q.is_active = True
+        return 'applied (question made live)'
+    return 'applied'
 
 
 def _rewrite(m, q, updates, snapshot, reason, now) -> str:

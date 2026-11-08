@@ -173,6 +173,88 @@ class ApplyPlanTests(TestCase):
         self.assertEqual(AnswerKeyChange.objects.filter(question=q).count(), 1)
 
 
+class FigureTests(TestCase):
+    """Figures cropped from an official paper (the 2026 plan): attached, and a question hidden only for its
+    missing figure made live."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.subject = Subject.objects.create(name='General Surgery', code='GS-F')
+
+    def setUp(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        folder = Path(self.tmp.name) / 'figs'
+        folder.mkdir()
+        self.blob = b'\xff\xd8\xff\xe0 test figure \xff\xd9'
+        (folder / 'cms2026_p2_q8.jpg').write_bytes(self.blob)
+        self.fig = {'file': 'cms2026_p2_q8.jpg', 'sha256': hashlib.sha256(self.blob).hexdigest(), 'width': 10,
+                    'height': 8, 'page': 3}
+
+    def _q(self, active):
+        return Question.objects.create(
+            subject=self.subject, year=2026, paper=2, exam_type='cms', is_active=active, correct_answer='C',
+            question_text='The typical ulcer as shown in the following diagram is seen in', option_a='syphilis',
+            option_b='squamous cell carcinoma', option_c='tuberculosis', option_d='basal cell carcinoma')
+
+    def _apply(self, ops):
+        from questions.models import QuestionImage
+        data = {'_dir': self.tmp.name, 'figures_dir': 'figs', 'source': SOURCE, 'ops': ops}
+        return cms_official.apply_plan(question_model=Question, snapshot_model=QuestionRevisionSnapshot,
+                                       key_change_model=AnswerKeyChange, subject_model=Subject,
+                                       image_model=QuestionImage, data=data)
+
+    def test_the_figure_is_attached_and_the_hidden_question_made_live(self):
+        q = self._q(active=False)
+        results = self._apply([{'op': 'figure', 'id': q.pk, 'figures': [self.fig], 'activate': True,
+                                'off': '2026_P2', 'n': 8, **_guard(q)}])
+        self.assertEqual(results['figure applied (question made live)'], 1)
+        q.refresh_from_db()
+        self.assertTrue(q.is_active)
+        image = q.images.get()
+        self.assertEqual((image.role, image.url), ('primary', '/media/question_figures/official/cms2026_p2_q8.jpg'))
+        self.assertEqual(image.sha256, self.fig['sha256'])
+
+    def test_a_question_that_has_its_figure_is_left_alone(self):
+        q = self._q(active=True)
+        op = {'op': 'figure', 'id': q.pk, 'figures': [self.fig], 'off': '2026_P2', 'n': 8, **_guard(q)}
+        self._apply([op])
+        again = self._apply([op])
+        self.assertEqual(again['figure skipped: already has its figure'], 1)
+        self.assertEqual(q.images.count(), 1)
+
+    def test_a_figure_file_that_does_not_match_its_checksum_is_refused(self):
+        q = self._q(active=False)
+        bad = dict(self.fig, sha256='0' * 64)
+        results = self._apply([{'op': 'figure', 'id': q.pk, 'figures': [bad], 'activate': True, 'off': '2026_P2',
+                                'n': 8, **_guard(q)}])
+        self.assertEqual(results['figure skipped: figure file does not match its checksum'], 1)
+        q.refresh_from_db()
+        self.assertFalse(q.is_active)
+
+
+class Data2026FileTests(SimpleTestCase):
+
+    def test_every_official_number_is_placed_once_and_every_figure_file_is_present(self):
+        import hashlib
+        from collections import Counter
+        from pathlib import Path
+        data = cms_official.load_data(cms_official.DATA_2026)
+        places = Counter((op['to_paper'], op['to_n']) for op in data['ops'] if op['op'] == 'place')
+        for paper in (1, 2):
+            self.assertEqual(sorted(n for p, n in places if p == paper), list(range(1, 121)), paper)
+        self.assertEqual(max(places.values()), 1)
+        folder = Path(data['_dir']) / data['figures_dir']
+        figures = [fig for op in data['ops'] if op['op'] == 'figure' for fig in op['figures']]
+        self.assertEqual(len(figures), 16)
+        for fig in figures:
+            self.assertEqual(hashlib.sha256((folder / fig['file']).read_bytes()).hexdigest(), fig['sha256'])
+        self.assertFalse([op for op in data['ops'] if op['op'] == 'key'])  # no official 2026 key: keys untouched
+
+
 class MojibakeTests(SimpleTestCase):
 
     def test_utf8_read_as_cp437_is_decoded(self):
