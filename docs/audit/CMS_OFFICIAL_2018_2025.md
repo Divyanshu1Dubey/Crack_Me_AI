@@ -65,9 +65,11 @@ decoded (`ΓåÆ` → `→`, `ΓëÑ` → `≥`, `┬░` → `°`, `╬▓` →
 * **2009–2017** (in the PDF, 2014–2017 with a text layer, 2009–2013 scanned) were not imported here; 2014–2017
   followed in `questions.0049` (`CMS_OFFICIAL_2014_2017.md`); **2026** is not in this PDF
   (`CMS_OFFICIAL_2026.md`).
-* Past attempts keep the score they were given (re-scoring after a key change is not implemented; the
-  `AnswerKeyChange` rows are `rescore_status='pending'`).
-* Questions UPSC dropped stay active (the bank keeps its key); students are not yet shown that UPSC dropped them.
+* Past attempts were not re-scored here (the `AnswerKeyChange` rows were created `rescore_status='pending'`); the
+  release step `rescore_key_changes --apply` (2026-11-09, `ANSWER_KEY_AUDIT.md`) re-scores them, keeping the
+  original score.
+* Questions UPSC dropped stay active (the bank keeps its key); since 2026-11-09 students see "Dropped by UPSC" and
+  tests leave them out of the score.
 * Untagged (paper 0) questions dated by a guideline year (e.g. "GAPPD goals for 2025") are left as they are.
 
 ## Verify after a deploy

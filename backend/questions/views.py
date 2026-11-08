@@ -538,7 +538,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         'year', 'subject', 'topic', 'difficulty', 'exam_type',
         'is_image_based', 'is_verified_by_admin',
         'needs_review', 'is_controversial', 'display_number', 'is_active',
-        'page_number',
+        'page_number', 'is_dropped',  # the admin editor's "Dropped" filter (was ignored)
     ]
     # ``display_number`` / ``paper``: the admin questions editor orders a
     # paper by ``?ordering=paper,display_number`` (OrderingFilter dropped

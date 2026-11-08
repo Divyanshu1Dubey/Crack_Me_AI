@@ -43,8 +43,11 @@ python manage.py seed_question_bank
 # Import static blog posts the database lacks; never overwrites admin edits (see seed_blogs)
 python manage.py seed_blogs || true
 
-# UPSC's official CMS 2018-2025 keys as official_key reviews in the answer-key audit (records only what is missing)
+# UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (records only what is missing)
 python manage.py record_official_cms_keys --apply || true
+
+# Past test attempts scored again for pending answer-key changes / UPSC-dropped questions (keeps original scores)
+python manage.py rescore_key_changes --apply || true
 
 # Bootstrap MEDIA_ROOT for recall image persistence.
 # The importer writes extracted images into MEDIA_ROOT/recall_images/...

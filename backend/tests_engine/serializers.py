@@ -161,6 +161,7 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
             'mnemonic': q.mnemonic or '',
             'concept_explanation': q.concept_explanation or '',
             'textbook_references': q.textbook_references or [],
+            'dropped_by_upsc': q.dropped_by_upsc,
             'answer_locked': False,
         }
         if not (self.context.get('answer_visibility') or {}).get(q.pk, False):
@@ -171,16 +172,22 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
 class TestAttemptSerializer(serializers.ModelSerializer):
     test_title = PublicTestTitleField(source='test.title', read_only=True)
     accuracy = serializers.ReadOnlyField()
+    # Questions UPSC dropped, not part of score / total_marks (tests_engine.scoring).
+    not_scored_count = serializers.SerializerMethodField()
 
     class Meta:
         model = TestAttempt
         fields = ['id', 'test', 'test_title', 'started_at', 'completed_at',
                   'score', 'total_marks', 'correct_count', 'incorrect_count',
                   'unanswered_count', 'time_taken_seconds', 'is_completed',
-                  'is_late', 'accuracy']
+                  'is_late', 'accuracy', 'not_scored_count', 'original_score',
+                  'original_total_marks', 'rescored_at']
         read_only_fields = ['id', 'started_at', 'score', 'total_marks',
                             'correct_count', 'incorrect_count', 'unanswered_count',
-                            'is_late']
+                            'is_late', 'original_score', 'original_total_marks', 'rescored_at']
+
+    def get_not_scored_count(self, obj):
+        return len(obj.not_scored or [])
 
 
 class TestAttemptDetailSerializer(TestAttemptSerializer):

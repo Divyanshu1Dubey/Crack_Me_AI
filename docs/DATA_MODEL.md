@@ -332,7 +332,10 @@
 **Business rules**:
 - `correct_answer` must be one of `A/B/C/D` (validated via `choices=` constraint).
 - `is_active=False` hides from student endpoints.
-- `is_dropped=True` excludes from scoring.
+- `is_dropped=True` on an **active** question = UPSC dropped it from evaluation (`Question.dropped_by_upsc`):
+  shown to students with a "Dropped by UPSC" badge, never scored in tests (`tests_engine.scoring`: not in the
+  score nor in `total_marks`). With `is_active=False` it means the duplicate / remove tools took the copy out of
+  the bank.
 - `admin_edited=True` protects from seed-script overwrites.
 - Questions filtered by `exam_track` via Subject → ExamTrack chain.
 - `lock_answer` / `lock_explanation` prevent AI regeneration of those fields.
@@ -455,8 +458,25 @@ Per-question attempt log: `user`, `question`, `test_attempt` (nullable), `select
 | `unanswered_count` | `IntegerField` | default 0 |
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_completed` | `BooleanField` | default False |
+| `is_late` | `BooleanField` | submitted after the time limit: scored, no XP, off the leaderboard |
+| `not_scored` | `JSONField` | question ids left out of `score` / `total_marks` (dropped by UPSC) |
+| `original_score` / `original_total_marks` | `FloatField` | the figures before the first re-scoring (null until then) |
+| `rescored_at` | `DateTimeField` | last re-scoring after an answer-key change (null until then) |
 
 Property: `accuracy = round(correct / (correct + incorrect) * 100, 1)`
+
+Scoring (`tests_engine/scoring.py`): +1 correct, minus the test's negative mark per wrong answer, one mark per
+question; questions UPSC dropped are not scored. `manage.py rescore_key_changes` (a release step) applies pending
+`AnswerKeyChange` rows and dropped questions to completed attempts: only the touched questions change the stored
+figures, the negative mark is the one the stored score used, `original_score` keeps the first score, and each
+change is an `AttemptRescore` row.
+
+### `AttemptRescore`
+
+One re-scoring of an attempt (never edited): `attempt` (FK, related_name `rescores`), `created_at`, `reason`,
+`key_changes` (AnswerKeyChange ids), `negative_mark`, `old_/new_score`, `old_/new_total_marks`,
+`old_/new_correct`, `old_/new_incorrect`, `old_/new_unanswered`, `answers` (`[{question_id, selected, was, now,
+scored_before, scored_now}]`). Read-only in Django admin.
 
 ### `QuestionResponse`
 
@@ -465,7 +485,7 @@ Property: `accuracy = round(correct / (correct + incorrect) * 100, 1)`
 | `attempt` | `FK(TestAttempt, CASCADE)` | related_name=`responses` |
 | `question` | `FK(Question, CASCADE)` | |
 | `selected_answer` | `CharField(1)` | nullable |
-| `is_correct` | `BooleanField` | nullable (None = unanswered) |
+| `is_correct` | `BooleanField` | nullable (None = unanswered, or not scored: a question UPSC dropped; the answer is kept) |
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_marked_for_review` | `BooleanField` | default False |
 | `confidence_level` | `IntegerField` | 1–5, nullable |

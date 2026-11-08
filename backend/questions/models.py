@@ -456,6 +456,12 @@ class Question(models.Model):
     def __str__(self):
         return f"[{self.year}] {self.subject.code}: {self.question_text[:80]}..."
 
+    @property
+    def dropped_by_upsc(self):
+        """UPSC dropped the question from evaluation: active, shown, never scored (tests_engine.scoring).
+        ``is_dropped`` on a hidden question means "removed from the bank" instead."""
+        return bool(self.is_dropped and self.is_active)
+
     def get_correct_option_text(self):
         mapping = {'A': self.option_a, 'B': self.option_b, 'C': self.option_c, 'D': self.option_d}
         return mapping.get(self.correct_answer, '')
@@ -1367,7 +1373,9 @@ class AnswerKeyChange(models.Model):
     ]
     EXPLANATION_ACTION_CHOICES = [('kept_stale', 'Kept (marked stale)'), ('replaced', 'Replaced'), ('cleared', 'Cleared')]
     RESCORE_CHOICES = [('pending', 'Pending'), ('done', 'Done'), ('skipped', 'Skipped')]
-    RESCORE_FIELDS = ('rescore_status', 'rescored_at', 'rescored_by')
+    # written by tests_engine.scoring.rescore_pending_key_changes (``affected``: {test_attempts, qbank_attempts}
+    # the re-scoring changed)
+    RESCORE_FIELDS = ('rescore_status', 'rescored_at', 'rescored_by', 'affected')
 
     question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name='key_changes')
     old_key = models.CharField(max_length=1, blank=True, default='')

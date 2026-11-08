@@ -97,6 +97,13 @@ class TestAttempt(models.Model):
         default=False,
         help_text='Submitted after the time limit (plus grace): scored, but no XP and off the leaderboard.',
     )
+    # Scoring (tests_engine.scoring): questions UPSC dropped are not scored; an answer-key change scores the
+    # attempt again, keeping its first score here and the details in AttemptRescore.
+    not_scored = models.JSONField(default=list, blank=True,
+                                  help_text='Question ids not scored (dropped by UPSC) in score / total_marks.')
+    original_score = models.FloatField(null=True, blank=True, help_text='Score before the first re-scoring.')
+    original_total_marks = models.FloatField(null=True, blank=True)
+    rescored_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-started_at']
@@ -130,6 +137,34 @@ class TestAttempt(models.Model):
         if total == 0:
             return 0
         return round((self.correct_count / total) * 100, 1)
+
+
+class AttemptRescore(models.Model):
+    """One re-scoring of a completed attempt (tests_engine.scoring.rescore_attempt): the figures before and after
+    and every answer whose verdict changed. Never edited; the attempt keeps its first score as well."""
+    attempt = models.ForeignKey(TestAttempt, on_delete=models.CASCADE, related_name='rescores')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    reason = models.CharField(max_length=300)
+    key_changes = models.JSONField(default=list, blank=True, help_text='questions.AnswerKeyChange ids')
+    negative_mark = models.FloatField(default=0)
+    old_score = models.FloatField(null=True)
+    new_score = models.FloatField(null=True)
+    old_total_marks = models.FloatField(null=True)
+    new_total_marks = models.FloatField(null=True)
+    old_correct = models.IntegerField(default=0)
+    new_correct = models.IntegerField(default=0)
+    old_incorrect = models.IntegerField(default=0)
+    new_incorrect = models.IntegerField(default=0)
+    old_unanswered = models.IntegerField(default=0)
+    new_unanswered = models.IntegerField(default=0)
+    # [{question_id, selected, was, now, scored_before, scored_now}]
+    answers = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Attempt {self.attempt_id}: {self.old_score} -> {self.new_score}'
 
 
 class QuestionResponse(models.Model):

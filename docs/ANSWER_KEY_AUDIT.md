@@ -103,6 +103,20 @@ for a key the data file holds for review: 2015 Paper II Q60, printed "Dc"), so t
 `official_key_disagrees`. It records only what is missing; a dry run reports the counts. 2026 has no official key
 yet (`docs/audit/CMS_OFFICIAL_2026.md`).
 
+**Re-scoring after a key change (2026-11-09).** Every `AnswerKeyChange` is created `rescore_status='pending'`. The
+release step `python manage.py rescore_key_changes --apply` (dry run without `--apply`) scores the completed test
+attempts it touches again (`tests_engine/scoring.py`): an answer is marked against the current key and a question
+UPSC dropped (`is_dropped` on an active question) is left out of the score and the total. Only the touched
+questions change the stored figures (an admin edit of the test's negative marking or questions since does not),
+the attempt keeps its first score (`original_score`, `original_total_marks`, `rescored_at`), and each re-scoring is
+an `AttemptRescore` row (old / new figures, every answer whose verdict changed; read-only in Django admin). The
+students' question-bank answers (`QuestionAttempt.is_correct`) of the changed questions follow the current key;
+a Mistake Notebook entry the corrected key now accepts stays stored but is no longer listed. XP already earned is
+not changed. The key change is then `done` with `affected = {test_attempts, qbank_attempts}`. A second run changes
+nothing. Students see "Dropped by UPSC" on such questions, "not scored" in the review, and a note on a re-scored
+result ("originally x / y"). Rehearsal on the production copy after questions.0049: 337 pending changes, 27 of 31
+touched attempts re-scored, 180 question-bank answers re-marked.
+
 ## 4. Review queue
 
 Page: `/admin/review-queue` (admin role). API under `/api/key-audit/` (`IsControlTowerAdmin`, throttle

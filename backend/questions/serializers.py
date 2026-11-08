@@ -533,7 +533,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review',
+        fields = ['id', 'uuid', 'display_number', 'is_dropped', 'dropped_by_upsc', 'admin_edited', 'needs_review',
                   'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
                   'year', 'subject', 'subject_name',
                   'topic', 'topic_name', 'difficulty', 'exam_source',
@@ -868,8 +868,8 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review', 'is_disputed',
-            'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+            'id', 'uuid', 'display_number', 'is_dropped', 'dropped_by_upsc', 'admin_edited', 'needs_review',
+            'is_disputed', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'year', 'subject', 'subject_name', 'topic', 'topic_name',
             'difficulty', 'concept_tags', 'concept_id', 'explanation', 'concept_explanation',
             'mnemonic', 'book_name', 'chapter', 'page_number', 'reference_text', 'paper',

@@ -1517,6 +1517,8 @@ def _notebook_queryset(user):
 
     qs = (
         MistakeNotebook.objects.filter(user=user)
+        # an answer a corrected key now accepts is no mistake (the entry stays; it is just not listed)
+        .exclude(selected_answer=F('question__correct_answer'))
         .select_related('question__subject', 'question__topic')
         # Every notebook column, but of the question only what
         # MistakeNotebookSerializer and mistake_answer_visible read (a

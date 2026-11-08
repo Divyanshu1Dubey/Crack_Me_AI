@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Test, TestAttempt, QuestionResponse
+from .models import AttemptRescore, Test, TestAttempt, QuestionResponse
 
 @admin.register(Test)
 class TestAdmin(admin.ModelAdmin):
@@ -19,3 +19,19 @@ class TestAttemptAdmin(admin.ModelAdmin):
 @admin.register(QuestionResponse)
 class QuestionResponseAdmin(admin.ModelAdmin):
     list_display = ['attempt', 'question', 'selected_answer', 'is_correct']
+
+
+@admin.register(AttemptRescore)
+class AttemptRescoreAdmin(admin.ModelAdmin):
+    """The audit trail of re-scored attempts (tests_engine.scoring): read-only."""
+    list_display = ['attempt', 'created_at', 'old_score', 'new_score', 'old_total_marks', 'new_total_marks', 'reason']
+    search_fields = ['attempt__id', 'reason']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

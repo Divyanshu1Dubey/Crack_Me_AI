@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import DroppedByUpscBadge from '@/components/question/DroppedByUpscBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
@@ -623,6 +624,7 @@ function PracticeContent() {
                                 <Badge variant="secondary" className="text-xs">{currentQ.subject_name}</Badge>
                                 {currentQ.topic_name && <Badge variant="outline" className="text-xs">{currentQ.topic_name}</Badge>}
                                 {currentQ.difficulty && <Badge variant="outline" className="text-xs capitalize">{currentQ.difficulty}</Badge>}
+                                {currentQ.dropped_by_upsc && <DroppedByUpscBadge />}
                             </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={handleBookmark} className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" title="Bookmark">

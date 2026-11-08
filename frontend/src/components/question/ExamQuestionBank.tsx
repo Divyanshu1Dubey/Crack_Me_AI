@@ -60,6 +60,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { LockedBadge } from '@/components/paywall/LockedBadge';
+import DroppedByUpscBadge from '@/components/question/DroppedByUpscBadge';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
@@ -1688,6 +1689,7 @@ function ExamQuestionBankInner({
                                                 ✔ Verified by Admin
                                             </Badge>
                                         )}
+                                        {detail.dropped_by_upsc && <DroppedByUpscBadge />}
                                     </div>
 
                                     <div className="p-4">
