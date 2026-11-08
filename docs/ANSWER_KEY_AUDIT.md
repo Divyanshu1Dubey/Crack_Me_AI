@@ -92,9 +92,10 @@ python manage.py audit_answer_keys [--exam neet_pg] [--ids 1,2] [--stale-only] [
 verdict keeps its first timestamp, so importing a file again does not reopen decided questions.
 Every key / stem / option change re-audits the question (`key_audit.services.on_question_changed`).
 
-**UPSC CMS 2014–2025 official keys (2026-11-07 / 08).** `questions.0047` made the bank match the official papers
+**UPSC CMS 2009–2025 official keys (2026-11-07 / 09).** `questions.0047` made the bank match the official papers
 and UPSC answer keys for 2018–2025 (`docs/audit/CMS_OFFICIAL_2018_2025.md`), `questions.0049` completed 2014–2017
-from the same PDF (`docs/audit/CMS_OFFICIAL_2014_2017.md`); key changes are `AnswerKeyChange` rows with
+from the same PDF (`docs/audit/CMS_OFFICIAL_2014_2017.md`) and `questions.0051` added 2009–2013
+(`docs/audit/CMS_OFFICIAL_2009_2013.md`); key changes are `AnswerKeyChange` rows with
 `source='official_key'` and `official_key` evidence (PDF, sha256, key page, cell). The release step
 `python manage.py record_official_cms_keys --apply` then records UPSC's key as an `official_key` review for every
 active question of those papers (found by year, paper and `display_number`; none for a question UPSC dropped, none

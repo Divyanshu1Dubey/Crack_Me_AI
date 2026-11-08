@@ -165,6 +165,16 @@ class ApplyPlanTests(TestCase):
         self.assertEqual((copy_without_year.year, copy_without_year.paper, copy_without_year.display_number),
                          (2016, 2, 30))
 
+    def test_a_question_upsc_dropped_is_added_without_a_key_and_flagged(self):
+        text = {'question_text': 'Which one of the following pollutants causes surface deterioration of leather?',
+                'option_a': 'Hydrogen sulphide', 'option_b': 'Nitrogen dioxide', 'option_c': 'Ozone',
+                'option_d': 'Sulphur dioxide'}
+        _apply(self._data([{'op': 'add', 'year': 2013, 'paper': 1, 'n': 108, 'subject': 'General Medicine',
+                            'text': text, 'dropped': True, 'off': '2013_P1', 'key_page': 698}]))
+        q = Question.objects.get(year=2013, paper=1, display_number=108)
+        self.assertEqual((q.correct_answer, q.is_dropped, q.is_active), ('', True, True))
+        self.assertTrue(q.dropped_by_upsc)
+
     def test_subject_moves_with_a_topic_of_the_same_name(self):
         q = self._q(year=2018, topic=self.surgery_topic)
         op = {'op': 'subject', 'id': q.pk, 'to_subject': 'Community Medicine', 'off': '2018_P2', 'n': 1, **_guard(q)}
@@ -328,6 +338,36 @@ class Data2014To2017FileTests(SimpleTestCase):
         ends = {(op['off'], op['n']): op['text']['option_d'] for op in self.data['ops'] if op['op'] == 'add'}
         self.assertEqual(ends[('2017_P1', 28)], 'At least resistance to Streptomycin and Rifampicin')
         self.assertEqual(ends[('2017_P2', 96)], '1, 3 and 4 only')
+
+
+class Data2009To2013FileTests(SimpleTestCase):
+
+    def test_every_official_question_is_added_once_with_its_official_key_or_dropped(self):
+        from collections import Counter
+        data = cms_official.load_data(cms_official.DATA_2009_2013)
+        self.assertEqual(sorted(data['keys']), [f'{y}_P{p}' for y in range(2009, 2014) for p in (1, 2)])
+        keys = {(op['off'], op['n']): op['to'] for op in data['ops'] if op['op'] == 'key'}
+        slots = Counter()
+        for op in data['ops']:
+            if op['op'] != 'add':
+                continue
+            slots[(op['off'], op['n'])] += 1
+            self.assertTrue(op['text']['question_text'].strip())
+            self.assertTrue(all(op['text'][f'option_{l}'].strip() for l in 'abcd'), (op['off'], op['n']))
+            official = data['keys'][op['off']][str(op['n'])]
+            if official == 'X':  # UPSC dropped it: no key, flagged
+                self.assertTrue(op.get('dropped'))
+                self.assertNotIn((op['off'], op['n']), keys)
+            else:
+                self.assertEqual(keys[(op['off'], op['n'])], official)
+        for paper in data['keys']:
+            self.assertEqual(sorted(n for off, n in slots if off == paper), list(range(1, 121)), paper)
+        self.assertEqual(max(slots.values()), 1)
+        # 2009 Paper I runs General Ability first; the other years end with it
+        subjects = {(op['off'], op['n']): op['subject'] for op in data['ops'] if op['op'] == 'add'}
+        self.assertEqual((subjects[('2009_P1', 1)], subjects[('2009_P1', 31)], subjects[('2009_P1', 101)]),
+                         ('General Ability', 'General Medicine', 'Paediatrics'))
+        self.assertEqual(subjects[('2013_P1', 91)], 'General Ability')
 
 
 class MojibakeTests(SimpleTestCase):

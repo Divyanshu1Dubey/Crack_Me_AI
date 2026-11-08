@@ -1,8 +1,8 @@
-"""Record UPSC's official answer key of CMS 2014-2025 in the answer-key audit (dry run unless --apply).
+"""Record UPSC's official answer key of CMS 2009-2025 in the answer-key audit (dry run unless --apply).
 
-The key of every question of the 24 papers is in questions/data/cms_official_2018_2025.json and
-cms_official_2014_2017.json (questions.0047 and 0049 made the bank match them: year, paper, display_number = the
-official number, key). Each active question found by year, paper and number gets an ``official_key`` review
+The key of every question of the 34 papers is in questions/data/cms_official_2018_2025.json,
+cms_official_2014_2017.json and cms_official_2009_2013.json (questions.0047, 0049 and 0051 made the bank match them:
+year, paper, display_number = the official number, key). Each active question found by year, paper and number gets an ``official_key`` review
 (key_audit.reviews) through ``key_audit.importers.import_review_signals``, so the audit shows it as verified
 against the official key and flags any later change away from it. A question UPSC dropped gets no review, nor
 does a key the data file holds for review (``needs_review``: printed unreadably); for a question with two
@@ -31,6 +31,7 @@ from questions.models import Question
 OFFICIAL_KEY_FILES = (
     (cms_official.DATA, 'cms_official_2018_2025'),
     (cms_official.DATA_2014_2017, 'cms_official_2014_2017'),
+    (cms_official.DATA_2009_2013, 'cms_official_2009_2013'),
 )
 
 

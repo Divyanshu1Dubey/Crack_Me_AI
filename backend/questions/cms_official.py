@@ -56,6 +56,7 @@ from questions.content_repairs import REVISION_FIELDS
 DATA = Path(__file__).resolve().parent / 'data' / 'cms_official_2018_2025.json'
 DATA_2026 = Path(__file__).resolve().parent / 'data' / 'cms_official_2026.json'
 DATA_2014_2017 = Path(__file__).resolve().parent / 'data' / 'cms_official_2014_2017.json'
+DATA_2009_2013 = Path(__file__).resolve().parent / 'data' / 'cms_official_2009_2013.json'
 OP_ORDER = ('hide', 'repair', 'restore', 'format', 'add', 'place', 'subject', 'key', 'dropped', 'figure', 'mojibake')
 # questions/media_restore.py writes a staged file to MEDIA_ROOT when the image endpoint first asks for it (and
 # start_web.sh restores every staged file at container start); same table as scripts/railway/upload_media_to_db.py
@@ -300,6 +301,7 @@ def _apply_one(m, data, op, q, snapshot, added_keys, subjects, now, added) -> st
         m.Question.objects.create(
             exam_type='cms', exam_source='UPSC CMS', year=year, paper=paper, display_number=n,
             subject=subject, correct_answer=key, is_active=True, needs_review=bool(op.get('needs_review')),
+            is_dropped=bool(op.get('dropped')),  # UPSC dropped it (official key X): shown, never scored
             source=(op.get('source') or
                     f"UPSC CMS {year} Paper {'I' if paper == 1 else 'II'} (official paper, Series A) Q{n}")[:200],
             **{field: text[field] for field in STEM_FIELDS})

@@ -22,8 +22,8 @@ python manage.py seed_blogs || true
 # review and publish them at /admin/blog (blog_engine/pyq_drafts.py).
 python manage.py generate_pyq_blog_drafts --apply || true
 
-# UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (questions.0047 / 0049 made
-# the bank match them). Records only what is missing, so later deploys finish at once.
+# UPSC's official CMS 2009-2025 keys as official_key reviews in the answer-key audit (questions.0047 / 0049 / 0051
+# made the bank match them). Records only what is missing, so later deploys finish at once.
 python manage.py record_official_cms_keys --apply || true
 
 # Past test attempts scored again for pending answer-key changes and questions UPSC dropped (tests_engine.scoring):

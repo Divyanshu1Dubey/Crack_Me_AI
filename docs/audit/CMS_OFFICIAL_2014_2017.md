@@ -80,6 +80,7 @@ and, per paper, `Question.objects.filter(exam_type='cms', year=Y, paper=P, is_ac
 
 ## Not done
 
-* **2009–2013** are scanned pages in the PDF (no text layer): not imported yet.
+* **2009–2013** are scanned pages in the PDF (no text layer): imported by `questions.0051` from OCR checked on the
+  page images (`CMS_OFFICIAL_2009_2013.md`).
 * Explanations: the 939 added questions have none yet; they are generated on demand (AI, marked as such) or by the
   batch pipeline.
