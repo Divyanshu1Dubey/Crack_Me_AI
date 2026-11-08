@@ -9,16 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Briefcase, MapPin, IndianRupee, ExternalLink, Plus } from 'lucide-react';
+import { Trash2, Briefcase, MapPin, IndianRupee, ExternalLink, Plus, ShieldCheck, Ban } from 'lucide-react';
 
 /**
- * /admin/jobs — full CRUD UI for the `jobs.Job` model (medical job
- * postings). Reachable directly via the URL or via the "Jobs" tile on
- * the admin dashboard, which deep-links here.
+ * /admin/jobs — the `jobs.Job` listings (medical job postings). Reachable directly via the URL or via the
+ * "Jobs" tile on the admin dashboard, which deep-links here.
  *
- * The page is intentionally self-contained: list, create, delete all
- * live here with no modals so the create flow is fast for the daily
- * "post 5 hospital jobs" use case.
+ * A new listing is a draft. Students see it only after an admin checked it against the official notification
+ * (its link goes in "Official notification") and pressed "Verify & publish"; it stays up while that check is
+ * recent (45 days by default: re-verify) and the last date to apply has not passed (jobs.official_sources). Both
+ * links must be on an official recruitment site. Nothing is fetched or generated.
  */
 interface JobForm {
     title: string;
@@ -28,6 +28,8 @@ interface JobForm {
     eligibility_summary: string;
     exam_tracks: number[];
     apply_link: string;
+    source_url: string;
+    expires_on: string;
     salary: string;
 }
 
@@ -39,8 +41,30 @@ const EMPTY_FORM: JobForm = {
     eligibility_summary: '',
     exam_tracks: [],
     apply_link: '',
+    source_url: '',
+    expires_on: '',
     salary: '',
 };
+
+const STATUS_LABEL: Record<string, string> = { draft: 'Draft (not public)', approved: 'Published', rejected: 'Rejected' };
+
+/** The reasons the API gives for a refused verification / approval, else a generic message. */
+function apiProblems(err: unknown, fallback: string): string {
+    const data = (err as { response?: { data?: unknown } })?.response?.data;
+    if (data && typeof data === 'object') {
+        const status = (data as Record<string, unknown>).status;
+        if (Array.isArray(status) && status.length) return status.map(String).join(' ');
+        const firstField = Object.values(data as Record<string, unknown>).find(v => Array.isArray(v) && v.length);
+        if (Array.isArray(firstField)) return firstField.map(String).join(' ');
+    }
+    return fallback;
+}
+
+function formatDay(value?: string | null): string {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function AdminJobsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -56,6 +80,7 @@ export default function AdminJobsPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [busyId, setBusyId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [formData, setFormData] = useState<JobForm>(EMPTY_FORM);
 
@@ -113,14 +138,57 @@ export default function AdminJobsPage() {
         setSubmitting(true);
         setError(null);
         try {
-            await jobsAPI.create({ ...formData, admin_edited: true });
+            const { expires_on, ...fields } = formData;
+            // A draft: published from the list below with "Verify & publish".
+            await jobsAPI.create({
+                ...fields,
+                expires_at: expires_on ? `${expires_on}T23:59:59+05:30` : null,
+                admin_edited: true,
+            });
             setFormData(EMPTY_FORM);
             await fetchJobs(1);
         } catch (err) {
             console.error(err);
-            setError('Error creating job. Verify all fields are valid.');
+            setError(apiProblems(err, 'Error creating job. Verify all fields are valid.'));
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const replaceJob = (updated: any) => setJobs(prev => prev.map(job => (job.id === updated.id ? updated : job)));
+
+    // Records the check against the official notification (and publishes the listing); the API refuses a
+    // listing whose links are not on an official recruitment site and says why.
+    const handleVerify = async (job: any) => {
+        const source = window.prompt(
+            'Official notification you checked this listing against (a .gov.in / .nic.in / .edu.in / .ac.in / aiims.edu page or PDF):',
+            job.source_url || '',
+        );
+        if (source === null) return;
+        setBusyId(job.id);
+        setError(null);
+        try {
+            const res = await jobsAPI.verify(job.id, { source_url: source.trim(), approve: true });
+            replaceJob(res.data);
+        } catch (err) {
+            setError(apiProblems(err, 'Could not verify this listing.'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleReject = async (job: any) => {
+        const note = window.prompt('Why is this listing taken off the board? (kept for admins)', job.review_note || '');
+        if (note === null) return;
+        setBusyId(job.id);
+        setError(null);
+        try {
+            const res = await jobsAPI.reject(job.id, note.trim());
+            replaceJob(res.data);
+        } catch (err) {
+            setError(apiProblems(err, 'Could not reject this listing.'));
+        } finally {
+            setBusyId(null);
         }
     };
 
@@ -164,7 +232,8 @@ export default function AdminJobsPage() {
                         Job Postings
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Manage medical job postings shown to candidates.
+                        Students see a listing only after you check it against the official notification and
+                        publish it, while that check is under 45 days old and the last date has not passed.
                     </p>
                 </div>
                 <Button variant="outline" onClick={() => fetchJobs(1)} disabled={loading}>
@@ -185,8 +254,9 @@ export default function AdminJobsPage() {
                         Create New Job
                     </CardTitle>
                     <CardDescription>
-                        Posted jobs appear on the candidate jobs board immediately and are never
-                        overwritten by the job scraper.
+                        Saved as a draft. Copy the details from the official notification only, then use
+                        &quot;Verify &amp; publish&quot; in the list below. Links must be on an official recruitment
+                        site (.gov.in, .nic.in, .edu.in, .ac.in, .res.in, aiims.edu).
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -228,13 +298,30 @@ export default function AdminJobsPage() {
                                 />
                             </div>
                             <div className="space-y-1 md:col-span-2">
-                                <label className="text-sm font-medium">Application Link</label>
+                                <label className="text-sm font-medium">Application Link (official site)</label>
                                 <Input
                                     required
                                     type="url"
                                     value={formData.apply_link}
                                     onChange={e => setFormData({ ...formData, apply_link: e.target.value })}
-                                    placeholder="https://example.com/apply"
+                                    placeholder="https://upsc.gov.in/..."
+                                />
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                                <label className="text-sm font-medium">Official notification (page or PDF it was checked against)</label>
+                                <Input
+                                    type="url"
+                                    value={formData.source_url}
+                                    onChange={e => setFormData({ ...formData, source_url: e.target.value })}
+                                    placeholder="https://www.aiimsexams.ac.in/pdf/notice.pdf"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium">Last date to apply</label>
+                                <Input
+                                    type="date"
+                                    value={formData.expires_on}
+                                    onChange={e => setFormData({ ...formData, expires_on: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -308,7 +395,8 @@ export default function AdminJobsPage() {
                 <CardHeader>
                     <CardTitle>Existing Jobs ({jobsTotal || jobs.length})</CardTitle>
                     <CardDescription>
-                        Posted jobs visible on the candidate jobs board.
+                        Every listing, public or not. &quot;Published&quot; listings are on the candidate jobs board
+                        while their verification is under 45 days old and the last date has not passed.
                         {jobsTotal > jobs.length && ` Showing ${jobs.length} of ${jobsTotal}.`}
                     </CardDescription>
                 </CardHeader>
@@ -328,6 +416,18 @@ export default function AdminJobsPage() {
                                 >
                                     <div className="space-y-1 min-w-0">
                                         <h3 className="font-semibold">{job.title} <span className="text-muted-foreground font-normal">at {job.hospital}</span></h3>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                            <Badge variant={job.status === 'approved' ? 'default' : 'secondary'}>
+                                                {STATUS_LABEL[job.status] ?? job.status ?? 'Draft'}
+                                            </Badge>
+                                            <span className="text-muted-foreground">
+                                                {job.last_verified_at ? `Verified ${formatDay(job.last_verified_at)}` : 'Never verified'}
+                                                {job.expires_at ? ` · Last date ${formatDay(job.expires_at)}` : ''}
+                                            </span>
+                                            {job.status === 'rejected' && job.review_note && (
+                                                <span className="text-muted-foreground">· {job.review_note}</span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                             <span className="flex items-center gap-1">
                                                 <MapPin className="h-3 w-3" />
@@ -348,6 +448,17 @@ export default function AdminJobsPage() {
                                                 <ExternalLink className="h-3 w-3" />
                                                 Apply link
                                             </a>
+                                            {job.source_url && (
+                                                <a
+                                                    href={job.source_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="flex items-center gap-1 hover:underline"
+                                                >
+                                                    <ExternalLink className="h-3 w-3" />
+                                                    Official notification
+                                                </a>
+                                            )}
                                         </div>
                                         {Array.isArray(job.exam_tracks) && job.exam_tracks.length > 0 && (
                                             <div className="flex gap-1 mt-1 flex-wrap">
@@ -359,16 +470,36 @@ export default function AdminJobsPage() {
                                             </div>
                                         )}
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        disabled={deletingId === job.id}
-                                        onClick={() => handleDelete(job.id)}
-                                        className="self-start"
-                                    >
-                                        <Trash2 className="h-3 w-3 mr-1" />
-                                        {deletingId === job.id ? 'Deleting…' : 'Delete'}
-                                    </Button>
+                                    <div className="flex flex-wrap gap-2 self-start">
+                                        <Button
+                                            size="sm"
+                                            disabled={busyId === job.id}
+                                            onClick={() => handleVerify(job)}
+                                        >
+                                            <ShieldCheck className="h-3 w-3 mr-1" />
+                                            {job.status === 'approved' ? 'Re-verify' : 'Verify & publish'}
+                                        </Button>
+                                        {job.status !== 'rejected' && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={busyId === job.id}
+                                                onClick={() => handleReject(job)}
+                                            >
+                                                <Ban className="h-3 w-3 mr-1" />
+                                                Reject
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={deletingId === job.id}
+                                            onClick={() => handleDelete(job.id)}
+                                        >
+                                            <Trash2 className="h-3 w-3 mr-1" />
+                                            {deletingId === job.id ? 'Deleting…' : 'Delete'}
+                                        </Button>
+                                    </div>
                                 </div>
                             ))}
                             {jobsNextPage !== null && (

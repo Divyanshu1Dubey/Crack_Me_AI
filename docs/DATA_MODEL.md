@@ -605,6 +605,13 @@ Cross-app announcements also exist here (in addition to `questions.Announcement`
 | `exam_track_tags` | `JSONField` | list of exam codes |
 | `exam_tracks` | `M2M(ExamTrack)` | related_name=`jobs` |
 | `admin_edited` | `BooleanField` | protect from overwrite |
+| `source_url` | `URLField(500)` | the official notification the listing was checked against |
+| `status` | `CharField(10)` | `draft` (default, not public) / `approved` / `rejected` |
+| `last_verified_at` | `DateTimeField` | nullable; set only by `POST /api/jobs/<id>/verify/` |
+| `verified_by` | `FK(CustomUser, SET_NULL)` | nullable; never in student payloads |
+| `review_note` | `CharField(300)` | why it was rejected (admin only) |
+
+Public = `is_active`, `approved`, verified within 45 days (`JOBS_VERIFY_MAX_AGE_DAYS`), not past `expires_at`; approval needs both links on an official recruitment site (`jobs/official_sources.py`). Rows that existed before `jobs.0004` are drafts until verified.
 
 ### `JobBookmark`
 | Field | Type | Notes |

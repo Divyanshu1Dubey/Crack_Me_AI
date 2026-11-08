@@ -20,6 +20,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from jobs.models import Job, JobCategory
+from jobs.testing import published_job
 
 
 User = get_user_model()
@@ -32,13 +33,13 @@ class JobApiPermissionsTests(APITestCase):
         self.category = JobCategory.objects.create(name="Medical", slug="medical")
 
     def _make_job(self) -> Job:
-        return Job.objects.create(
+        # students see only verified, approved listings (jobs.official_sources)
+        return published_job(
             title="Senior Resident",
             hospital="AIIMS",
             location="New Delhi",
             category=self.category,
             description="Cardiology SR",
-            apply_link="https://example.com/apply",
             is_active=True,
         )
 

@@ -571,15 +571,22 @@ Medura_Train/{textbooks,PYQ,web_knowledge}/ → manage.py train_ai → chunk →
 ## 23. Jobs / Career Listings
 
 ### Files
-- Backend: `backend/jobs/models.py` (`JobCategory`, `Job`, `JobBookmark`), `views.py`, `urls.py`
-- Frontend: `app/jobs`
+- Backend: `backend/jobs/models.py` (`JobCategory`, `Job`, `JobBookmark`), `official_sources.py`, `views.py`,
+  `urls.py`
+- Frontend: `app/jobs` (students), `app/admin/jobs` (admins)
+
+Verified listings only (2026-11-09): an admin creates a draft from the official notification, adds that
+notification's link and presses "Verify & publish"; students see the listing while that check is under 45 days old
+and the last date has not passed, with "Verified <date>" and the official notification linked. Both links must be on
+an official recruitment site. Nothing is scraped or generated.
 
 ### APIs
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/jobs/` | List jobs |
+| GET | `/api/jobs/` | List jobs (public: verified, approved, open) |
 | GET | `/api/jobs/categories/` | Categories |
 | POST | `/api/jobs/<id>/bookmark/` | Bookmark |
+| POST | `/api/jobs/<id>/verify/`, `/reject/` | Admin: record a verification (and publish), take off the board |
 
 ---
 

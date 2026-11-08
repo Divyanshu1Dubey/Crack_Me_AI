@@ -954,6 +954,11 @@ EXPLAIN_EVIDENCE_MIN_SCORE = float(os.getenv('EXPLAIN_EVIDENCE_MIN_SCORE', '0.35
 EXPLAIN_CONFLICT_MARGIN = float(os.getenv('EXPLAIN_CONFLICT_MARGIN', '0.15'))
 KEY_AUDIT_METHOD_VERSION = 'key-audit/1'
 
+# Jobs board (jobs.official_sources): listings link to official recruitment sites only (.gov.in, .nic.in, .edu.in,
+# .ac.in, .res.in, aiims.edu + these comma-separated domains) and stay public while verified within this many days.
+JOBS_EXTRA_OFFICIAL_DOMAINS = [d.strip() for d in os.getenv('JOBS_EXTRA_OFFICIAL_DOMAINS', '').split(',') if d.strip()]
+JOBS_VERIFY_MAX_AGE_DAYS = int(os.getenv('JOBS_VERIFY_MAX_AGE_DAYS', '45'))
+
 # ── Security Hardening ──────────────────────────────────────────────
 # Browser-level protections against common web vulnerabilities (OWASP).
 SECURE_BROWSER_XSS_FILTER = True

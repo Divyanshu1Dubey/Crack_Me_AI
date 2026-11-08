@@ -16,7 +16,8 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from jobs.models import Job, JobBookmark, JobCategory
+from jobs.models import JobBookmark, JobCategory
+from jobs.testing import published_job
 from questions.models import ExamTrack
 
 User = get_user_model()
@@ -35,9 +36,9 @@ class JobsBoardTests(TestCase):
         self.neet = ExamTrack.objects.create(name="NEET PG G11", code="neet_pg")
 
     def _job(self, title, *, tracks=(), tags=(), expires_in_days=None):
-        job = Job.objects.create(
+        job = published_job(
             title=title, hospital="H", location="L", category=self.cat, description="D",
-            apply_link="https://example.com/apply", exam_track_tags=list(tags),
+            exam_track_tags=list(tags),
             expires_at=(timezone.now() + timedelta(days=expires_in_days)) if expires_in_days is not None else None,
         )
         job.exam_tracks.set(tracks)

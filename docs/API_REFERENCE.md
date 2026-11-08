@@ -762,10 +762,15 @@ Failure contract: when no provider answers, the view gives back what it charged 
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/jobs/` | List jobs; `?category=1&is_active=true` |
+| GET | `/api/jobs/` | List jobs; `?category=1&is_active=true&exam_track=cms&search=` |
 | GET | `/api/jobs/<id>/` | Job detail |
-| POST | `/api/jobs/<id>/bookmark/` | Toggle bookmark (auth required) |
+| POST | `/api/jobs/<id>/bookmark/` | Toggle bookmark (auth required; public listings only) |
 | GET | `/api/jobs/categories/` | List categories |
+| POST / PATCH / DELETE | `/api/jobs/`, `/api/jobs/<id>/` | Admin: create (a draft), edit, delete |
+| POST | `/api/jobs/<id>/verify/` | Admin: `{source_url?, approve?}` records a check against the official notification now (`last_verified_at`, `verified_by`); `approve: true` publishes. `400 {status: [reasons]}` unless the apply link and `source_url` are on an official recruitment site |
+| POST | `/api/jobs/<id>/reject/` | Admin: `{note}` takes the listing off the board (`status: rejected`) |
+
+Students (and anonymous visitors) see only listings that are active, `status: approved`, verified within `JOBS_VERIFY_MAX_AGE_DAYS` (45) and not past `expires_at` (`jobs/official_sources.py`); admins see all. A payload carries `source_url`, `status` and `last_verified_at`; `review_note` only for admins. Setting `status: approved` by PATCH is refused the same way unless the listing was verified recently; `last_verified_at` is read-only (only `verify` sets it). Official sites: `.gov.in`, `.nic.in`, `.edu.in`, `.ac.in`, `.res.in`, `aiims.edu`, `cdac.in` and `JOBS_EXTRA_OFFICIAL_DOMAINS`. Nothing is fetched or generated.
 
 ---
 
