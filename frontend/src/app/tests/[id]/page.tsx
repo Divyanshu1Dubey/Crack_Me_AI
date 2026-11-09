@@ -24,7 +24,9 @@ import { plainInline } from '@/lib/aiMarkdown';
 import { coerceToText, decodeMojiB, extractAnalysisFromJson } from '@/lib/textCleanup';
 import ImageViewer from '@/components/image/ImageViewer';
 import FigureImage from '@/components/question/FigureImage';
+import DroppedByUpscBadge from '@/components/question/DroppedByUpscBadge';
 import { figureSrc } from '@/lib/figureSrc';
+import { formatMarks, notScoredLabel, notScoredNote } from '@/lib/scoreFormat';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface QuestionImage {
@@ -839,19 +841,22 @@ export default function TakeTestPage() {
                     <div className="glass-card overflow-hidden animate-fadeInUp">
                         {/* Result Banner */}
                         <div className="px-5 py-3 flex items-center justify-between" style={{
-                            background: rd?.is_correct ? 'rgba(16,185,129,0.06)' : rd?.is_correct === false ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
-                            borderBottom: `2px solid ${rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b'}`
+                            background: rd?.not_scored ? 'rgba(100,116,139,0.08)' : rd?.is_correct ? 'rgba(16,185,129,0.06)' : rd?.is_correct === false ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
+                            borderBottom: `2px solid ${rd?.not_scored ? '#64748b' : rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b'}`
                         }}>
                             <div className="flex items-center gap-3">
-                                <div className="text-2xl">{rd?.is_correct ? '✅' : rd?.is_correct === false ? '❌' : '⏭️'}</div>
+                                <div className="text-2xl" aria-hidden="true">{rd?.not_scored ? '➖' : rd?.is_correct ? '✅' : rd?.is_correct === false ? '❌' : '⏭️'}</div>
                                 <div>
                                     <div className="font-bold text-sm">Q{reviewIdx + 1} of {questions.length}</div>
-                                    <div className="text-xs" style={{ color: rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b' }}>
-                                        {rd?.is_correct ? 'Correct! Great job 🎉' : rd?.is_correct === false ? (answerLocked ? 'Incorrect' : 'Incorrect — Study the explanation below carefully') : (answerLocked ? 'Skipped' : 'Skipped — Review what you missed')}
+                                    <div className="text-xs" style={{ color: rd?.not_scored ? 'var(--text-secondary)' : rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b' }}>
+                                        {rd?.not_scored
+                                            ? notScoredLabel(rd)
+                                            : rd?.is_correct ? 'Correct! Great job 🎉' : rd?.is_correct === false ? (answerLocked ? 'Incorrect' : 'Incorrect — Study the explanation below carefully') : (answerLocked ? 'Skipped' : 'Skipped — Review what you missed')}
                                     </div>
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
+                                {rd?.dropped_by_upsc && <DroppedByUpscBadge />}
                                 {rq?.subject_name && <span className="review-tag review-tag-cyan">{rq.subject_name}</span>}
                                 {(rd?.topic || rq?.topic_name) && <span className="review-tag review-tag-purple">{rd?.topic || rq?.topic_name}</span>}
                                 {rd?.difficulty && <span className={`review-tag ${rd.difficulty === 'hard' ? 'review-tag-red' : rd.difficulty === 'medium' ? 'review-tag-amber' : 'review-tag-green'}`}>{rd.difficulty}</span>}
@@ -1344,6 +1349,12 @@ export default function TakeTestPage() {
             result.is_late === true
                 ? 'It was submitted after the time limit, so it earns no XP and does not count towards the leaderboard.'
                 : '',
+            // Questions UPSC dropped from evaluation, or without an answer key, are shown but not scored
+            // (tests_engine.scoring).
+            notScoredNote(result.not_scored_count),
+            result.rescored_at
+                ? `This attempt was re-scored after an answer-key correction (originally ${formatMarks(result.original_score)} / ${formatMarks(result.original_total_marks)}).`
+                : '',
         ].filter(Boolean).join(' ');
         return (
             <div className="min-h-screen flex items-center justify-center p-4 sm:p-8 bg-background">
@@ -1374,7 +1385,7 @@ export default function TakeTestPage() {
 
                     <div className="text-4xl font-bold gradient-text mb-2">{String(result.accuracy)}%</div>
                     <div className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-                        Score: {String(result.score)} / {String(result.total_marks)}
+                        Score: {formatMarks(result.score)} / {formatMarks(result.total_marks)}
                     </div>
 
                     <div className="flex gap-3">

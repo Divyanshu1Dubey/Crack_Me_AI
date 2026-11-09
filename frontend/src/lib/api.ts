@@ -581,6 +581,9 @@ export const jobsAPI = {
   create: (data: Record<string, unknown>) => api.post('/jobs/', data),
   update: (id: number, data: Record<string, unknown>) => api.patch(`/jobs/${id}/`, data),
   remove: (id: number) => api.delete(`/jobs/${id}/`),
+  // Record a check against the official notification (approve: publish it); 400 {status: [reasons]} otherwise.
+  verify: (id: number, data: { source_url?: string; approve?: boolean }) => api.post(`/jobs/${id}/verify/`, data),
+  reject: (id: number, note = '') => api.post(`/jobs/${id}/reject/`, { note }),
 };
 
 // Announcements API

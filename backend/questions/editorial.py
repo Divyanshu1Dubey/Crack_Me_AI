@@ -314,26 +314,25 @@ def unverify_question(question: Question, *, actor, reason: str = "") -> str:
 
 
 def rescore_key_change(change: AnswerKeyChange, *, actor, apply: bool = False) -> dict[str, Any]:
-    """Count the test submissions a key change affects (dry run only).
-
-    Re-scoring is not implemented: ``apply=True`` raises instead of marking the change "done" without
-    recomputing a single score.
+    """Score again the test attempts and question-bank answers one pending key change touches
+    (tests_engine.scoring; dry run unless ``apply``). The attempts keep their first score and an AttemptRescore
+    row per change; the key change is marked done. ``python manage.py rescore_key_changes`` does every pending one.
     """
-    if apply:
-        raise NotImplementedError("Re-scoring test submissions after a key change is not implemented yet.")
-    # Counts attempts that had selected either old_key or new_key
-    from tests_engine.models import TestSubmission
-    affected_submissions = TestSubmission.objects.filter(
-        test__test_questions__question=change.question
-    ).count()
+    from tests_engine.scoring import rescore_pending_key_changes
 
-    result = {
+    stats = rescore_pending_key_changes(apply=apply, change_ids=[change.pk])
+    if apply and getattr(actor, "is_authenticated", False) and stats.get("key changes marked done"):
+        change.refresh_from_db()
+        change.rescored_by = actor
+        change.save(update_fields=["rescored_by"])
+    return {
         "change_id": change.id,
         "question_id": change.question_id,
         "old_key": change.old_key,
         "new_key": change.new_key,
-        "affected_submissions_count": affected_submissions,
-        "apply": False,
+        "attempts_rescored": stats.get("attempts rescored", 0),
+        "answers_re_marked": stats.get("answers re-marked", 0),
+        "qbank_answers_re_marked": stats.get("question-bank answers re-marked", 0),
+        "apply": apply,
     }
-    return result
 

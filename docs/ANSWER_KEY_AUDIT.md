@@ -92,6 +92,43 @@ python manage.py audit_answer_keys [--exam neet_pg] [--ids 1,2] [--stale-only] [
 verdict keeps its first timestamp, so importing a file again does not reopen decided questions.
 Every key / stem / option change re-audits the question (`key_audit.services.on_question_changed`).
 
+**UPSC CMS 2009–2025 official keys (2026-11-07 / 09).** `questions.0047` made the bank match the official papers
+and UPSC answer keys for 2018–2025 (`docs/audit/CMS_OFFICIAL_2018_2025.md`), `questions.0049` completed 2014–2017
+from the same PDF (`docs/audit/CMS_OFFICIAL_2014_2017.md`) and `questions.0051` added 2009–2013
+(`docs/audit/CMS_OFFICIAL_2009_2013.md`); key changes are `AnswerKeyChange` rows with
+`source='official_key'` and `official_key` evidence (PDF, sha256, key page, cell). The release step
+`python manage.py record_official_cms_keys --apply` then records UPSC's key as an `official_key` review for every
+active question of those papers (found by year, paper and `display_number`; none for a question UPSC dropped, none
+for a key the data file holds for review: 2015 Paper II Q60, printed "Dc"), so they are `verified` /
+`official_key_match`, and an admin change away from the official key becomes `needs_review` /
+`official_key_disagrees`. It records only what is missing; a dry run reports the counts. 2026 has no official key
+yet (`docs/audit/CMS_OFFICIAL_2026.md`).
+
+**Re-scoring after a key change (2026-11-09).** Every `AnswerKeyChange` is created `rescore_status='pending'`. The
+release step `python manage.py rescore_key_changes --apply` (dry run without `--apply`) scores the completed test
+attempts it touches again (`tests_engine/scoring.py`): an answer is marked against the current key, and a question
+UPSC dropped (`is_dropped` on an active question) or one without a valid A-D key (none, or an import placeholder
+such as `F`: `not_scored_reason`) is left out of the score and the total. Only the touched
+questions change the stored figures (an admin edit of the test's negative marking or questions since does not),
+the attempt keeps its first score (`original_score`, `original_total_marks`, `rescored_at`), and each re-scoring is
+an `AttemptRescore` row (old / new figures, every answer whose verdict changed; read-only in Django admin). The
+students' question-bank answers (`QuestionAttempt.is_correct`) of the changed questions follow the current key;
+a Mistake Notebook entry the corrected key now accepts stays stored but is no longer listed. XP already earned is
+not changed. The key change is then `done` with `affected = {test_attempts, qbank_attempts}`. A second run changes
+nothing. Students see "Dropped by UPSC" on such questions, "not scored" in the review, and a note on a re-scored
+result ("originally x / y"). Rehearsal on the production copy after questions.0049: 337 pending changes, 27 of 31
+touched attempts re-scored, 180 question-bank answers re-marked.
+
+**Questions without an answer key (2026-11-09).** 382 active questions have no valid A-D key (on the production
+copy: 239 CMS questions without a paper, 238 of them undated; 137 NEET PG and 4 INI-CET rows, mostly recall imports,
+stored as `F` / `E` / empty; the 2 questions UPSC dropped in 2013). Tests used to mark every answer to them wrong, with negative marking (37 answers in 7 of 52 completed
+attempts); now, like the question bank, nothing is right or wrong there: a test leaves them out of the score and the
+total and files no mistake, the review says "Not scored — this question has no answer key yet" (`no_answer_key` on
+the row), the question bank grades `F` / `E` like an empty key, and the Mistake Notebook stops listing answers to
+them (kept, listed again once the question has a key). `rescore_key_changes --apply` re-scores the past attempts
+(`AttemptRescore` rows, original scores kept); a key added later scores them again on the next run. Giving these
+questions keys is an editor's job (no official key exists for them).
+
 ## 4. Review queue
 
 Page: `/admin/review-queue` (admin role). API under `/api/key-audit/` (`IsControlTowerAdmin`, throttle
@@ -125,6 +162,19 @@ Measured with the commands above; every number is reproducible from them.
   mapping; not adjudicated).
 * AI first pass: 2,634 reviews imported (agree 1,121, unanswerable 1,043, disagree 416, uncertain 54),
   all for unchanged content.
+* AI first pass, the rest (2026-11-09, workflow `wf_78212b0c-62a`, 49 Claude subagents, 195 batches of 30, same
+  format and reviewer label): every active question without UPSC's key whose content the first pass had not
+  reviewed, 5,828 on a copy of production migrated through `questions.0051` (2,513 first-pass reviews still match
+  their content; the 4,080 dated CMS 2009-2025 questions carry UPSC's key). CMS 2,684 (agree 2,571, disagree 13,
+  unanswerable 63, uncertain 37); NEET PG 3,119 (agree 1,156, disagree 1,444, unanswerable 377, uncertain 142);
+  INI-CET 25 (agree 7, disagree 15, unanswerable 2, uncertain 1). 1,397 of the 1,472 disagreements are with a stored
+  `A` in the skewed recall years (NEET PG 2025: 1,301 of 2,465 reviewed; 2018: 88 of 215; 2020: 35 of 82; INI-CET
+  2025: 15 of 23); 1,087 of them are high-confidence. File: `backend/key_audit/data/pass1b_reviews_hashed.jsonl`
+  (`stem_hash` of the reviewed content; batches, raw outputs and manifest in `crack_local/key_audit/pass1b/`). With
+  both files every active question has an AI review or UPSC's key. On that copy, with the official keys recorded
+  (`record_official_cms_keys --apply`): verified 4,056, needs_review 4,316, insufficient_evidence 2,964,
+  likely_correct 1,071, image_context_missing 14; `ai_review_disagrees` opens a review on 1,869 questions. No key
+  was changed: the reviews are signals for the review queue.
 * Audit of the 10,013 active questions: `needs_review` 3,829, `insufficient_evidence` 5,952,
   `likely_correct` 170, `image_context_missing` 62, `verified` 0, `contradictory_sources` 0. Main reasons
   in review: confident printed-key mismatch 1,934, unchecked printed-key mismatch 526, skewed key
@@ -156,6 +206,20 @@ Measured with the commands above; every number is reproducible from them.
     from `Medura_Train/PYQ/2022paper2.txt` (they score 3, the stored key C) with the worked score added to
     the explanation (`explanation_origin` `mixed`). The stem hash changed: its source-key signals are
     re-read on the next `recover_source_keys` run.
+* Hidden questions (2026-11-07, migration `questions.0046`, `content_repairs.HIDES_2026_11_07`). The owner's
+  rule: a question is never hidden or deleted unless it is a duplicate or wrong; a question that says "shown in
+  the image" gets its figure, it is not hidden. Hidden after the owner's approval:
+  - three duplicates (#12605 of #12321; #22456 of #6477 and #22631 of #2210, both without their data table);
+  - two seed demo questions whose image never existed (#26454, #26451);
+  - two NEET PG questions whose source book omits the data they ask about (#15370, #15618).
+  Each is hidden only while it still holds the content it was judged on, a duplicate only while its kept copy
+  is live with the same key, after a revision snapshot; nothing is deleted.
+* Figure audit (2026-11-07): 540 active or held-back questions said a figure is shown but had none. 511
+  figures were extracted from their source PDFs, each checked against the question's own options and by eye,
+  and are attached by the owner's command (`prod_attach_figures.py`; the bytes go through `ops_media_transfer`).
+  The 14 CMS 2026 figure questions wait for the official UPSC paper (the solution PDFs only describe the
+  figures). Bank-wide, 589 groups of active duplicates remain (533 extra copies with the same key, 72 whose
+  copies disagree on the key): an owner decision, because hiding them changes the bank counts the site shows.
 
 ## 6. Production rollout (`cracklabs`)
 
@@ -171,8 +235,15 @@ Nothing of this runs on its own: the deploy does not run migrations yet (see `DE
    it changes the content, run `ai_eval.recover_source_keys` on the restore again afterwards (the printed
    keys are re-read against the repaired text); the AI reviews of repaired questions were made on the
    old text and are skipped by the hash check, as they should be.
-4. Dry-run, then apply, the imports against `cracklabs` with the files made on the local restore
-   (`source_keys_v2.jsonl`, `pass1_reviews_hashed.jsonl`): lines whose question changed in production
-   since the restore are skipped by the hash check.
-5. `audit_answer_keys` (dry run), then `--apply`.
+4. The imports run on their own since 2026-11-09: the files made on the local restore (`source_keys_v2.jsonl`,
+   `pass1_reviews_hashed.jsonl`, `pass1b_reviews_hashed.jsonl`) ship in `backend/key_audit/data/`, and
+   `start_web.sh` runs `python manage.py import_bundled_key_audit --apply` in the background after every start. Each
+   file is imported once per version (a `BundledSignalImport` row records its sha256 and the importer's report);
+   lines whose question changed in production since the restore are skipped by the hash check; after an import
+   every active question is audited (`audit_answer_keys --apply`). A later start finds nothing new at once.
+   Rehearsed on a copy of production through `questions.0051`: 57 s (source keys 5,085 valid, first pass 2,626 valid
+   with 8 made for older content, `pass1b` 5,828 valid), then verified 4,056, needs_review 4,316,
+   insufficient_evidence 2,964, likely_correct 1,071, image_context_missing 14; a second run: nothing new.
+   `RUN_KEY_AUDIT_IMPORT=0` skips it; the dry run `python manage.py import_bundled_key_audit` shows what is new.
+5. `audit_answer_keys` (dry run) shows the result; the step above has applied it.
 6. Review in `/admin/review-queue`: start with "Printed key differs".

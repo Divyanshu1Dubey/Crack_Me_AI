@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { jobsAPI } from '@/lib/api';
-import { Briefcase, MapPin, Building2, Clock, Search, ExternalLink, Bookmark } from 'lucide-react';
+import { Briefcase, MapPin, Building2, Clock, Search, ExternalLink, Bookmark, ShieldCheck, CalendarClock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,8 +22,11 @@ interface Job {
     salary: string;
     apply_link: string;
     posted_at: string;
-    expires_at: string;
+    expires_at: string | null;
     is_bookmarked: boolean;
+    /** The official notification the listing was checked against, and when (jobs.official_sources). */
+    source_url?: string;
+    last_verified_at?: string | null;
 }
 
 export default function JobsPage() {
@@ -127,7 +130,10 @@ function JobsContent() {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight text-foreground">Medical Jobs Portal</h1>
-                            <p className="text-sm text-muted-foreground">Find medical officer, resident, and specialized roles</p>
+                            <p className="text-sm text-muted-foreground">
+                                Medical officer, resident and specialist posts, each checked by our team against its
+                                official notification. Always confirm the details on the official website before applying.
+                            </p>
                         </div>
                     </div>
 
@@ -175,8 +181,12 @@ function JobsContent() {
                     ) : jobs.length === 0 ? (
                         <div className="col-span-full py-12 text-center">
                             <Briefcase className="mx-auto h-12 w-12 text-muted-foreground/30 mb-3" />
-                            <h3 className="text-lg font-medium text-foreground">No jobs found</h3>
-                            <p className="text-muted-foreground">Try adjusting your search criteria</p>
+                            <h3 className="text-lg font-medium text-foreground">No verified listings found</h3>
+                            <p className="text-muted-foreground">
+                                {searchQuery || examTrack !== 'all'
+                                    ? 'Try adjusting your search criteria.'
+                                    : 'We list a post only after checking it against its official notification. New listings appear here once verified.'}
+                            </p>
                         </div>
                     ) : (
                         jobs.map(job => {
@@ -209,6 +219,24 @@ function JobsContent() {
                                         {job.salary && (
                                             <div className="flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                                                 <span className="truncate">{job.salary}</span>
+                                            </div>
+                                        )}
+                                        {job.expires_at && (
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+                                                <span>Last date {new Date(job.expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                            </div>
+                                        )}
+                                        {job.last_verified_at && (
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                <span>Verified {new Date(job.last_verified_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                {job.source_url && (
+                                                    <a href={job.source_url} target="_blank" rel="noopener noreferrer"
+                                                       className="inline-flex items-center gap-1 text-primary hover:underline">
+                                                        Official notification <ExternalLink className="h-3 w-3" />
+                                                    </a>
+                                                )}
                                             </div>
                                         )}
                                     </div>

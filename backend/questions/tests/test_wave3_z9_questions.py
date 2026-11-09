@@ -365,6 +365,21 @@ class UngradableAnswerTests(_Base):
         row = StudyTimeBreakdown.objects.get(user=self.premium, subject=self.subject)
         self.assertEqual((row.seconds, row.question_count), (50, 0))
 
+    def test_a_placeholder_key_outside_a_d_is_no_answer_key(self):
+        # Recall imports store 'F' / 'E' where the key is unknown (questions have options A-D only): picking 'E'
+        # on an 'E' row used to be "correct", any other pick a mistake.
+        api = _client(self.premium)
+        for i, placeholder in ((21, 'F'), (22, 'E')):
+            q = _question(self.subject, i, correct_answer=placeholder)
+            res = api.post(f'/api/questions/{q.id}/attempt/', {'selected_answer': 'B'}, format='json')
+            self.assertEqual(res.status_code, 200, res.data)
+            self.assertEqual((res.data['correct_answer'], res.data['is_correct']), ('', None), placeholder)
+            res = api.post(f'/api/questions/{q.id}/practice/attempt/', {'answer': 'E'}, format='json')
+            self.assertEqual(res.status_code, 200, res.data)
+            self.assertEqual((res.data['correct_answer'], res.data['is_correct']), ('', None), placeholder)
+            self.assertFalse(QuestionAttempt.objects.filter(question=q).exists(), placeholder)
+            self.assertFalse(MistakeNotebook.objects.filter(question=q).exists(), placeholder)
+
     def test_a_keyed_wrong_answer_is_still_a_mistake(self):
         q = _question(self.subject, 21)
         _client(self.premium).post(f'/api/questions/{q.id}/attempt/', {'selected_answer': 'b'}, format='json')

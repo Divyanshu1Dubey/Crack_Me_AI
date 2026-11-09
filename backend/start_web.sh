@@ -30,6 +30,17 @@ if [ "${RUN_MEDIA_STEPS:-1}" = "1" ]; then
     ) &
 fi
 
+# Answer-key audit signals shipped in key_audit/data/ (printed source keys, AI review signals;
+# docs/ANSWER_KEY_AUDIT.md): each file is imported once per version, then every question is audited.
+# Signals for the review queue only: no key is ever changed. In the background, because the first
+# import takes a few minutes; a later start finds nothing new at once. Set RUN_KEY_AUDIT_IMPORT=0 to skip.
+if [ "${RUN_KEY_AUDIT_IMPORT:-1}" = "1" ]; then
+    (
+        python manage.py import_bundled_key_audit --apply || true
+        echo "start_web.sh: key-audit signals checked"
+    ) &
+fi
+
 if [ "${RUN_QCLUSTER_IN_WEB:-1}" = "1" ]; then
     (
         # Restart the worker if it exits; it must never take gunicorn down.

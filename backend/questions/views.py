@@ -54,6 +54,7 @@ from . import practice_modes as _practice_modes  # Phase 3 practice queues
 from . import ai_per_question as _ai_per_question  # Phase 3 AI endpoints
 from . import practice_experience as _practice_experience  # Phase 3 flag/confidence/time
 from .import_protection import pre_check_create as _pre_check_remove
+from .content_hashes import valid_key as _valid_key
 
 
 logger = logging.getLogger(__name__)
@@ -538,7 +539,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
         'year', 'subject', 'topic', 'difficulty', 'exam_type',
         'is_image_based', 'is_verified_by_admin',
         'needs_review', 'is_controversial', 'display_number', 'is_active',
-        'page_number',
+        'page_number', 'is_dropped',  # the admin editor's "Dropped" filter (was ignored)
     ]
     # ``display_number`` / ``paper``: the admin questions editor orders a
     # paper by ``?ordering=paper,display_number`` (OrderingFilter dropped
@@ -1632,10 +1633,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
             confidence = int(request.data.get("confidence", 0)) or None
         except (TypeError, ValueError):
             confidence = None
-        correct_answer = (q.correct_answer or "").strip().upper()[:1]
-        # No answer key: the pick cannot be graded. Nothing is recorded as an
-        # attempt or a mistake (the time still counts as study time); the
-        # response carries ``correct_answer: ''`` and ``is_correct: null``.
+        correct_answer = _valid_key(q.correct_answer)
+        # No answer key A-D (none, or an import placeholder such as 'F'): the
+        # pick cannot be graded. Nothing is recorded as an attempt or a
+        # mistake (the time still counts as study time); the response carries
+        # ``correct_answer: ''`` and ``is_correct: null``.
         gradable = bool(correct_answer)
         is_correct = bool(answer) and gradable and answer == correct_answer
         payload = _practice_experience.submit_attempt(
@@ -2449,13 +2451,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
         from questions.study_time import clamp_seconds, record_study_time
         seconds = clamp_seconds(request.data.get('time_spent_seconds'))
-        correct_answer = (question.correct_answer or '').strip().upper()[:1]
+        correct_answer = _valid_key(question.correct_answer)
 
         if not correct_answer:
-            # No answer key: the pick cannot be graded, so it is neither an
-            # attempt nor a mistake (it used to be stored as a wrong answer
-            # and filed in the mistake notebook). The time still counts as
-            # study time. ``correct_answer: ''`` tells the UI "no key".
+            # No answer key A-D (none, or an import placeholder such as 'F'):
+            # the pick cannot be graded, so it is neither an attempt nor a
+            # mistake (it used to be stored as a wrong answer and filed in the
+            # mistake notebook). The time still counts as study time.
+            # ``correct_answer: ''`` tells the UI "no key".
             record_study_time(request.user, [(question.subject_id, seconds, 0)])
             return Response({
                 'is_correct': None,

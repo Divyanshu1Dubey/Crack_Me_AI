@@ -63,12 +63,14 @@ class RailwayDeployScriptTests(SimpleTestCase):
     def test_every_start_path_migrates_before_gunicorn(self):
         # Railway skips release.sh (its pre-deploy step) when the service is not using backend/railway.json,
         # then starts the Procfile web command; it never runs the Procfile release line. 2026-11-04: the new
-        # code served a database without its migrations and every signed-in request answered 500. Both start
-        # paths migrate first, in one process (not at worker import), and start gunicorn only after success.
+        # code served a database without its migrations and every signed-in request answered 500. 2026-11-07:
+        # that path also ran no django-q worker, so queued AI sections and reminders never ran. The Procfile
+        # web line is now start_web.sh itself: both start paths migrate first, in one process, start the
+        # worker and the media steps, and start gunicorn only after a successful migrate.
         web = dict(line.split(':', 1) for line in _commands('Procfile'))['web'].strip()
-        migrate, separator, start = web.partition(' && ')
-        self.assertEqual((migrate, separator), ('python manage.py migrate --no-input', ' && '))
-        self.assertTrue(start.startswith('gunicorn crack_cms.wsgi:application'), web)
+        self.assertEqual(web, 'bash start_web.sh')
+        self.assertEqual(json.loads((BACKEND_DIR / 'railway.json').read_text(encoding='utf-8'))['deploy']['startCommand'],
+                         web)
 
         text = (BACKEND_DIR / 'start_web.sh').read_text(encoding='utf-8')
         migrate_at = text.index('\npython manage.py migrate --no-input\n')
@@ -85,3 +87,12 @@ class RailwayDeployScriptTests(SimpleTestCase):
         self.assertLess(relink, gunicorn)
         block = text[text.index('RUN_MEDIA_STEPS'):gunicorn]
         self.assertIn(') &', block)  # backgrounded: the health check never waits for the restore
+
+    def test_start_web_imports_the_bundled_key_audit_signals_in_the_background(self):
+        text = (BACKEND_DIR / 'start_web.sh').read_text(encoding='utf-8')
+        step = text.index('python manage.py import_bundled_key_audit --apply || true')
+        gunicorn = text.index('exec gunicorn')
+        self.assertLess(text.index('\npython manage.py migrate --no-input\n'), step)
+        self.assertLess(step, gunicorn)
+        block = text[text.index('RUN_KEY_AUDIT_IMPORT:-1'):gunicorn]
+        self.assertIn(') &', block)  # backgrounded: the first import takes minutes

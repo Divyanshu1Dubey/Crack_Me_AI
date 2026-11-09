@@ -456,6 +456,12 @@ class Question(models.Model):
     def __str__(self):
         return f"[{self.year}] {self.subject.code}: {self.question_text[:80]}..."
 
+    @property
+    def dropped_by_upsc(self):
+        """UPSC dropped the question from evaluation: active, shown, never scored (tests_engine.scoring).
+        ``is_dropped`` on a hidden question means "removed from the bank" instead."""
+        return bool(self.is_dropped and self.is_active)
+
     def get_correct_option_text(self):
         mapping = {'A': self.option_a, 'B': self.option_b, 'C': self.option_c, 'D': self.option_d}
         return mapping.get(self.correct_answer, '')
@@ -1363,10 +1369,13 @@ class AnswerKeyChange(models.Model):
         ('undo_revision', 'Undo to revision'),
         ('management_command', 'Management command'),
         ('legacy_snapshot', 'Recovered from revision history'),
+        ('official_key', 'Official answer key (UPSC)'),
     ]
     EXPLANATION_ACTION_CHOICES = [('kept_stale', 'Kept (marked stale)'), ('replaced', 'Replaced'), ('cleared', 'Cleared')]
     RESCORE_CHOICES = [('pending', 'Pending'), ('done', 'Done'), ('skipped', 'Skipped')]
-    RESCORE_FIELDS = ('rescore_status', 'rescored_at', 'rescored_by')
+    # written by tests_engine.scoring.rescore_pending_key_changes (``affected``: {test_attempts, qbank_attempts}
+    # the re-scoring changed)
+    RESCORE_FIELDS = ('rescore_status', 'rescored_at', 'rescored_by', 'affected')
 
     question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name='key_changes')
     old_key = models.CharField(max_length=1, blank=True, default='')
@@ -1498,3 +1507,54 @@ class QuestionAttemptLog(models.Model):
             models.Index(fields=['question', 'is_first'], name='q_attemptlog_first'),
         ]
 
+
+
+class ExplanationBatchRun(models.Model):
+    """One batch of AI explanations (questions.explanation_batch): which questions, who started it, when.
+    Progress is the status of its items; a run can be continued any time (no question is processed twice)."""
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='+')
+    scope = models.JSONField(default=dict, blank=True, help_text='{exam_type, years, include_stale, limit}')
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Explanation batch {self.pk} ({self.created_at:%Y-%m-%d})'
+
+
+class ExplanationBatchItem(models.Model):
+    """One question of a run: its checkpoint (status) and its claim (claimed_until), so an interrupted run resumes
+    where it stopped and two workers never process the same question."""
+
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('claimed', 'Being generated'),
+        ('done', 'Explanation saved (AI-generated, to review)'),
+        ('disagrees', 'AI chose another answer than the key (not saved)'),
+        ('invalid', 'AI output unusable (not saved)'),
+        ('failed', 'No AI provider answered (gave up)'),
+        ('skipped', 'Skipped (changed since queued / figure / has an explanation now)'),
+    ]
+
+    run = models.ForeignKey(ExplanationBatchRun, on_delete=models.CASCADE, related_name='items')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='explanation_batch_items')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='queued', db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    claimed_until = models.DateTimeField(null=True, blank=True)
+    key = models.CharField(max_length=1, blank=True, help_text='The answer key when queued')
+    stem_hash = models.CharField(max_length=64, blank=True, help_text='content_hashes.stem_hash when queued')
+    detail = models.CharField(max_length=300, blank=True)
+    provider = models.CharField(max_length=60, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['pk']
+        constraints = [models.UniqueConstraint(fields=['run', 'question'], name='uniq_expl_batch_item')]
+        indexes = [models.Index(fields=['run', 'status'], name='q_explbatch_run_status')]
+
+    def __str__(self):
+        return f'Batch {self.run_id} Q{self.question_id}: {self.status}'

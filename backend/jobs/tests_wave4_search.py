@@ -9,7 +9,8 @@ from rest_framework.filters import SearchFilter
 from rest_framework.test import APIClient
 
 from crack_cms.filters import MAX_SEARCH_TERMS, BoundedSearchFilter
-from jobs.models import Job, JobCategory
+from jobs.models import JobCategory
+from jobs.testing import published_job
 from jobs.views import JobViewSet
 
 
@@ -27,9 +28,9 @@ class JobSearchIsBoundedTests(TestCase):
     def test_search_still_matches_and_ignores_terms_past_the_cap(self):
         cat = JobCategory.objects.create(name="Govt", slug="govt-z8")
         words = [f"zqterm{i:02d}" for i in range(MAX_SEARCH_TERMS)]
-        job = Job.objects.create(
+        job = published_job(
             title="Senior Resident", hospital="H", location="L", category=cat,
-            description=" ".join(words), apply_link="https://example.com/apply",
+            description=" ".join(words),
         )
         client = APIClient()
         self.assertEqual(_ids(client.get("/api/jobs/", {"search": "Senior Resident"})), [job.id])

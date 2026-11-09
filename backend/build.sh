@@ -43,6 +43,18 @@ python manage.py seed_question_bank
 # Import static blog posts the database lacks; never overwrites admin edits (see seed_blogs)
 python manage.py seed_blogs || true
 
+# Unpublished blog drafts from the question bank, each slug created once (blog_engine/pyq_drafts.py)
+python manage.py generate_pyq_blog_drafts --apply || true
+
+# UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (records only what is missing)
+python manage.py record_official_cms_keys --apply || true
+
+# Past test attempts scored again for pending answer-key changes / UPSC-dropped / keyless questions (keeps original scores)
+python manage.py rescore_key_changes --apply || true
+
+# Answer-key audit signals shipped in key_audit/data/, imported once per file version, then audited (never a key change)
+python manage.py import_bundled_key_audit --apply || true
+
 # Bootstrap MEDIA_ROOT for recall image persistence.
 # The importer writes extracted images into MEDIA_ROOT/recall_images/...
 # so the browser can fetch them via MEDIA_URL. Without this mkdir,

@@ -17,6 +17,7 @@ from .entitlement import (
     locked_test_response, strip_explanation_images,
 )
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
+from .scoring import key_of, score_submission
 from .serializers import (
     TestSerializer, TestDetailSerializer,
     TestAttemptSerializer, TestAttemptDetailSerializer,
@@ -448,7 +449,7 @@ def _record_submission_analytics(user, attempt, clean_answers, questions_map, co
     topic_counts = defaultdict(lambda: [0, 0, 0, 0])
     for qid, ans in clean_answers.items():
         question = questions_map.get(qid)
-        if not ans['selected'] or question is None or not question.subject_id:
+        if not ans['selected'] or question is None or not question.subject_id or ans.get('not_scored'):
             continue
         slot = 1 if ans.get('is_correct') else 2
         buckets = [subject_counts[question.subject_id]]
@@ -1069,6 +1070,10 @@ class TestViewSet(viewsets.ModelViewSet):
             }
 
         questions_map = Question.objects.in_bulk(list(clean_answers))
+        # The paper's questions that cannot be scored are left out, answered or not: UPSC dropped them, or they have
+        # no valid A-D key (tests_engine.scoring.not_scored_reason). Every question of the test, four columns each.
+        scoring_map = (Question.objects.only('id', 'is_dropped', 'is_active', 'correct_answer')
+                       .in_bulk(list(test_question_ids)))
 
         xp_earned = 0
         with transaction.atomic():
@@ -1079,8 +1084,14 @@ class TestViewSet(viewsets.ModelViewSet):
             if attempt.is_completed:
                 return _already_submitted(attempt, request)
 
-            correct = 0
-            incorrect = 0
+            # Scored against the full paper, not just the answers the client chose to send.
+            scored, verdicts, not_scored = score_submission(
+                test, test_question_ids,
+                {qid: ans['selected'] for qid, ans in clean_answers.items() if qid in questions_map},
+                {**scoring_map, **questions_map},
+            )
+            not_scored_ids = set(not_scored)
+            correct, incorrect = scored.correct, scored.incorrect
             responses_to_create = []
             wrong_answers = []
             for qid, ans in clean_answers.items():
@@ -1088,14 +1099,10 @@ class TestViewSet(viewsets.ModelViewSet):
                 if not question:
                     continue
                 selected = ans['selected']
-                is_correct = None
-                if selected:
-                    is_correct = selected == (question.correct_answer or '').strip().upper()[:1]
-                    if is_correct:
-                        correct += 1
-                    else:
-                        incorrect += 1
+                # None: unanswered, or not scored (UPSC dropped it, or it has no answer key; the answer is kept)
+                is_correct = verdicts.get(qid)
                 ans['is_correct'] = is_correct
+                ans['not_scored'] = qid in not_scored_ids
                 if is_correct is False:
                     wrong_answers.append((question, selected))
                 responses_to_create.append(QuestionResponse(
@@ -1110,12 +1117,9 @@ class TestViewSet(viewsets.ModelViewSet):
             if responses_to_create:
                 QuestionResponse.objects.bulk_create(responses_to_create, ignore_conflicts=True)
 
-            # Calculate score against the full paper, not just the answers
-            # the client chose to send.
-            total_questions = len(test_question_ids)
-            unanswered = max(0, total_questions - correct - incorrect)
-            score = correct - (incorrect * test.negative_mark_value if test.negative_marking else 0)
-            total_marks = total_questions
+            unanswered = scored.unanswered
+            score = scored.score
+            total_marks = scored.total_marks
 
             now = timezone.now()
             elapsed = max(0.0, (now - attempt.started_at).total_seconds())
@@ -1129,6 +1133,7 @@ class TestViewSet(viewsets.ModelViewSet):
             attempt.correct_count = correct
             attempt.incorrect_count = incorrect
             attempt.unanswered_count = unanswered
+            attempt.not_scored = not_scored
             attempt.is_completed = True
             attempt.completed_at = now
             attempt.time_taken_seconds = int(elapsed)
@@ -1226,6 +1231,7 @@ class TestViewSet(viewsets.ModelViewSet):
 
         questions_review = []
         subject_breakdown = {}
+        not_scored = set(attempt.not_scored or [])
 
         for resp in responses:
             q = resp.question
@@ -1234,7 +1240,9 @@ class TestViewSet(viewsets.ModelViewSet):
             if subj not in subject_breakdown:
                 subject_breakdown[subj] = {'correct': 0, 'incorrect': 0, 'unanswered': 0}
 
-            if resp.is_correct:
+            if q.id in not_scored:
+                pass  # not scored (dropped by UPSC, or no answer key): not part of the score, nor of the breakdown
+            elif resp.is_correct:
                 subject_breakdown[subj]['correct'] += 1
             elif resp.is_correct is False:
                 subject_breakdown[subj]['incorrect'] += 1
@@ -1266,6 +1274,10 @@ class TestViewSet(viewsets.ModelViewSet):
                 'time_taken': resp.time_taken_seconds,
                 'confidence': resp.confidence_level,
                 'concept_tags': q.concept_tags or [],
+                # UPSC dropped the question; no valid A-D key; not_scored: this attempt's score leaves it out
+                'dropped_by_upsc': q.dropped_by_upsc,
+                'no_answer_key': not key_of(q),
+                'not_scored': q.id in not_scored,
                 'answer_locked': False,
             }
             answer_visible = visible.get(q.id, False)
@@ -1284,6 +1296,10 @@ class TestViewSet(viewsets.ModelViewSet):
             'incorrect': attempt.incorrect_count,
             'unanswered': attempt.unanswered_count,
             'is_late': attempt.is_late,
+            'not_scored_count': len(not_scored),
+            'original_score': attempt.original_score,
+            'original_total_marks': attempt.original_total_marks,
+            'rescored_at': attempt.rescored_at,
             'subject_breakdown': subject_breakdown,
             'questions': questions_review,
         })

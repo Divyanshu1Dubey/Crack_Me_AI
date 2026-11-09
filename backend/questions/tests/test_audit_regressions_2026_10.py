@@ -284,18 +284,10 @@ class QuestionAdminActionPermissionTests(TestCase):
 
 class JobBookmarkPermissionTests(TestCase):
     def test_student_can_bookmark_job(self):
-        from jobs.models import Job
-        from django.utils import timezone
-        fields = {f.name for f in Job._meta.get_fields()}
-        data = {'title': 'Medical Officer'}
-        for name, value in (('organization', 'Govt'), ('location', 'Delhi'), ('description', 'x'),
-                            ('is_active', True), ('last_date', timezone.localdate())):
-            if name in fields:
-                data[name] = value
-        try:
-            job = Job.objects.create(**data)
-        except Exception as exc:  # pragma: no cover - schema drift guard
-            self.skipTest(f'Job fixture could not be created: {exc}')
+        # Students bookmark listings on the board: verified, approved ones (jobs.official_sources).
+        from jobs.testing import published_job
+        job = published_job(title='Medical Officer', hospital='Govt', location='Delhi', description='x',
+                            is_active=True)
         student = User.objects.create_user(username='job-student', password='x')
         client = APIClient()
         client.force_authenticate(student)

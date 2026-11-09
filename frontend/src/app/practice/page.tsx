@@ -58,6 +58,7 @@ import { Loader2, ChevronDown, ChevronUp, Filter, RefreshCw } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useRequireAuth } from "@/lib/hooks/useRequireAuth";
+import DroppedByUpscBadge from "@/components/question/DroppedByUpscBadge";
 
 interface QRow {
   id: number;
@@ -77,6 +78,8 @@ interface QRow {
   subject_name?: string;
   topic_name?: string;
   is_image_based?: boolean;
+  /** UPSC dropped it from evaluation: shown, never scored. */
+  dropped_by_upsc?: boolean;
   ai_explanation?: string;
   ai_mnemonic?: string;
   ai_clinical_pearl?: string;
@@ -102,7 +105,9 @@ const MODES: { k: string; label: string; scopes: Array<"year" | "subject" | "top
 ];
 
 const COUNTS = [10, 20, 30, 50];
-const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018];
+// UPSC CMS papers in the bank: 2009-2026 (2014-2017 from questions.0049, 2009-2013 from questions.0051).
+const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011,
+    2010, 2009];
 const DIFFICULTIES = ["", "easy", "medium", "hard"];
 
 // Shared control styles (theme tokens, readable in light and dark).
@@ -482,6 +487,7 @@ function PracticeInner() {
                         {q.subject_name ? <span className={CHIP_CLS}>{q.subject_name}</span> : null}
                         {q.topic_name ? <span className="rounded bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground">{q.topic_name}</span> : null}
                         {q.is_image_based ? <span className="rounded bg-sky-600 px-2 py-0.5 text-xs text-white">Image</span> : null}
+                        {q.dropped_by_upsc ? <DroppedByUpscBadge /> : null}
                     </div>
 
                     <div className="my-3">

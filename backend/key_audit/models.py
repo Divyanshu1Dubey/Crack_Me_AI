@@ -165,3 +165,23 @@ class SourceKey(models.Model):
     def confident(self) -> bool:
         """The stem was found in the source and the letter was mapped through the option text."""
         return bool(self.located and self.option_order in ('same', 'reordered'))
+
+
+class BundledSignalImport(models.Model):
+    """A signal file shipped with the code (``key_audit/data/``) imported into this database, once per version
+    (``manage.py import_bundled_key_audit``): its name, sha256 and the importer's report."""
+
+    KIND_CHOICES = [('source_keys', 'Printed source keys'), ('reviews', 'Review signals')]
+
+    name = models.CharField(max_length=120)
+    sha256 = models.CharField(max_length=64)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    report = models.JSONField(default=dict, blank=True)
+    imported_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-imported_at']
+        constraints = [models.UniqueConstraint(fields=['name', 'sha256'], name='kaudit_bundle_once')]
+
+    def __str__(self):
+        return f'{self.name} ({self.sha256[:12]})'

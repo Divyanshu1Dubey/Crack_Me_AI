@@ -210,3 +210,61 @@ export const editorialAPI = {
       `/questions/${questionId}/review-explanation/`,
     ),
 };
+
+/** AI explanation batch + its review queue (backend questions/views_explanation_batch.py; admin only). */
+export interface ExplanationBatchRun {
+  id: number;
+  created_at: string;
+  scope: { exam_type?: string; years?: number[]; include_stale?: boolean; limit?: number };
+  note: string;
+  total: number;
+  counts: Record<string, number>;
+}
+
+export interface ExplanationBatchOverview {
+  needed: { total: number; by_exam: Record<string, number> };
+  runs: ExplanationBatchRun[];
+}
+
+export interface ExplanationBatchItemRow {
+  question_id: number;
+  status: string;
+  detail: string;
+  attempts: number;
+  provider: string;
+  key: string;
+  exam_type: string;
+  year: number;
+  paper: number;
+  display_number: number | null;
+  question_preview: string;
+  updated_at: string;
+}
+
+export interface ExplanationReviewRow {
+  question_id: number;
+  exam_type: string;
+  year: number;
+  paper: number;
+  display_number: number | null;
+  correct_answer: string;
+  question_preview: string;
+  explanation: string;
+  explanation_for_key: string;
+  updated_at: string;
+}
+
+export interface Paged<T> { count: number; page: number; results: T[] }
+
+export const explanationBatchAPI = {
+  overview: () => api.get<ExplanationBatchOverview>('/questions/explanation-batches/'),
+  create: (body: { exam_type?: string; years?: number[]; include_stale?: boolean; limit?: number; note?: string }) =>
+    api.post<ExplanationBatchRun>('/questions/explanation-batches/', body),
+  process: (runId: number, body: { max_items?: number; sleep_seconds?: number }) =>
+    api.post<ExplanationBatchRun & { queued: boolean; task_id: string; max_items: number }>(
+      `/questions/explanation-batches/${runId}/process/`, body),
+  items: (runId: number, params: { status?: string; page?: number }) =>
+    api.get<Paged<ExplanationBatchItemRow>>(`/questions/explanation-batches/${runId}/items/`, { params }),
+  reviewQueue: (params: { exam_type?: string; page?: number }) =>
+    api.get<Paged<ExplanationReviewRow>>('/questions/explanation-review/', { params }),
+};

@@ -277,8 +277,8 @@
 | `times_asked` | `IntegerField` | how many times this concept appeared |
 | `is_active` | `BooleanField` | hide from students |
 | `uuid` | `UUIDField` | unique, immutable |
-| `display_number` | `IntegerField` | number shown to students (scoped by year/paper) |
-| `is_dropped` | `BooleanField` | dropped/disputed question excluded from scoring |
+| `display_number` | `IntegerField` | number shown to students (scoped by year/paper); for UPSC CMS 2018-2025 the question's number in the official paper (1-120, `questions.0047`) |
+| `is_dropped` | `BooleanField` | dropped/disputed question excluded from scoring; with `is_active=True` on CMS 2018-2025: a question UPSC dropped from the official key (the duplicate tools set it with `is_active=False` for a removed copy) |
 | `admin_edited` | `BooleanField` | protect from seed-script overwrites |
 | `needs_review` | `BooleanField` | partially digitized or disputed PYQs |
 | `is_scholarship_eligible` | `BooleanField` | eligible for scholarship test |
@@ -332,7 +332,10 @@
 **Business rules**:
 - `correct_answer` must be one of `A/B/C/D` (validated via `choices=` constraint).
 - `is_active=False` hides from student endpoints.
-- `is_dropped=True` excludes from scoring.
+- `is_dropped=True` on an **active** question = UPSC dropped it from evaluation (`Question.dropped_by_upsc`):
+  shown to students with a "Dropped by UPSC" badge, never scored in tests (`tests_engine.scoring`: not in the
+  score nor in `total_marks`). With `is_active=False` it means the duplicate / remove tools took the copy out of
+  the bank.
 - `admin_edited=True` protects from seed-script overwrites.
 - Questions filtered by `exam_track` via Subject → ExamTrack chain.
 - `lock_answer` / `lock_explanation` prevent AI regeneration of those fields.
@@ -455,8 +458,28 @@ Per-question attempt log: `user`, `question`, `test_attempt` (nullable), `select
 | `unanswered_count` | `IntegerField` | default 0 |
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_completed` | `BooleanField` | default False |
+| `is_late` | `BooleanField` | submitted after the time limit: scored, no XP, off the leaderboard |
+| `not_scored` | `JSONField` | question ids left out of `score` / `total_marks` (dropped by UPSC, or no valid A-D key) |
+| `original_score` / `original_total_marks` | `FloatField` | the figures before the first re-scoring (null until then) |
+| `rescored_at` | `DateTimeField` | last re-scoring after an answer-key change (null until then) |
 
 Property: `accuracy = round(correct / (correct + incorrect) * 100, 1)`
+
+Scoring (`tests_engine/scoring.py`): +1 correct, minus the test's negative mark per wrong answer, one mark per
+question; questions UPSC dropped, and questions without a valid A-D key (none, or an import placeholder such as
+`F`), are not scored (`not_scored_reason`). `manage.py rescore_key_changes` (a release step) applies pending
+`AnswerKeyChange` rows, dropped questions and questions without a key to completed attempts: only the touched
+questions change the stored figures, the negative mark is the one the stored score used, a test question without a
+response counts only while the test still has the questions the attempt was scored on, `original_score` keeps the
+first score, and each change is an `AttemptRescore` row.
+
+### `AttemptRescore`
+
+One re-scoring of an attempt (never edited): `attempt` (FK, related_name `rescores`), `created_at`, `reason`,
+`key_changes` (AnswerKeyChange ids), `negative_mark`, `old_/new_score`, `old_/new_total_marks`,
+`old_/new_correct`, `old_/new_incorrect`, `old_/new_unanswered`, `answers` (`[{question_id, selected, was, now,
+scored_before, scored_now, not_scored_reason}]`; `not_scored_reason`: `dropped_by_upsc`, `no_answer_key` or `""`,
+on rows written since 2026-11-09). Read-only in Django admin.
 
 ### `QuestionResponse`
 
@@ -465,7 +488,7 @@ Property: `accuracy = round(correct / (correct + incorrect) * 100, 1)`
 | `attempt` | `FK(TestAttempt, CASCADE)` | related_name=`responses` |
 | `question` | `FK(Question, CASCADE)` | |
 | `selected_answer` | `CharField(1)` | nullable |
-| `is_correct` | `BooleanField` | nullable (None = unanswered) |
+| `is_correct` | `BooleanField` | nullable (None = unanswered, or not scored: UPSC dropped the question, or it has no answer key; the answer is kept) |
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_marked_for_review` | `BooleanField` | default False |
 | `confidence_level` | `IntegerField` | 1–5, nullable |
@@ -585,6 +608,13 @@ Cross-app announcements also exist here (in addition to `questions.Announcement`
 | `exam_track_tags` | `JSONField` | list of exam codes |
 | `exam_tracks` | `M2M(ExamTrack)` | related_name=`jobs` |
 | `admin_edited` | `BooleanField` | protect from overwrite |
+| `source_url` | `URLField(500)` | the official notification the listing was checked against |
+| `status` | `CharField(10)` | `draft` (default, not public) / `approved` / `rejected` |
+| `last_verified_at` | `DateTimeField` | nullable; set only by `POST /api/jobs/<id>/verify/` |
+| `verified_by` | `FK(CustomUser, SET_NULL)` | nullable; never in student payloads |
+| `review_note` | `CharField(300)` | why it was rejected (admin only) |
+
+Public = `is_active`, `approved`, verified within 45 days (`JOBS_VERIFY_MAX_AGE_DAYS`), not past `expires_at`; approval needs both links on an official recruitment site (`jobs/official_sources.py`). Rows that existed before `jobs.0004` are drafts until verified.
 
 ### `JobBookmark`
 | Field | Type | Notes |
@@ -850,6 +880,7 @@ Rules, commands and the review queue: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT
 | `SourceKey` | `question` (FK), `source_file`, `source_sha256`, `question_page`, `question_number`, `answer_page`, `chapter`, `source_exam`, `source_year`, `printed_letter`, `letter`, `option_order`, `method`, `located`, `stem_hash`, `recovery_version`, `recovered_at`, `imported_at` | unique (`question`, `source_file`, `question_page`, `question_number`); loaded by `import_source_keys`; `confident` = located and option order checked |
 | `AuditResolution` | `question`, `audit`, `resolution`, `reason`, `evidence`, `key_change` (FK `questions.AnswerKeyChange`), `status_before`, `stored_key`, `stem_hash`, `resolved_by`, `resolved_at` | immutable (save after create / delete raise) |
 | `ReviewClaim` | `question` (1:1), `claimed_by`, `claimed_at`, `expires_at` | 15-minute claim in the review queue |
+| `BundledSignalImport` | `name`, `sha256`, `kind` (`source_keys` / `reviews`), `report` (JSON: the importer's counts), `imported_at` | unique (`name`, `sha256`): a file of `key_audit/data/` imported once per version by `import_bundled_key_audit` (run by `start_web.sh`) |
 
 ---
 
@@ -858,6 +889,7 @@ Rules, commands and the review queue: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT
 | Model | Key fields | Notes |
 |---|---|---|
 | `BlogSeedImport` | `slug` (unique), `content_hash`, `imported_at`, `updated_at` | One row per static post `seed_blogs` handled (migration `blog_engine.0003`): a post deleted or renamed in the admin is never re-created, and a post an admin edited (row hash differs from `content_hash`) is kept unless `seed_blogs --update`. `BlogPost` ordering is `-date_published, -created_at, -id`. The public blog reads published `BlogPost` rows (`/api/blog/posts/catalog/`); the static modules in `frontend/src/content/blog/` are the seed (`seed_data/static_posts.json`) and the build-time fallback only. |
+| `GeneratedBlogDraft` | `slug` (unique), `kind` (`paper` / `term`), `created_at` | One row per draft `generate_pyq_blog_drafts` created (migration `blog_engine.0005`): a slug is generated once, so a draft deleted or renamed in the admin is not re-created. |
 | `BlogPost.body_word_count` | `PositiveIntegerField`, not editable (migration `blog_engine.0004`, which counts the existing rows) | Words in `body` (`blog_engine/text_stats.py count_words`), recounted by `BlogPost.save()` whenever the body is written (and by `seed_blogs`' bulk updates). The API's read-only `word_count` / `reading_time` / `is_thin` come from it. The older `word_count` / `reading_time` columns hold the static seed's metadata (part of the seed content hash, so kept) and are never shown. |
 
 Blog images are files, not rows: `MEDIA_ROOT/blog/<yyyy>/<mm>/<sha256-32>.<ext>` (`blog_engine/images.py`), written by

@@ -599,13 +599,13 @@ Request:
   ]
 }
 ```
-Only questions of this test are scored, each once; the score counts the whole paper (`correct − incorrect × negative_mark_value` when negative marking is on).
-Response `200`: the attempt (`TestAttemptSerializer`: `id, test, test_title, started_at, completed_at, score, total_marks, correct_count, incorrect_count, unanswered_count, time_taken_seconds, is_completed, is_late, accuracy`) plus `xp_earned`. `is_late` is true when the submit came later than the time limit + 120 s: the attempt is scored but earns no XP and stays off the leaderboard.
+Only questions of this test are scored, each once; the score counts the whole paper (`correct − incorrect × negative_mark_value` when negative marking is on). A question UPSC dropped from evaluation (`dropped_by_upsc`), or one without a valid A-D key (none, or an import placeholder such as `F`), is not scored: not in the score, not in `total_marks`, no XP, no topic statistics or Mistake Notebook entry; its response keeps the answer with `is_correct: null` (`tests_engine/scoring.py` `not_scored_reason`).
+Response `200`: the attempt (`TestAttemptSerializer`: `id, test, test_title, started_at, completed_at, score, total_marks, correct_count, incorrect_count, unanswered_count, time_taken_seconds, is_completed, is_late, accuracy, not_scored_count, original_score, original_total_marks, rescored_at`) plus `xp_earned`. `original_*` / `rescored_at` are set once `rescore_key_changes` re-scored the attempt after an answer-key change (`docs/ANSWER_KEY_AUDIT.md`). `is_late` is true when the submit came later than the time limit + 120 s: the attempt is scored but earns no XP and stays off the leaderboard.
 Errors: `400 {error: "Invalid attempt"}`; `400 {code: "already_submitted", attempt_id, result}` for a repeated submit (with the stored result); `402 upgrade_required` per the free-plan rules (the attempt stays open).
 A submit also drops the user's cached `/api/analytics/dashboard_v3/` results and those of its sub-endpoints, so they show the attempt at once.
 
 ### `GET /api/tests/<id>/review/?attempt_id=99`
-Per-question review of a completed attempt: `{ attempt_id, score, total_marks, accuracy, total_time, correct, incorrect, unanswered, is_late, subject_breakdown, questions }`. Each row carries `question_text`, `options`, `correct_answer`, `selected_answer`, `is_correct`, `explanation`, `mnemonic`, `subject`, `concept_explanation`, `textbook_references`, `book_reference`, `chapter`, `page_number`, `concept_tags`, ... and `answer_locked`. A row's `subject` and the `subject_breakdown` keys show the loader bucket as `Expert Curated`.
+Per-question review of a completed attempt: `{ attempt_id, score, total_marks, accuracy, total_time, correct, incorrect, unanswered, is_late, not_scored_count, original_score, original_total_marks, rescored_at, subject_breakdown, questions }`. Each row carries `question_text`, `options`, `correct_answer`, `selected_answer`, `is_correct`, `explanation`, `mnemonic`, `subject`, `concept_explanation`, `textbook_references`, `book_reference`, `chapter`, `page_number`, `concept_tags`, `dropped_by_upsc` (UPSC dropped the question), `no_answer_key` (the question has no valid A-D key), `not_scored` (this attempt's score leaves it out; not counted in `subject_breakdown`), ... and `answer_locked`. A row's `subject` and the `subject_breakdown` keys show the loader bucket as `Expert Curated`.
 For a question the user may not see the answer of (`tests_engine.entitlement.lock_answer`), `answer_locked` is `true`, `correct_answer` is `null`, `explanation`, `mnemonic`, `concept_explanation`, `book_reference`, `chapter` and `page_number` are `""`, `textbook_references` is `[]`, and `concept_tags` keeps only non-revealing markers (`high_yield`). Its `question_text` and `options` are cut as on locked question-bank rows (`questions.answer_leak.redact_public_text`): at any answer / explanation label or correctness flag (a tick, `(correct)`, `[wrong]`), together with the reason printed after a flag. The row keeps the student's own `selected_answer` and `is_correct`: `/submit/` re-checks entitlement and never scores a locked question, so such rows only appear in attempts scored before the free-plan rule, or while the user was premium.
 
 ### `GET /api/tests/attempts/` and `GET /api/tests/attempts/<id>/`
@@ -762,10 +762,15 @@ Failure contract: when no provider answers, the view gives back what it charged 
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/jobs/` | List jobs; `?category=1&is_active=true` |
+| GET | `/api/jobs/` | List jobs; `?category=1&is_active=true&exam_track=cms&search=` |
 | GET | `/api/jobs/<id>/` | Job detail |
-| POST | `/api/jobs/<id>/bookmark/` | Toggle bookmark (auth required) |
+| POST | `/api/jobs/<id>/bookmark/` | Toggle bookmark (auth required; public listings only) |
 | GET | `/api/jobs/categories/` | List categories |
+| POST / PATCH / DELETE | `/api/jobs/`, `/api/jobs/<id>/` | Admin: create (a draft), edit, delete |
+| POST | `/api/jobs/<id>/verify/` | Admin: `{source_url?, approve?}` records a check against the official notification now (`last_verified_at`, `verified_by`); `approve: true` publishes. `400 {status: [reasons]}` unless the apply link and `source_url` are on an official recruitment site |
+| POST | `/api/jobs/<id>/reject/` | Admin: `{note}` takes the listing off the board (`status: rejected`) |
+
+Students (and anonymous visitors) see only listings that are active, `status: approved`, verified within `JOBS_VERIFY_MAX_AGE_DAYS` (45) and not past `expires_at` (`jobs/official_sources.py`); admins see all. A payload carries `source_url`, `status` and `last_verified_at`; `review_note` only for admins. Setting `status: approved` by PATCH is refused the same way unless the listing was verified recently; `last_verified_at` is read-only (only `verify` sets it). Official sites: `.gov.in`, `.nic.in`, `.edu.in`, `.ac.in`, `.res.in`, `aiims.edu`, `cdac.in` and `JOBS_EXTRA_OFFICIAL_DOMAINS`. Nothing is fetched or generated.
 
 ---
 

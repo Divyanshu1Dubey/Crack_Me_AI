@@ -125,7 +125,7 @@ backend/
   textbooks/        Indexed textbook library + chapter list
   resources/        UPSC exam resource catalog
   video_engine/     edge-tts + moviepy slide video generation
-  jobs/             Background job model + endpoints
+  jobs/             Medical jobs board (verified listings only: jobs/official_sources.py)
   chroma_db/        rag_store.sqlite3 (TF-IDF chunks, NOT chromadb in name only)
   Medura_Train/     Drop textbooks/PYQ/web_knowledge here, then run manage.py train_ai
   scripts/, *.py    Ad-hoc loader scripts, fixtures, validators

@@ -60,6 +60,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PremiumVideoPlayer } from '@/components/ui/PremiumVideoPlayer';
 import { LockedBadge } from '@/components/paywall/LockedBadge';
+import DroppedByUpscBadge from '@/components/question/DroppedByUpscBadge';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 import { FormattedText, stripMarkdown, resolveImageTokensForMarkdown } from '@/components/FormattedText';
 import { cleanOptionText, decodeMojiB, extractAnalysisFromJson, isLikelyGarbled, sanitizeQuestionText, sanitizeOptionText } from '@/lib/textCleanup';
@@ -1688,6 +1689,7 @@ function ExamQuestionBankInner({
                                                 ✔ Verified by Admin
                                             </Badge>
                                         )}
+                                        {detail.dropped_by_upsc && <DroppedByUpscBadge />}
                                     </div>
 
                                     <div className="p-4">
@@ -1860,6 +1862,12 @@ function ExamQuestionBankInner({
                                                     override), else the effective (AI) one. */}
                                                 {detailExplanation && (
                                                     <div className="rounded-lg bg-white/80 dark:bg-slate-900/40 p-3 text-sm leading-relaxed text-foreground">
+                                                        {/* Written by the AI explanation batch, not reviewed by the team yet. */}
+                                                        {detail.explanation_status === 'ai_generated' && (
+                                                            <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                                                                AI-generated, not yet reviewed by our team: cross-check with your textbook
+                                                            </p>
+                                                        )}
                                                         <FormattedText text={resolveImageTokensForMarkdown(extractAnalysisFromJson(detailExplanation), detail.images)} />
                                                     </div>
                                                 )}

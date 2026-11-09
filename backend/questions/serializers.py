@@ -533,7 +533,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review',
+        fields = ['id', 'uuid', 'display_number', 'is_dropped', 'dropped_by_upsc', 'admin_edited', 'needs_review',
                   'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
                   'year', 'subject', 'subject_name',
                   'topic', 'topic_name', 'difficulty', 'exam_source',
@@ -868,10 +868,12 @@ class QuestionDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'uuid', 'display_number', 'is_dropped', 'admin_edited', 'needs_review', 'is_disputed',
-            'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
+            'id', 'uuid', 'display_number', 'is_dropped', 'dropped_by_upsc', 'admin_edited', 'needs_review',
+            'is_disputed', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'year', 'subject', 'subject_name', 'topic', 'topic_name',
             'difficulty', 'concept_tags', 'concept_id', 'explanation', 'concept_explanation',
+            # 'ai_generated': written by the AI batch and not reviewed yet (labelled for students)
+            'explanation_status',
             'mnemonic', 'book_name', 'chapter', 'page_number', 'reference_text', 'paper',
             'source', 'exam_source', 'times_asked', 'is_active', 'created_at', 'updated_at',
             'textbook_references', 'learning_technique', 'shortcut_tip', 'page_screenshot',
