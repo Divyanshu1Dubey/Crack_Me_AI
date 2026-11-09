@@ -26,7 +26,7 @@ import ImageViewer from '@/components/image/ImageViewer';
 import FigureImage from '@/components/question/FigureImage';
 import DroppedByUpscBadge from '@/components/question/DroppedByUpscBadge';
 import { figureSrc } from '@/lib/figureSrc';
-import { formatMarks } from '@/lib/scoreFormat';
+import { formatMarks, notScoredLabel, notScoredNote } from '@/lib/scoreFormat';
 import { usePaywall } from '@/lib/paywall/paywallContext';
 
 interface QuestionImage {
@@ -850,7 +850,7 @@ export default function TakeTestPage() {
                                     <div className="font-bold text-sm">Q{reviewIdx + 1} of {questions.length}</div>
                                     <div className="text-xs" style={{ color: rd?.not_scored ? 'var(--text-secondary)' : rd?.is_correct ? '#10b981' : rd?.is_correct === false ? '#ef4444' : '#f59e0b' }}>
                                         {rd?.not_scored
-                                            ? `Not scored — UPSC dropped this question from evaluation${rd?.selected_answer ? ` (your answer: ${rd.selected_answer})` : ''}`
+                                            ? notScoredLabel(rd)
                                             : rd?.is_correct ? 'Correct! Great job 🎉' : rd?.is_correct === false ? (answerLocked ? 'Incorrect' : 'Incorrect — Study the explanation below carefully') : (answerLocked ? 'Skipped' : 'Skipped — Review what you missed')}
                                     </div>
                                 </div>
@@ -1349,10 +1349,9 @@ export default function TakeTestPage() {
             result.is_late === true
                 ? 'It was submitted after the time limit, so it earns no XP and does not count towards the leaderboard.'
                 : '',
-            // Questions UPSC dropped from evaluation are shown but not scored (tests_engine.scoring).
-            Number(result.not_scored_count) > 0
-                ? `${result.not_scored_count} question${Number(result.not_scored_count) === 1 ? '' : 's'} UPSC dropped from evaluation ${Number(result.not_scored_count) === 1 ? 'is' : 'are'} not part of the score.`
-                : '',
+            // Questions UPSC dropped from evaluation, or without an answer key, are shown but not scored
+            // (tests_engine.scoring).
+            notScoredNote(result.not_scored_count),
             result.rescored_at
                 ? `This attempt was re-scored after an answer-key correction (originally ${formatMarks(result.original_score)} / ${formatMarks(result.original_total_marks)}).`
                 : '',

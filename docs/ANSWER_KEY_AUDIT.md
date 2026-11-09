@@ -106,8 +106,9 @@ yet (`docs/audit/CMS_OFFICIAL_2026.md`).
 
 **Re-scoring after a key change (2026-11-09).** Every `AnswerKeyChange` is created `rescore_status='pending'`. The
 release step `python manage.py rescore_key_changes --apply` (dry run without `--apply`) scores the completed test
-attempts it touches again (`tests_engine/scoring.py`): an answer is marked against the current key and a question
-UPSC dropped (`is_dropped` on an active question) is left out of the score and the total. Only the touched
+attempts it touches again (`tests_engine/scoring.py`): an answer is marked against the current key, and a question
+UPSC dropped (`is_dropped` on an active question) or one without a valid A-D key (none, or an import placeholder
+such as `F`: `not_scored_reason`) is left out of the score and the total. Only the touched
 questions change the stored figures (an admin edit of the test's negative marking or questions since does not),
 the attempt keeps its first score (`original_score`, `original_total_marks`, `rescored_at`), and each re-scoring is
 an `AttemptRescore` row (old / new figures, every answer whose verdict changed; read-only in Django admin). The
@@ -117,6 +118,16 @@ not changed. The key change is then `done` with `affected = {test_attempts, qban
 nothing. Students see "Dropped by UPSC" on such questions, "not scored" in the review, and a note on a re-scored
 result ("originally x / y"). Rehearsal on the production copy after questions.0049: 337 pending changes, 27 of 31
 touched attempts re-scored, 180 question-bank answers re-marked.
+
+**Questions without an answer key (2026-11-09).** 382 active questions have no valid A-D key (on the production
+copy: 239 CMS questions without a paper, 238 of them undated; 137 NEET PG and 4 INI-CET rows, mostly recall imports,
+stored as `F` / `E` / empty; the 2 questions UPSC dropped in 2013). Tests used to mark every answer to them wrong, with negative marking (37 answers in 7 of 52 completed
+attempts); now, like the question bank, nothing is right or wrong there: a test leaves them out of the score and the
+total and files no mistake, the review says "Not scored — this question has no answer key yet" (`no_answer_key` on
+the row), the question bank grades `F` / `E` like an empty key, and the Mistake Notebook stops listing answers to
+them (kept, listed again once the question has a key). `rescore_key_changes --apply` re-scores the past attempts
+(`AttemptRescore` rows, original scores kept); a key added later scores them again on the next run. Giving these
+questions keys is an editor's job (no official key exists for them).
 
 ## 4. Review queue
 

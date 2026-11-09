@@ -172,7 +172,8 @@ class QuestionResponseSerializer(serializers.ModelSerializer):
 class TestAttemptSerializer(serializers.ModelSerializer):
     test_title = PublicTestTitleField(source='test.title', read_only=True)
     accuracy = serializers.ReadOnlyField()
-    # Questions UPSC dropped, not part of score / total_marks (tests_engine.scoring).
+    # Questions not scored (UPSC dropped them, or they have no answer key): not part of score / total_marks
+    # (tests_engine.scoring).
     not_scored_count = serializers.SerializerMethodField()
 
     class Meta:

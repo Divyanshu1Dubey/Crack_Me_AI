@@ -26,7 +26,8 @@ python manage.py generate_pyq_blog_drafts --apply || true
 # made the bank match them). Records only what is missing, so later deploys finish at once.
 python manage.py record_official_cms_keys --apply || true
 
-# Past test attempts scored again for pending answer-key changes and questions UPSC dropped (tests_engine.scoring):
+# Past test attempts scored again for pending answer-key changes, questions UPSC dropped and questions without an
+# answer key (tests_engine.scoring):
 # the original score is kept on the attempt, every change has an AttemptRescore row. Only pending work: a deploy
 # with nothing pending finishes at once.
 python manage.py rescore_key_changes --apply || true

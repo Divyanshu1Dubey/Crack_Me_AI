@@ -11,6 +11,9 @@ import hashlib
 import unicodedata
 
 OPTION_LETTERS = ('A', 'B', 'C', 'D')
+# The stored values ``valid_key`` accepts (``Question.correct_answer`` holds one character), for database filters:
+# anything else ('', or an import placeholder such as 'E' / 'F') is no answer key.
+VALID_KEY_VALUES = OPTION_LETTERS + tuple(letter.lower() for letter in OPTION_LETTERS)
 
 
 def _canon(text) -> str:

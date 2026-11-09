@@ -459,24 +459,27 @@ Per-question attempt log: `user`, `question`, `test_attempt` (nullable), `select
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_completed` | `BooleanField` | default False |
 | `is_late` | `BooleanField` | submitted after the time limit: scored, no XP, off the leaderboard |
-| `not_scored` | `JSONField` | question ids left out of `score` / `total_marks` (dropped by UPSC) |
+| `not_scored` | `JSONField` | question ids left out of `score` / `total_marks` (dropped by UPSC, or no valid A-D key) |
 | `original_score` / `original_total_marks` | `FloatField` | the figures before the first re-scoring (null until then) |
 | `rescored_at` | `DateTimeField` | last re-scoring after an answer-key change (null until then) |
 
 Property: `accuracy = round(correct / (correct + incorrect) * 100, 1)`
 
 Scoring (`tests_engine/scoring.py`): +1 correct, minus the test's negative mark per wrong answer, one mark per
-question; questions UPSC dropped are not scored. `manage.py rescore_key_changes` (a release step) applies pending
-`AnswerKeyChange` rows and dropped questions to completed attempts: only the touched questions change the stored
-figures, the negative mark is the one the stored score used, `original_score` keeps the first score, and each
-change is an `AttemptRescore` row.
+question; questions UPSC dropped, and questions without a valid A-D key (none, or an import placeholder such as
+`F`), are not scored (`not_scored_reason`). `manage.py rescore_key_changes` (a release step) applies pending
+`AnswerKeyChange` rows, dropped questions and questions without a key to completed attempts: only the touched
+questions change the stored figures, the negative mark is the one the stored score used, a test question without a
+response counts only while the test still has the questions the attempt was scored on, `original_score` keeps the
+first score, and each change is an `AttemptRescore` row.
 
 ### `AttemptRescore`
 
 One re-scoring of an attempt (never edited): `attempt` (FK, related_name `rescores`), `created_at`, `reason`,
 `key_changes` (AnswerKeyChange ids), `negative_mark`, `old_/new_score`, `old_/new_total_marks`,
 `old_/new_correct`, `old_/new_incorrect`, `old_/new_unanswered`, `answers` (`[{question_id, selected, was, now,
-scored_before, scored_now}]`). Read-only in Django admin.
+scored_before, scored_now, not_scored_reason}]`; `not_scored_reason`: `dropped_by_upsc`, `no_answer_key` or `""`,
+on rows written since 2026-11-09). Read-only in Django admin.
 
 ### `QuestionResponse`
 
@@ -485,7 +488,7 @@ scored_before, scored_now}]`). Read-only in Django admin.
 | `attempt` | `FK(TestAttempt, CASCADE)` | related_name=`responses` |
 | `question` | `FK(Question, CASCADE)` | |
 | `selected_answer` | `CharField(1)` | nullable |
-| `is_correct` | `BooleanField` | nullable (None = unanswered, or not scored: a question UPSC dropped; the answer is kept) |
+| `is_correct` | `BooleanField` | nullable (None = unanswered, or not scored: UPSC dropped the question, or it has no answer key; the answer is kept) |
 | `time_taken_seconds` | `IntegerField` | nullable |
 | `is_marked_for_review` | `BooleanField` | default False |
 | `confidence_level` | `IntegerField` | 1–5, nullable |

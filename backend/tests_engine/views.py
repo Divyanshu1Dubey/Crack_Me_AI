@@ -17,7 +17,7 @@ from .entitlement import (
     locked_test_response, strip_explanation_images,
 )
 from .models import FREE_TEST_MAX_QUESTIONS, Test, TestAttempt, QuestionResponse
-from .scoring import score_submission
+from .scoring import key_of, score_submission
 from .serializers import (
     TestSerializer, TestDetailSerializer,
     TestAttemptSerializer, TestAttemptDetailSerializer,
@@ -1070,9 +1070,10 @@ class TestViewSet(viewsets.ModelViewSet):
             }
 
         questions_map = Question.objects.in_bulk(list(clean_answers))
-        # The paper's questions UPSC dropped are not scored, answered or not (tests_engine.scoring).
-        dropped_map = (Question.objects.only('id', 'is_dropped', 'is_active', 'correct_answer')
-                       .filter(id__in=test_question_ids, is_dropped=True, is_active=True).in_bulk())
+        # The paper's questions that cannot be scored are left out, answered or not: UPSC dropped them, or they have
+        # no valid A-D key (tests_engine.scoring.not_scored_reason). Every question of the test, four columns each.
+        scoring_map = (Question.objects.only('id', 'is_dropped', 'is_active', 'correct_answer')
+                       .in_bulk(list(test_question_ids)))
 
         xp_earned = 0
         with transaction.atomic():
@@ -1087,8 +1088,9 @@ class TestViewSet(viewsets.ModelViewSet):
             scored, verdicts, not_scored = score_submission(
                 test, test_question_ids,
                 {qid: ans['selected'] for qid, ans in clean_answers.items() if qid in questions_map},
-                {**dropped_map, **questions_map},
+                {**scoring_map, **questions_map},
             )
+            not_scored_ids = set(not_scored)
             correct, incorrect = scored.correct, scored.incorrect
             responses_to_create = []
             wrong_answers = []
@@ -1097,10 +1099,10 @@ class TestViewSet(viewsets.ModelViewSet):
                 if not question:
                     continue
                 selected = ans['selected']
-                # None: unanswered, or not scored (a question UPSC dropped; the answer is kept)
+                # None: unanswered, or not scored (UPSC dropped it, or it has no answer key; the answer is kept)
                 is_correct = verdicts.get(qid)
                 ans['is_correct'] = is_correct
-                ans['not_scored'] = qid in dropped_map
+                ans['not_scored'] = qid in not_scored_ids
                 if is_correct is False:
                     wrong_answers.append((question, selected))
                 responses_to_create.append(QuestionResponse(
@@ -1239,7 +1241,7 @@ class TestViewSet(viewsets.ModelViewSet):
                 subject_breakdown[subj] = {'correct': 0, 'incorrect': 0, 'unanswered': 0}
 
             if q.id in not_scored:
-                pass  # dropped by UPSC: not part of the score, nor of the breakdown
+                pass  # not scored (dropped by UPSC, or no answer key): not part of the score, nor of the breakdown
             elif resp.is_correct:
                 subject_breakdown[subj]['correct'] += 1
             elif resp.is_correct is False:
@@ -1272,8 +1274,9 @@ class TestViewSet(viewsets.ModelViewSet):
                 'time_taken': resp.time_taken_seconds,
                 'confidence': resp.confidence_level,
                 'concept_tags': q.concept_tags or [],
-                # UPSC dropped the question; not_scored: this attempt's score leaves it out
+                # UPSC dropped the question; no valid A-D key; not_scored: this attempt's score leaves it out
                 'dropped_by_upsc': q.dropped_by_upsc,
+                'no_answer_key': not key_of(q),
                 'not_scored': q.id in not_scored,
                 'answer_locked': False,
             }

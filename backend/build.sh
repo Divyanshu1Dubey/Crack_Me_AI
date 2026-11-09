@@ -49,7 +49,7 @@ python manage.py generate_pyq_blog_drafts --apply || true
 # UPSC's official CMS 2014-2025 keys as official_key reviews in the answer-key audit (records only what is missing)
 python manage.py record_official_cms_keys --apply || true
 
-# Past test attempts scored again for pending answer-key changes / UPSC-dropped questions (keeps original scores)
+# Past test attempts scored again for pending answer-key changes / UPSC-dropped / keyless questions (keeps original scores)
 python manage.py rescore_key_changes --apply || true
 
 # Bootstrap MEDIA_ROOT for recall image persistence.

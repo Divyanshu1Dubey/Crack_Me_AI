@@ -1513,12 +1513,16 @@ def _notebook_queryset(user):
     everywhere else.
     """
     from accounts.utils import is_premium
+    from questions.content_hashes import VALID_KEY_VALUES
     from questions.views import free_showcase_rows
 
     qs = (
         MistakeNotebook.objects.filter(user=user)
         # an answer a corrected key now accepts is no mistake (the entry stays; it is just not listed)
         .exclude(selected_answer=F('question__correct_answer'))
+        # nor is an answer to a question without an answer key A-D, which no answer gets wrong (tests and the
+        # question bank no longer file one: tests_engine.scoring.not_scored_reason); listed again once it has a key
+        .filter(question__correct_answer__in=VALID_KEY_VALUES)
         .select_related('question__subject', 'question__topic')
         # Every notebook column, but of the question only what
         # MistakeNotebookSerializer and mistake_answer_visible read (a

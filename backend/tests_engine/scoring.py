@@ -1,20 +1,24 @@
 """How a test attempt is scored, at submit and when it is scored again after an answer-key change.
 
 Submit (``score_submission``): +1 for a correct answer, minus the test's negative mark for a wrong one, out of one
-mark per question. A question UPSC dropped from evaluation (``dropped_by_upsc``: ``is_dropped`` on an active
-question; ``is_dropped`` on a hidden one means "removed from the bank") is not scored: it adds nothing, costs
-nothing and is not part of the total. The attempt lists such questions in ``TestAttempt.not_scored``, and their
-``QuestionResponse.is_correct`` is null (the answer chosen is kept).
+mark per question. A question that cannot be scored (``not_scored_reason``) adds nothing, costs nothing and is not
+part of the total: one UPSC dropped from evaluation (``dropped_by_upsc``: ``is_dropped`` on an active question;
+``is_dropped`` on a hidden one means "removed from the bank"), or one without a valid A-D key (none, or an import
+placeholder such as 'F'), where no answer is right or wrong (the question bank does not grade those either). The
+attempt lists such questions in ``TestAttempt.not_scored``, and their ``QuestionResponse.is_correct`` is null (the
+answer chosen is kept).
 
 Scoring again (``rescore_attempt``) starts from the stored figures and changes them only by what the touched
-questions change: a key that now accepts another answer, a question UPSC dropped since (or restored), never the
-test's current settings (an admin may have edited its negative marking or its questions since): the negative mark
-is the one the stored figures were computed with. A change is written only when something differs, with an
-``AttemptRescore`` row holding the old and the new figures and every answer whose verdict changed; the attempt
-keeps its first score in ``original_score`` / ``original_total_marks``. ``rescore_pending_key_changes`` does that for
-every attempt a pending ``AnswerKeyChange`` or a dropped question touches, brings the question-bank answers
-(``QuestionAttempt.is_correct``) of the changed questions in line with the current key, and marks the key changes
-done with what they affected. A second run changes nothing. XP already earned is left as it is.
+questions change: a key that now accepts another answer, a question UPSC dropped since (or restored), a key a
+question gained or lost, never the test's current settings (an admin may have edited its negative marking or its
+questions since): the negative mark is the one the stored figures were computed with, and a question of the test
+without a response counts as unanswered only while the test still has the questions the attempt was scored on. A
+change is written only when something differs, with an ``AttemptRescore`` row holding the old and the new figures
+and every answer whose verdict changed; the attempt keeps its first score in ``original_score`` /
+``original_total_marks``. ``rescore_pending_key_changes`` does that for every attempt a pending ``AnswerKeyChange``
+or a question that cannot be scored touches, brings the question-bank answers (``QuestionAttempt.is_correct``) of
+the changed questions in line with the current key, and marks the key changes done with what they affected. A
+second run changes nothing. XP already earned is left as it is.
 """
 from __future__ import annotations
 
@@ -25,6 +29,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from questions.content_hashes import VALID_KEY_VALUES, valid_key
+
+NOT_SCORED_DROPPED = 'dropped_by_upsc'
+NOT_SCORED_NO_KEY = 'no_answer_key'
+
 
 def dropped_by_upsc(question) -> bool:
     """UPSC dropped the question from evaluation: it stays in the bank (active) but is never scored."""
@@ -32,7 +41,17 @@ def dropped_by_upsc(question) -> bool:
 
 
 def key_of(question) -> str:
-    return (getattr(question, 'correct_answer', '') or '').strip().upper()[:1]
+    """The question's key A-D; '' when it has none (or an import placeholder such as 'F')."""
+    return valid_key(getattr(question, 'correct_answer', ''))
+
+
+def not_scored_reason(question) -> str:
+    """Why a score leaves the question out: NOT_SCORED_DROPPED, NOT_SCORED_NO_KEY, or '' (it is scored)."""
+    if dropped_by_upsc(question):
+        return NOT_SCORED_DROPPED
+    if not key_of(question):
+        return NOT_SCORED_NO_KEY
+    return ''
 
 
 def verdict(question, selected) -> bool | None:
@@ -54,11 +73,12 @@ class Score:
 
 def score_submission(test, question_ids, answers, questions):
     """Score a submission. ``question_ids``: the test's questions; ``answers``: {question_id: selected letter or ''}
-    (questions of the test only); ``questions``: {question_id: Question} covering both.
+    (questions of the test only); ``questions``: {question_id: Question} covering both (every question of the test,
+    answered or not, so the ones that cannot be scored leave the total).
 
     Returns (Score, verdicts {question_id: True / False / None}, sorted list of the question ids not scored)."""
     question_ids = set(question_ids)
-    not_scored = {qid for qid in question_ids if qid in questions and dropped_by_upsc(questions[qid])}
+    not_scored = {qid for qid in question_ids if qid in questions and not_scored_reason(questions[qid])}
     verdicts, correct, incorrect = {}, 0, 0
     for qid, selected in answers.items():
         question = questions.get(qid)
@@ -109,6 +129,11 @@ def rescore_attempt(attempt, *, touched, apply, reason, key_change_ids=(), now=N
     responses = {r.question_id: r for r in QuestionResponse.objects.filter(attempt=attempt,
                                                                             question_id__in=relevant)}
     in_test = set(attempt.test.questions.filter(id__in=relevant).values_list('id', flat=True))
+    # A question of the test without a response was counted as unanswered only if the test still has the questions
+    # the attempt was scored on (total_marks + not_scored = the paper at submit, kept by every re-score); an admin
+    # may have added some since, which the stored figures never counted: then only the attempt's responses count.
+    if (attempt.total_marks or 0) + len(before_not_scored) != attempt.test.questions.count():
+        in_test = set()
     ids = set(responses) | in_test
     questions = Question.objects.only('id', 'correct_answer', 'is_dropped', 'is_active').in_bulk(ids)
     mark = negative_mark_of(attempt)
@@ -120,7 +145,8 @@ def rescore_attempt(attempt, *, touched, apply, reason, key_change_ids=(), now=N
             continue
         response = responses.get(qid)
         scored_before = qid not in before_not_scored
-        scored_now = not dropped_by_upsc(question)
+        reason_now = not_scored_reason(question)
+        scored_now = not reason_now
         was = response.is_correct if response is not None else None
         now_result = verdict(question, response.selected_answer) if (response is not None and scored_now) else None
         old = _contribution(scored_before, was if scored_before else None, mark)
@@ -134,7 +160,8 @@ def rescore_attempt(attempt, *, touched, apply, reason, key_change_ids=(), now=N
         else:
             not_scored.add(qid)
         changed.append({'question_id': qid, 'selected': response.selected_answer if response else None,
-                        'was': was, 'now': now_result, 'scored_before': scored_before, 'scored_now': scored_now})
+                        'was': was, 'now': now_result, 'scored_before': scored_before, 'scored_now': scored_now,
+                        'not_scored_reason': reason_now})
     if not changed:
         return None
     old_figures = {'score': attempt.score, 'total_marks': attempt.total_marks,
@@ -174,9 +201,10 @@ def rescore_attempt(attempt, *, touched, apply, reason, key_change_ids=(), now=N
 
 
 def rescore_pending_key_changes(*, apply, limit=None, log=None, change_ids=None):
-    """Score again every completed attempt touched by a pending AnswerKeyChange or by a question UPSC dropped (or
-    restored), align the question-bank answers of the changed questions, and mark the pending changes done.
-    ``change_ids``: only these pending changes (dropped questions are then left for a full run).
+    """Score again every completed attempt touched by a pending AnswerKeyChange or by a question that cannot be
+    scored (UPSC dropped it, or it has no valid A-D key) or can be again, align the question-bank answers of the
+    changed questions, and mark the pending changes done.
+    ``change_ids``: only these pending changes (the questions that cannot be scored are then left for a full run).
 
     Returns a Counter of what was (or, in a dry run, would be) changed."""
     from questions.models import AnswerKeyChange, MistakeNotebook, Question, QuestionAttempt
@@ -192,17 +220,21 @@ def rescore_pending_key_changes(*, apply, limit=None, log=None, change_ids=None)
     changes_by_question = defaultdict(list)
     for change in pending:
         changes_by_question[change.question_id].append(change.pk)
-    dropped_ids = set() if change_ids is not None else set(
-        Question.objects.filter(is_dropped=True, is_active=True).values_list('id', flat=True))
-    touched = set(changes_by_question) | dropped_ids
+    dropped_ids, keyless_ids = set(), set()
+    if change_ids is None:
+        dropped_ids = set(Question.objects.filter(is_dropped=True, is_active=True).values_list('id', flat=True))
+        keyless_ids = set(Question.objects.exclude(correct_answer__in=VALID_KEY_VALUES).values_list('id', flat=True))
+    unscorable_ids = dropped_ids | keyless_ids
+    touched = set(changes_by_question) | unscorable_ids
     stats['pending key changes'] = len(pending)
     stats['questions dropped by UPSC'] = len(dropped_ids)
+    stats['questions without an answer key'] = len(keyless_ids)
 
     completed = TestAttempt.objects.filter(is_completed=True)
     attempt_ids = set(QuestionResponse.objects.filter(attempt__is_completed=True, question_id__in=touched)
                       .values_list('attempt_id', flat=True))
     if change_ids is None:
-        attempt_ids |= set(completed.filter(test__questions__in=dropped_ids).values_list('id', flat=True))
+        attempt_ids |= set(completed.filter(test__questions__in=unscorable_ids).values_list('id', flat=True))
         attempt_ids |= set(completed.exclude(not_scored=[]).values_list('id', flat=True))
     attempts = completed.filter(id__in=attempt_ids).select_related('test').order_by('pk')
     if limit:
@@ -262,8 +294,11 @@ def _reason(preview, change_ids):
     parts = []
     if change_ids:
         parts.append('answer-key change ' + ', '.join(f'#{c}' for c in change_ids))
-    if any(not row['scored_now'] for row in preview['answers']):
+    left_out = {row.get('not_scored_reason') for row in preview['answers'] if not row['scored_now']}
+    if NOT_SCORED_DROPPED in left_out:
         parts.append('question(s) dropped by UPSC not scored')
+    if NOT_SCORED_NO_KEY in left_out:
+        parts.append('question(s) without an answer key not scored')
     if any(row['scored_now'] and not row['scored_before'] for row in preview['answers']):
         parts.append('question(s) scored again')
     return 'Scored again: ' + '; '.join(parts or ['key now accepts another answer'])
