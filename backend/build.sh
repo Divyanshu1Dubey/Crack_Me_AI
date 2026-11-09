@@ -52,6 +52,9 @@ python manage.py record_official_cms_keys --apply || true
 # Past test attempts scored again for pending answer-key changes / UPSC-dropped / keyless questions (keeps original scores)
 python manage.py rescore_key_changes --apply || true
 
+# Answer-key audit signals shipped in key_audit/data/, imported once per file version, then audited (never a key change)
+python manage.py import_bundled_key_audit --apply || true
+
 # Bootstrap MEDIA_ROOT for recall image persistence.
 # The importer writes extracted images into MEDIA_ROOT/recall_images/...
 # so the browser can fetch them via MEDIA_URL. Without this mkdir,

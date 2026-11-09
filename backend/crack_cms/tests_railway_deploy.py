@@ -87,3 +87,12 @@ class RailwayDeployScriptTests(SimpleTestCase):
         self.assertLess(relink, gunicorn)
         block = text[text.index('RUN_MEDIA_STEPS'):gunicorn]
         self.assertIn(') &', block)  # backgrounded: the health check never waits for the restore
+
+    def test_start_web_imports_the_bundled_key_audit_signals_in_the_background(self):
+        text = (BACKEND_DIR / 'start_web.sh').read_text(encoding='utf-8')
+        step = text.index('python manage.py import_bundled_key_audit --apply || true')
+        gunicorn = text.index('exec gunicorn')
+        self.assertLess(text.index('\npython manage.py migrate --no-input\n'), step)
+        self.assertLess(step, gunicorn)
+        block = text[text.index('RUN_KEY_AUDIT_IMPORT:-1'):gunicorn]
+        self.assertIn(') &', block)  # backgrounded: the first import takes minutes

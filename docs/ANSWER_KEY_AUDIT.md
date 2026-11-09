@@ -169,7 +169,7 @@ Measured with the commands above; every number is reproducible from them.
   unanswerable 63, uncertain 37); NEET PG 3,119 (agree 1,156, disagree 1,444, unanswerable 377, uncertain 142);
   INI-CET 25 (agree 7, disagree 15, unanswerable 2, uncertain 1). 1,397 of the 1,472 disagreements are with a stored
   `A` in the skewed recall years (NEET PG 2025: 1,301 of 2,465 reviewed; 2018: 88 of 215; 2020: 35 of 82; INI-CET
-  2025: 15 of 23); 1,087 of them are high-confidence. File: `crack_local/key_audit/pass1b_reviews_hashed.jsonl`
+  2025: 15 of 23); 1,087 of them are high-confidence. File: `backend/key_audit/data/pass1b_reviews_hashed.jsonl`
   (`stem_hash` of the reviewed content; batches, raw outputs and manifest in `crack_local/key_audit/pass1b/`). With
   both files every active question has an AI review or UPSC's key. On that copy, with the official keys recorded
   (`record_official_cms_keys --apply`): verified 4,056, needs_review 4,316, insufficient_evidence 2,964,
@@ -235,9 +235,15 @@ Nothing of this runs on its own: the deploy does not run migrations yet (see `DE
    it changes the content, run `ai_eval.recover_source_keys` on the restore again afterwards (the printed
    keys are re-read against the repaired text); the AI reviews of repaired questions were made on the
    old text and are skipped by the hash check, as they should be.
-4. Dry-run, then apply, the imports against `cracklabs` with the files made on the local restore
-   (`source_keys_v2.jsonl`, `pass1_reviews_hashed.jsonl`, `pass1b_reviews_hashed.jsonl`): lines whose question
-   changed in production since the restore are skipped by the hash check. Import `pass1b` after the deploy that
-   carries `questions.0051` (it reviews content as those migrations leave it).
-5. `audit_answer_keys` (dry run), then `--apply`.
+4. The imports run on their own since 2026-11-09: the files made on the local restore (`source_keys_v2.jsonl`,
+   `pass1_reviews_hashed.jsonl`, `pass1b_reviews_hashed.jsonl`) ship in `backend/key_audit/data/`, and
+   `start_web.sh` runs `python manage.py import_bundled_key_audit --apply` in the background after every start. Each
+   file is imported once per version (a `BundledSignalImport` row records its sha256 and the importer's report);
+   lines whose question changed in production since the restore are skipped by the hash check; after an import
+   every active question is audited (`audit_answer_keys --apply`). A later start finds nothing new at once.
+   Rehearsed on a copy of production through `questions.0051`: 57 s (source keys 5,085 valid, first pass 2,626 valid
+   with 8 made for older content, `pass1b` 5,828 valid), then verified 4,056, needs_review 4,316,
+   insufficient_evidence 2,964, likely_correct 1,071, image_context_missing 14; a second run: nothing new.
+   `RUN_KEY_AUDIT_IMPORT=0` skips it; the dry run `python manage.py import_bundled_key_audit` shows what is new.
+5. `audit_answer_keys` (dry run) shows the result; the step above has applied it.
 6. Review in `/admin/review-queue`: start with "Printed key differs".

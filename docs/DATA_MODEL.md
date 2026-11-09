@@ -880,6 +880,7 @@ Rules, commands and the review queue: [`ANSWER_KEY_AUDIT.md`](./ANSWER_KEY_AUDIT
 | `SourceKey` | `question` (FK), `source_file`, `source_sha256`, `question_page`, `question_number`, `answer_page`, `chapter`, `source_exam`, `source_year`, `printed_letter`, `letter`, `option_order`, `method`, `located`, `stem_hash`, `recovery_version`, `recovered_at`, `imported_at` | unique (`question`, `source_file`, `question_page`, `question_number`); loaded by `import_source_keys`; `confident` = located and option order checked |
 | `AuditResolution` | `question`, `audit`, `resolution`, `reason`, `evidence`, `key_change` (FK `questions.AnswerKeyChange`), `status_before`, `stored_key`, `stem_hash`, `resolved_by`, `resolved_at` | immutable (save after create / delete raise) |
 | `ReviewClaim` | `question` (1:1), `claimed_by`, `claimed_at`, `expires_at` | 15-minute claim in the review queue |
+| `BundledSignalImport` | `name`, `sha256`, `kind` (`source_keys` / `reviews`), `report` (JSON: the importer's counts), `imported_at` | unique (`name`, `sha256`): a file of `key_audit/data/` imported once per version by `import_bundled_key_audit` (run by `start_web.sh`) |
 
 ---
 
