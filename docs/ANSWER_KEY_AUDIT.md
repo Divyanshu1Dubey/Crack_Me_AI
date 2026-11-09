@@ -162,6 +162,19 @@ Measured with the commands above; every number is reproducible from them.
   mapping; not adjudicated).
 * AI first pass: 2,634 reviews imported (agree 1,121, unanswerable 1,043, disagree 416, uncertain 54),
   all for unchanged content.
+* AI first pass, the rest (2026-11-09, workflow `wf_78212b0c-62a`, 49 Claude subagents, 195 batches of 30, same
+  format and reviewer label): every active question without UPSC's key whose content the first pass had not
+  reviewed, 5,828 on a copy of production migrated through `questions.0051` (2,513 first-pass reviews still match
+  their content; the 4,080 dated CMS 2009-2025 questions carry UPSC's key). CMS 2,684 (agree 2,571, disagree 13,
+  unanswerable 63, uncertain 37); NEET PG 3,119 (agree 1,156, disagree 1,444, unanswerable 377, uncertain 142);
+  INI-CET 25 (agree 7, disagree 15, unanswerable 2, uncertain 1). 1,397 of the 1,472 disagreements are with a stored
+  `A` in the skewed recall years (NEET PG 2025: 1,301 of 2,465 reviewed; 2018: 88 of 215; 2020: 35 of 82; INI-CET
+  2025: 15 of 23); 1,087 of them are high-confidence. File: `crack_local/key_audit/pass1b_reviews_hashed.jsonl`
+  (`stem_hash` of the reviewed content; batches, raw outputs and manifest in `crack_local/key_audit/pass1b/`). With
+  both files every active question has an AI review or UPSC's key. On that copy, with the official keys recorded
+  (`record_official_cms_keys --apply`): verified 4,056, needs_review 4,316, insufficient_evidence 2,964,
+  likely_correct 1,071, image_context_missing 14; `ai_review_disagrees` opens a review on 1,869 questions. No key
+  was changed: the reviews are signals for the review queue.
 * Audit of the 10,013 active questions: `needs_review` 3,829, `insufficient_evidence` 5,952,
   `likely_correct` 170, `image_context_missing` 62, `verified` 0, `contradictory_sources` 0. Main reasons
   in review: confident printed-key mismatch 1,934, unchecked printed-key mismatch 526, skewed key
@@ -223,7 +236,8 @@ Nothing of this runs on its own: the deploy does not run migrations yet (see `DE
    keys are re-read against the repaired text); the AI reviews of repaired questions were made on the
    old text and are skipped by the hash check, as they should be.
 4. Dry-run, then apply, the imports against `cracklabs` with the files made on the local restore
-   (`source_keys_v2.jsonl`, `pass1_reviews_hashed.jsonl`): lines whose question changed in production
-   since the restore are skipped by the hash check.
+   (`source_keys_v2.jsonl`, `pass1_reviews_hashed.jsonl`, `pass1b_reviews_hashed.jsonl`): lines whose question
+   changed in production since the restore are skipped by the hash check. Import `pass1b` after the deploy that
+   carries `questions.0051` (it reviews content as those migrations leave it).
 5. `audit_answer_keys` (dry run), then `--apply`.
 6. Review in `/admin/review-queue`: start with "Printed key differs".
